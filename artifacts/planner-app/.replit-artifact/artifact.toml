@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Planner App"
+version = "1.0.0"
+id = "artifacts/planner-app"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21026
+
+[services.development]
+run = "pnpm --filter @workspace/planner-app run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/planner-app", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/planner-app/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21026"
+BASE_PATH = "/"

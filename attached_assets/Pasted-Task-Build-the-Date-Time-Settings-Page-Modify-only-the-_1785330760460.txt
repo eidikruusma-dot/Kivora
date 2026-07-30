@@ -1,0 +1,121 @@
+Task: Build the "Date & Time" Settings Page
+
+Modify only the existing Date & Time settings page.
+
+Do not change any other Settings pages, Sidebar, Header, routing, layouts, or unrelated components.
+
+Reuse the existing Kivora design system and components. Do not create a separate settings architecture.
+
+Replace the placeholder
+
+Remove the current "This settings page is under development" placeholder and replace it with a fully functional settings page.
+
+1. Time Zone
+
+Add a Time Zone section.
+
+Include:
+
+Automatic (Recommended) → detect the user's local time zone (default)
+Manual selection from a dropdown
+
+When Automatic is enabled, the dropdown must be disabled.
+
+When Manual is selected, enable the dropdown.
+
+For MVP, include a small list such as:
+
+Europe/Tallinn
+Europe/Helsinki
+Europe/Riga
+Europe/Stockholm
+Europe/London
+UTC
+
+Structure the code so more time zones can easily be added later.
+
+2. First Day of Week
+
+Add a setting with two options:
+
+Monday (default)
+Sunday
+
+This setting will later be used by the Calendar module.
+
+3. Time Format
+
+Add a setting with two options:
+
+24-hour
+Example: 16:07
+12-hour
+Example: 4:07 PM
+
+Default:
+
+24-hour.
+
+4. Date Format
+
+Add three options:
+
+29.07.2026
+2026-07-29
+29/07/2026
+
+Default:
+
+29.07.2026
+
+5. Live Preview Card
+
+Create a separate card titled:
+
+Preview
+
+Display:
+
+Current date
+Current time
+Current weekday
+Selected time zone
+
+The preview must update immediately whenever the user changes:
+
+Date format
+Time format
+Time zone
+
+Use the user's real current device date and time.
+
+Do not use hardcoded example values.
+
+Saving Behavior
+
+This is still the demo version.
+
+Local state is enough.
+Do not connect Firestore.
+Do not build background synchronization.
+Do not modify Calendar, Tasks, Notifications, or any other module yet.
+Follow the same save behavior already used by the other Settings pages.
+Design Requirements
+Keep the existing Back to Settings navigation.
+Use existing Kivora cards, spacing, typography, dropdowns, radio buttons, and switches.
+Match the current Settings design perfectly.
+Support both Light Mode and Dark Mode.
+Do not redesign the Settings layout.
+Do not add unrelated settings.
+Important
+
+This page should feel like a polished production-ready settings page, not a placeholder.
+
+Keep the design clean, modern, and consistent with the rest of Kivora.
+
+After completing the task
+List every modified file.
+Explain briefly what was changed in each file.
+Do not refactor unrelated code.
+Do not make additional improvements.
+Stop and wait for user testing.

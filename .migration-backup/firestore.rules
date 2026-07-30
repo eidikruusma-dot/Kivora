@@ -1,0 +1,59 @@
+rules_version = '2'
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // User profiles — each user owns only their own document
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid
+
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.uid is string
+        && request.resource.data.uid == uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.trim().size() > 0
+        && request.resource.data.displayName.trim().size() <= 40
+        && request.resource.data.email is string
+        && request.resource.data.preferredLanguage in ['et', 'en']
+        && request.resource.data.timezone is string
+        && request.resource.data.timezone.size() > 0
+        && (request.resource.data.photoURL is string || !('photoURL' in request.resource.data))
+
+      allow update: if request.auth != null && request.auth.uid == uid
+        // Only allow modifying specific fields — no new fields allowed
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'preferredLanguage', 'timezone', 'photoURL', 'updatedAt'
+        ])
+        // Locked fields must not change
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.createdAt == resource.data.createdAt
+        // Field-level validation
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.trim().size() > 0
+        && request.resource.data.displayName.trim().size() <= 40
+        && request.resource.data.preferredLanguage in ['et', 'en']
+        && request.resource.data.timezone is string
+        && request.resource.data.timezone.size() > 0
+        && (request.resource.data.photoURL is string || !('photoURL' in request.resource.data))
+
+      allow delete: if request.auth != null && request.auth.uid == uid
+    }
+
+    // Quick notes — each user owns only their own notes subcollection
+    match /users/{uid}/notes/{noteId} {
+      allow read: if request.auth != null && request.auth.uid == uid
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.content is string
+        && request.resource.data.content.trim().size() > 0
+        && request.resource.data.content.size() <= 5000
+        && request.resource.data.type in ['quick', 'full']
+      allow update, delete: if request.auth != null && request.auth.uid == uid
+    }
+
+    // Deny all other access by default
+    match /{document=**} {
+      allow read, write: if false
+    }
+  }
+}
