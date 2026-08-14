@@ -1,0 +1,129 @@
+Complete the cross-module linking system end-to-end for all supported Kivora modules.
+
+Do not build another partial foundation.
+Do not stop after wiring only some pages.
+Do not ask me to repeat the same requirement module by module.
+
+Current state:
+- entityLinks Firestore store exists.
+- LinkedItemsPanel exists.
+- LinkPickerModal exists.
+- Tasks ↔ Calendar works.
+- Deep-link navigation exists.
+- Firestore rules for entityLinks exist.
+- Some modules still cannot create, display, open, or remove links correctly.
+
+Goal:
+Every supported module must be able to link to every other supported module from its own detail view.
+
+Supported entity types:
+- task
+- calendar
+- note
+- habit
+- goal
+- school
+- ai
+
+Required behavior for every supported entity type:
+1. Show a visible Linked Items section in the entity detail/edit view.
+2. Show an Add link button.
+3. Open the shared LinkPickerModal.
+4. List all supported target entity types.
+5. Exclude the current entity itself.
+6. Prevent duplicate links.
+7. Allow relation type selection.
+8. Save the link to Firestore.
+9. Show the new link immediately.
+10. Sync the link in real time across browsers.
+11. Show links bidirectionally.
+12. Open the exact linked entity.
+13. Remove the link from either side.
+14. Clean up links when an entity is deleted.
+15. Preserve all existing working data and UI.
+
+Calendar behavior:
+- Link to existing event must create only a relationship.
+- Create event and link must create a visible calendar event.
+- Created calendar events must use a valid calendarId from:
+  mine, school, work, family, training
+- Default generated events to calendarId: mine.
+- Prevent duplicate generated calendar events for the same source entity.
+- Tasks, school items, goals, habits, notes, and AI-created items with dates must be able to create and link a calendar event.
+- Do not automatically add every item to calendar without user action.
+
+Required module integrations:
+
+Tasks:
+- link to calendar, notes, habits, goals, school, AI
+
+Calendar:
+- link to tasks, notes, habits, goals, school, AI
+
+Notes:
+- link to tasks, calendar, habits, goals, school, AI
+
+Habits:
+- link to tasks, calendar, notes, goals, school, AI
+- if there is no detail modal, add the Linked Items section to the existing habit edit/detail experience instead of creating a duplicate modal system
+
+Goals:
+- link to tasks, calendar, notes, habits, school, AI
+
+School:
+- school task, exam, subject, and lesson must support links where appropriate
+- link to tasks, calendar, notes, habits, goals, AI
+
+AI:
+- AI conversations must support links to tasks, calendar, notes, habits, goals, school
+- AI may suggest links, but must not silently create them without user confirmation
+
+Implementation rules:
+- Reuse entityLinksStore, LinkedItemsPanel, LinkPickerModal, and existing resolvers.
+- Do not create separate linking systems per module.
+- Do not rewrite working Firestore stores.
+- Do not redesign unrelated UI.
+- Do not change existing entity schemas unless strictly necessary.
+- Use exact existing route paths under /app.
+- Use deep-link state to open the exact target entity.
+- Keep all existing translations and add missing ET/EN keys only where required.
+- Fix any entity resolver gaps so every supported entity displays a correct title, icon, date, time, and context.
+
+Audit before coding:
+Create a table for all 7 entity types showing:
+- detail/edit view file
+- LinkedItemsPanel present: yes/no
+- Add link action works: yes/no
+- target picker supports all types: yes/no
+- open exact entity works: yes/no
+- remove link works: yes/no
+- delete cleanup works: yes/no
+
+Then implement every missing item from that table in one task.
+
+Required testing before stopping:
+For each entity type:
+- create a link
+- verify it appears on both entities
+- open both directions
+- remove from one side
+- verify removal on both sides
+- verify cross-browser real-time sync
+
+Also test:
+- task → create calendar event
+- school item → create calendar event
+- goal → create calendar event
+- habit → create calendar event
+- note → create calendar event
+- AI conversation → create calendar event
+- duplicate prevention
+- deletion cleanup
+
+After finishing:
+1. Run TypeScript typecheck.
+2. Check runtime console for errors.
+3. List every modified file.
+4. List every supported link direction now working.
+5. List any remaining limitation honestly.
+6. Stop only when all seven entity types are fully integrated and ready for one final manual test.

@@ -1,0 +1,87 @@
+Fix the confirmed PDF attachment failure in the Kivora AI assistant.
+
+Current confirmed behavior:
+- A user attaches a bank statement PDF in the AI chat.
+- The attachment appears in the UI.
+- The UI then shows an error similar to:
+  “PDF could not be processed”.
+- The AI does not receive usable text from the PDF.
+- Manual text input works.
+
+Strict scope:
+- Fix only PDF upload and PDF text extraction for the AI assistant.
+- Do not modify authentication.
+- Do not modify Google or Facebook login.
+- Do not modify the Money module yet.
+- Do not modify AI finance actions yet.
+- Do not redesign the AI page.
+- Do not modify Android, Capacitor, PWA, service worker, routing, or unrelated UI.
+- Do not perform a broad audit.
+
+Required diagnosis before changing code:
+
+1. Trace the full PDF flow:
+   - file selection
+   - client-side validation
+   - upload
+   - storage location
+   - server/API request
+   - PDF parsing
+   - extracted text
+   - AI request payload
+
+2. Report:
+   - exact file and line where processing fails
+   - exact error code/message
+   - accepted MIME types
+   - maximum supported file size
+   - whether parsing happens in the browser or server
+   - whether the PDF reaches the backend at all
+   - whether the current implementation supports only text-based PDFs
+   - what happens with scanned/image-only PDFs
+
+3. Confirm whether the current parser can extract text from a normal bank statement PDF.
+
+4. Do not add OCR unless the PDF contains no extractable text.
+   If OCR is not currently available, show a clear localized message:
+   ET: “PDF ei sisalda loetavat teksti. Proovi tekstipõhist PDF-i.”
+   EN: “The PDF does not contain readable text. Try a text-based PDF.”
+
+5. Do not silently swallow parser errors.
+
+Required fix:
+
+- A valid text-based PDF must be processed successfully.
+- Extracted text must be included in the AI request.
+- The UI must show:
+  - file name
+  - processing state
+  - success state
+  - precise localized error state
+- Reject unsupported files before upload.
+- Reject files larger than the actual supported limit with a clear message.
+- Remove the failed attachment cleanly.
+- Never send a message while the PDF is still processing.
+- Never claim the PDF was processed unless extracted text is non-empty.
+
+Verification:
+
+Test with:
+- a valid text-based bank statement PDF
+- an image-only/scanned PDF
+- an invalid/corrupted PDF
+- a file with the wrong MIME type
+- a file larger than the supported limit
+- PDF removal before sending
+- sending after successful processing
+
+Before changing code, report:
+- exact root cause
+- exact files that need to change
+- parser/library currently used
+- where extracted text is stored
+- how the extracted text reaches the AI request
+
+After the diagnosis, make the smallest possible fix.
+Run TypeScript and production build checks.
+Do not change anything outside PDF attachment processing.

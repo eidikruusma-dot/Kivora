@@ -1,0 +1,178 @@
+Implement full application-wide localization for Kivora.
+
+This is not only a Language Settings page fix.
+
+The selected language must apply across the entire application, from the public landing page to all authenticated pages.
+
+Supported languages
+Estonian
+English
+
+Estonian remains the default language.
+
+Language selector before login
+
+Add a language selector to the public application area before the user reaches the dashboard.
+
+It must be available on:
+
+Landing page
+Login page
+Registration page
+Password reset page
+Email verification-related views, if present
+
+Use the same selector consistently across these public pages.
+
+Changing the language must update the visible page immediately.
+
+Do not redesign the public pages. Add the selector in a visually consistent and unobtrusive location.
+
+Application-wide translation system
+
+First inspect the existing project architecture.
+
+If a localization or translation system already exists, extend and reuse it.
+
+If none exists, create one shared reusable localization system for the entire application.
+
+Do not create separate translation logic inside individual pages.
+
+Use centralized translation resources for:
+
+Estonian
+English
+
+All shared and page-specific text must use the same translation system.
+
+Required translation coverage
+
+Translate the entire current application, including:
+
+Public area
+Landing page
+Navigation
+Hero content
+Feature sections
+Buttons
+Footer
+Login
+Registration
+Google authentication labels
+Password reset
+Validation messages
+Success and error messages
+Privacy Policy
+Terms of Use
+Contact page and contact form feedback
+Authenticated application
+Sidebar
+Header
+Dashboard
+Tasks
+Calendar
+Notes
+Habits
+Goals
+AI Assistant interface
+School
+Help & Support
+Profile
+Settings homepage
+Appearance
+Notifications
+Date & Time
+Language
+Security
+Email Settings
+Privacy
+Sync
+Backup
+Export
+Delete Data
+What's New
+Feedback
+App Info
+
+Also translate:
+
+buttons;
+form labels;
+placeholders;
+empty states;
+filters;
+modal titles;
+confirmation dialogs;
+toast notifications;
+validation messages;
+error messages;
+status labels;
+navigation links.
+
+Do not leave mixed Estonian and English UI on the same selected language.
+
+Persistence
+
+The chosen language must:
+
+remain active while navigating;
+remain active after page refresh;
+remain active after login;
+remain active after logout;
+apply before authentication is restored.
+
+Local persistence is acceptable for the demo version.
+
+If the authenticated user later has a saved language preference, the architecture should allow it to override or synchronize with the local preference, but do not add Firestore in this task.
+
+Language Settings page
+
+Keep the existing Language Settings page.
+
+The App Language selection must control the same global language system used by the landing page and the rest of the application.
+
+Do not create a separate page-only state.
+
+The preview must use the same translations as the real application.
+
+The AI Assistant Language setting must remain separate from the application language.
+
+Do not change AI response behavior yet.
+
+Important rules
+Do not redesign unrelated UI.
+Do not refactor unrelated business logic.
+Do not change module functionality.
+Do not create duplicate translation systems.
+Do not hardcode translations directly across components when centralized translation keys can be used.
+Do not translate user-created content.
+Do not translate names, email addresses, task titles, notes, calendar event titles, or other user-entered data.
+Preserve the current Estonian wording where it already exists.
+Use natural, consistent English translations.
+Keep routes and URLs unchanged.
+Work method
+
+This is a large task.
+
+Before editing, inspect the project and identify:
+
+all public pages;
+all authenticated modules;
+shared layouts and navigation;
+existing text constants;
+existing localization-related code.
+
+Then implement the localization system systematically.
+
+Do not stop after translating only the Sidebar or Settings.
+
+The task is complete only when both languages work from the landing page through the full application.
+
+After completion
+List every modified and created file.
+Explain the localization architecture.
+Explain where the selected language is stored.
+List every page and module now translated.
+Mention any remaining untranslated hardcoded text, if any.
+Do not make additional unrelated improvements.
+Stop and wait for user testing.

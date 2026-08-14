@@ -1,0 +1,70 @@
+Finance details modal is visually broken and editing is not functional.
+
+Current problem:
+- when opening a transaction or bill detail, the panel/modal appears too transparent;
+- the background becomes too dark;
+- text has insufficient contrast and is hard to read;
+- the user cannot edit the opened item.
+
+Fix only the Finance detail views.
+
+Requirements:
+
+1. Visual fix
+- Use an opaque white content surface.
+- Keep the page overlay darkened, but do not darken the modal content itself.
+- Remove unintended transparency from the modal, drawer, sheet or card.
+- Use the existing Kivora text colors and design tokens.
+- Ensure all headings, labels, values, inputs and buttons have clear contrast.
+- Keep the existing Kivora border radius, shadow and spacing.
+- Do not redesign the Finance page.
+
+2. Detail view
+For both transactions and bills, show:
+- title;
+- amount;
+- type/category;
+- date or due date;
+- status;
+- recurrence when applicable;
+- note when available;
+- linked goal, task or calendar event when available.
+
+3. Editing
+Add a real Edit action.
+
+When Edit is clicked:
+- switch the existing detail view into editable mode, or open the existing form prefilled with the selected item's data;
+- save changes to the existing Firestore document;
+- preserve the original document ID;
+- update the visible Finance page immediately;
+- keep changes after page refresh.
+
+4. Actions
+Include:
+- Edit
+- Save
+- Cancel
+- Delete, with confirmation
+- Close
+
+Do not leave any dead buttons.
+
+5. Data safety
+- Do not create a duplicate item when editing.
+- Use update logic, not create/add logic.
+- Do not modify unrelated modules or working Finance creation flows.
+
+6. Localization
+All new visible text and error/success messages must support Estonian and English through the existing translation system.
+
+After fixing, test:
+- open a transaction detail;
+- edit and save it;
+- refresh and confirm the change persists;
+- open a bill detail;
+- edit and save it;
+- refresh and confirm the change persists;
+- verify text is clearly readable in both light and dark overlay states.
+
+Do not perform a broad audit. Fix this exact Finance detail-view issue.

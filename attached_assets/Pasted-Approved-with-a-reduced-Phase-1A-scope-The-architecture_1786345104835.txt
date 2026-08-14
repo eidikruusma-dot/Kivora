@@ -1,0 +1,63 @@
+Approved with a reduced Phase 1A scope.
+
+The architecture is approved, but do NOT execute the entire Phase 1 at once.
+
+Implement only the smallest safe Money-module import path first.
+
+Phase 1A
+Remove all identified temporary privacy-sensitive debug logs.
+Extract MoneyImportReviewCard into the proposed shared component without changing its behavior.
+Add POST /api/ai/bank-import.
+PDF only.
+Explicit bank-import intent, so do not use looksLikeBankStatement() for routing.
+Call the existing specialized bank extractor.
+Return { transactions, bankMeta } on successful extraction.
+Fail safely when the document is not a usable bank statement.
+Add “Impordi pangaväljavõte” to the Money module.
+Add the Money-module import modal:
+select PDF
+uploading/analyzing state
+review state using the shared MoneyImportReviewCard
+existing validation gates
+explicit final confirmation
+duplicate detection
+safe writes through the existing Money store
+success/error result
+Do NOT do yet
+Do NOT remove the existing AI-chat bank-import code yet.
+Do NOT remove preview_bank_import.
+Do NOT remove canonicalBankDataRef.
+Do NOT remove looksLikeBankStatement().
+Do NOT simplify /api/ai/upload yet.
+Do NOT refactor the existing extraction pipeline.
+Do NOT implement structural extraction yet.
+
+The old flow may become legacy later, but keep it intact until the new Money-module flow has passed real end-to-end testing.
+
+Critical safety requirement
+
+Moving the existing extractor into Money does NOT mean extraction is considered reliable.
+
+Preserve all current validation and fail-closed behavior:
+
+review_required = no import
+any needsReview transaction = no import
+importAllowed !== true = no import
+reconciliation mismatch = no import
+no weakening of validation thresholds
+Testing
+
+After implementation, stop.
+
+Report:
+
+files changed
+TypeScript/build results
+new endpoint behavior
+Money-module UI flow
+confirmation/write path
+which legacy AI-chat code was deliberately left untouched
+
+Do NOT begin Phase 1B or Phase 2 automatically.
+
+Wait for my real UI test and explicit approval.

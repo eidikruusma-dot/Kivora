@@ -1,0 +1,82 @@
+Fix the Money bulk-import confirmation flow.
+
+A confirmed architecture bug was found.
+
+Current behaviour:
+The AI correctly shows a review and asks:
+“Palun kinnita, et soovid need tehingud salvestada Raha moodulisse.”
+
+BUT the SAME AI response already contains executable actions such as:
+
+{
+  "type": "create_money_income",
+  ...
+}
+
+and
+
+{
+  "type": "create_money_expense",
+  ...
+}
+
+This is incorrect.
+
+STRICT RULE:
+No Money write action may be emitted or executed before the user confirms.
+
+Required flow:
+
+STEP 1 — REVIEW
+When a bank statement is analyzed and the user asks to import it:
+
+- show the reviewed Income and Expense lists
+- show counts and totals
+- ask ONE confirmation
+- DO NOT emit create_money_income
+- DO NOT emit create_money_expense
+- DO NOT emit batch money write actions
+- DO NOT write anything to Firestore
+
+Store the reviewed transaction plan as pending confirmation state.
+
+STEP 2 — CONFIRMATION
+Only after the user replies affirmatively, e.g.:
+- “jah”
+- “kinnitan”
+- “lisa”
+- presses a Confirm button
+
+then convert the approved pending plan into executable Money actions.
+
+STEP 3 — EXECUTION
+- execute all approved writes
+- await every write
+- verify the records through the real Money data layer
+- return actual created / skipped / failed counts
+
+CANCEL:
+If the user says:
+- “ei”
+- “tühista”
+- “ära lisa”
+
+clear the pending import and write nothing.
+
+CRITICAL:
+The visible chat UI must NEVER display raw internal JSON such as:
+"reply": ...
+"actions": [...]
+
+The user should see only the human-readable AI reply and normal confirmation UI.
+
+Internal action payloads must remain internal.
+
+Also verify that the current parser cannot execute actions merely because they are present in the first review response.
+
+Before changing code report:
+1. Whether the current action executor would have executed those Money actions before confirmation.
+2. Where pending confirmation state will be stored.
+3. Which files need to change.
+
+Do not modify PDF extraction, transaction classification, Money schemas, authentication, or unrelated UI.

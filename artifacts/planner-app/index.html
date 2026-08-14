@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/x-icon" href="./favicon.ico" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+
+    <!-- PWA manifest (absolute path; crossorigin lets Chrome read it cross-origin) -->
+    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
+
+    <!-- Theme -->
+    <meta name="theme-color" content="#6D4CFF" />
+    <meta name="background-color" content="#F4F3EF" />
+
+    <!-- App meta -->
+    <meta name="application-name" content="Kivora" />
+    <meta name="description" content="Your personal planner — tasks, calendar, habits, notes and goals in one place." />
+
+    <!-- iOS / Safari PWA -->
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Kivora" />
+
+    <!-- Android / Chrome PWA -->
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- MS Tiles (Edge / Windows) -->
+    <meta name="msapplication-TileColor" content="#6D4CFF" />
+    <meta name="msapplication-TileImage" content="./icon-192.png" />
+
+    <title>Kivora</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

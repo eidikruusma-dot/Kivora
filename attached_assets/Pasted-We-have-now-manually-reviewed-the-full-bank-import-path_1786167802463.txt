@@ -1,0 +1,514 @@
+We have now manually reviewed the full bank-import path ourselves:
+
+1. api-server/src/routes/aiUpload.ts
+2. planner-app/src/views/AIAssistantPage.tsx
+3. planner-app/src/lib/aiActions.ts
+4. api-server/src/routes/ai.ts
+
+Do NOT redesign the architecture again.
+Do NOT add more bank-specific hacks.
+Do NOT hard-code any user's transaction data or expected totals.
+
+Implement ONLY the concrete fixes below.
+
+==================================================
+A. aiUpload.ts — FIX RECOVERY LOGIC
+==================================================
+
+CONFIRMED BUG:
+
+The current code uses:
+
+const incomeDiff1 =
+  summaryIncome != null ? Math.abs(totalIncome - summaryIncome) : 0
+
+const expenseDiff1 =
+  summaryExpenses != null ? Math.abs(totalExpenses - summaryExpenses) : 0
+
+Then it treats every positive absolute difference as “missing” data and runs a second pass that only ADDS transactions.
+
+This is wrong.
+
+Example:
+
+expected income = 1000
+extracted income = 1500
+
+Math.abs(...) = 500
+
+The current retry prompt tells the model approximately 500 EUR is missing, even though 500 EUR is actually OVER-EXTRACTED.
+
+The second pass can therefore make an already-wrong extraction even worse.
+
+REQUIRED FIX:
+
+Use SIGNED deltas:
+
+const incomeDelta =
+  summaryIncome != null ? summaryIncome - totalIncome : 0
+
+const expenseDelta =
+  summaryExpenses != null ? summaryExpenses - totalExpenses : 0
+
+Meaning:
+
+delta > 0
+→ extracted total is too low
+→ something may be missing
+
+delta < 0
+→ extracted total is too high
+→ something may be duplicated, misread, or misclassified
+
+Do NOT call the current “find missing rows” second pass when the extracted total is already too high.
+
+==================================================
+B. aiUpload.ts — REPLACE ADD-ONLY RECOVERY
+==================================================
+
+The current retry pipeline can only append transactions:
+
+transactions.push(t)
+
+This is unsafe.
+
+Replace the retry result shape with a correction-oriented result.
+
+Equivalent structure:
+
+{
+  "added": [...],
+  "corrected": [...],
+  "removed": [...],
+  "uncertain": [...]
+}
+
+The retry pass must be used only when validation says recovery is actually needed.
+
+Rules:
+
+1. If totals are too LOW:
+   - search for genuinely omitted rows
+   - allow "added"
+
+2. If totals are too HIGH:
+   - do NOT search for more transactions
+   - inspect likely duplicate/misread/misclassified rows
+   - allow "corrected", "removed", or "uncertain"
+
+3. Application code decides whether a correction is accepted.
+
+4. Never blindly append everything returned by the second pass.
+
+5. If a correction cannot be proven:
+   mark the row needsReview and block import.
+
+==================================================
+C. aiUpload.ts — USE RUNNING BALANCE AS VALIDATION
+==================================================
+
+The backend already preserves:
+
+debit
+credit
+balance
+
+but currently balance is not used to validate row direction.
+
+Use balance as an independent consistency check wherever consecutive balance values are available.
+
+For adjacent transaction rows:
+
+balanceDelta = currentBalance - previousBalance
+
+Expected behaviour:
+
+credit transaction:
+balanceDelta ≈ +credit
+
+debit transaction:
+balanceDelta ≈ -debit
+
+Use a small currency tolerance.
+
+If the extracted debit/credit values contradict the observed running-balance movement:
+
+- do NOT silently trust the LLM column mapping
+- mark that transaction needsReview
+- add a clear reviewReason
+- do not allow import until resolved
+
+Do NOT infer merchant meaning from descriptions.
+
+This is mathematical validation only.
+
+IMPORTANT:
+Account statements may be ordered newest-first or oldest-first.
+
+Detect the row order before validating balance movement.
+
+Do not assume chronological direction.
+
+Use the actual sequence of running balances and transaction dates.
+
+==================================================
+D. aiUpload.ts — FIX DEDUPLICATION
+==================================================
+
+Current fingerprint:
+
+date + amount + description
+
+This can incorrectly delete legitimate repeated transactions.
+
+Two identical payments can exist on the same date with the same amount and description.
+
+Do NOT globally deduplicate legitimate first-pass rows using only these fields.
+
+Use stable source identity.
+
+Preferred identity for first-pass transactions:
+
+page + rowIndex
+
+For retry reconciliation:
+match corrections against the original row using page + rowIndex when available.
+
+If fuzzy matching is needed:
+use it only within the same page and near the same row position.
+
+Do not collapse repeated legitimate transactions.
+
+==================================================
+E. aiUpload.ts — KEEP FIRST-PASS DATA SEPARATE
+==================================================
+
+Do not mutate the canonical transaction array while deciding whether recovery results are valid.
+
+Use something equivalent to:
+
+firstPassTransactions
+recoveryCandidates
+validatedTransactions
+
+Only publish the final canonical array after deterministic validation.
+
+==================================================
+F. aiUpload.ts — BANK STATEMENT DETECTION MUST NOT DEPEND ON GARBLED TEXT
+==================================================
+
+Current extractPdf() logic is:
+
+1. extract text
+2. if text is readable → return plain text
+3. only use structured bank extraction when text is garbled
+
+This means a bank statement with a good PDF text layer may bypass the structured transaction pipeline entirely.
+
+These are two separate questions:
+
+1. Is the PDF text readable?
+2. Is this PDF a structured financial/bank statement?
+
+Refactor so a readable bank statement can still enter structured bank extraction.
+
+Do NOT force every readable PDF into bank extraction.
+
+Use lightweight document-type detection first.
+
+If it is a bank statement:
+run structured bank extraction.
+
+If it is a normal PDF:
+return readable plain text.
+
+==================================================
+G. AIAssistantPage.tsx — MAKE IMPORT GATE FAIL-CLOSED
+==================================================
+
+CONFIRMED BUG:
+
+Current logic blocks only when flags are explicitly false:
+
+bankMeta?.reconciliationOk === false
+bankMeta?.extractionComplete === false
+bankMeta?.importAllowed === false
+
+If bankMeta or one of those flags is undefined, blocked can become false.
+
+Import must be allowed ONLY when every required backend flag is explicitly true.
+
+Replace the gate with equivalent logic:
+
+const canImport =
+  bankMeta != null &&
+  bankMeta.importAllowed === true &&
+  bankMeta.reconciliationOk === true &&
+  bankMeta.extractionComplete === true &&
+  needsReview.length === 0
+
+const blocked = !canImport
+
+Do the same inside confirmMoneyImport().
+
+confirmMoneyImport() must immediately return unless:
+
+pendingMoneyMeta exists
+AND pendingMoneyMeta.importAllowed === true
+AND pendingMoneyMeta.reconciliationOk === true
+AND pendingMoneyMeta.extractionComplete === true
+AND no transaction needsReview
+
+Fail closed.
+
+Never fail open.
+
+==================================================
+H. AIAssistantPage.tsx — STRUCTURED BANK FLOW MUST NOT REQUIRE usedOCR
+==================================================
+
+Current condition:
+
+if (data.usedOCR && data.transactions?.length)
+
+This is wrong.
+
+Structured bank data can exist even when the PDF has a readable text layer.
+
+Use:
+
+if (data.transactions?.length)
+
+The structured flow must depend on the existence of structured transactions, not on whether OCR happened.
+
+==================================================
+I. AIAssistantPage.tsx — REVIEWCARD WORDING
+==================================================
+
+The first attachment ReviewCard currently says:
+
+"Kinnita ja saada AI-le"
+
+even when extraction may not be reliable.
+
+Do NOT imply that the user is confirming the financial correctness of the extraction.
+
+Use safer wording.
+
+For example:
+
+If extractionComplete/importAllowed is false:
+"Kasuta analüüsimiseks"
+
+and show:
+"Dokumendi lugemine vajab kontrolli. Raha import ei ole lubatud."
+
+If the extraction is reliable:
+the user may continue normally.
+
+This first ReviewCard is NOT the Money import confirmation.
+
+Keep that distinction clear.
+
+==================================================
+J. aiActions.ts — FIX batch_create_money_transactions
+==================================================
+
+CONFIRMED BUG:
+
+Current code:
+
+const rawAmount = Number(item.amount ?? 0)
+const type = rawAmount >= 0 ? 'income' : 'expense'
+
+This assumes positive amount = income.
+
+That is unsafe.
+
+Require an explicit transaction direction/type.
+
+Accept only:
+
+direction: "income" | "expense"
+
+or:
+
+type: "income" | "expense"
+
+If neither exists:
+reject that item.
+
+Do NOT infer income/expense from the sign of amount.
+
+Use Math.abs(amount) only AFTER type has been validated.
+
+If this action is obsolete, remove it from runtime support instead of keeping unsafe behaviour.
+
+Do not affect preview_bank_import.
+
+==================================================
+K. aiActions.ts — ALIGN CANONICAL TYPE
+==================================================
+
+CanonicalBankTransaction currently omits:
+
+id
+page
+rowIndex
+debit
+credit
+balance
+
+Align this type with the actual canonical BankTransaction structure.
+
+Do not silently narrow the canonical object.
+
+Prefer a shared type if the project structure supports it cleanly.
+
+If not, mirror the full structure exactly and add a clear comment that it must stay synchronized.
+
+==================================================
+L. ai.ts — REMOVE CONTRADICTORY preview_bank_import SCHEMA
+==================================================
+
+Current allowed action schema says:
+
+preview_bank_import: {
+  transactions: [...]
+}
+
+Later the prompt says:
+
+preview_bank_import: {}
+
+These instructions contradict each other.
+
+Change BOTH English and Estonian allowed-action definitions to:
+
+preview_bank_import: {}
+
+The LLM must never send a transaction list for this action.
+
+==================================================
+M. ai.ts — FIX LANGUAGE BUG
+==================================================
+
+English system prompt currently says that after preview_bank_import the reply must be:
+
+"Vaata üle ja kinnita import alloleval kaardil."
+
+That is Estonian.
+
+English version must use:
+
+"Review and confirm the import on the card below."
+
+Estonian version remains:
+
+"Vaata üle ja kinnita import alloleval kaardil."
+
+==================================================
+N. DO NOT CHANGE THESE WORKING PARTS
+==================================================
+
+Do NOT modify:
+
+- canonicalBankDataRef architecture
+- preview_bank_import canonical-only behaviour
+- MoneyImportReviewCard transaction direction handling
+- confirmMoneyImport use of item.direction
+- document storage actions
+- Calendar
+- Tasks
+- Notes
+- Habits
+- Goals
+- authentication
+- message edit/delete
+- AI textarea
+- attachment chip UX
+
+==================================================
+O. TESTING
+==================================================
+
+Run TypeScript/build checks for both frontend and backend.
+
+Then test:
+
+1. Missing-total scenario
+   - retry may add genuinely missing rows
+
+2. Over-total scenario
+   - retry must NOT add more rows
+   - inspect/correct/remove/flag instead
+
+3. Two identical same-day same-amount transactions
+   - both must survive dedup
+
+4. Debit/credit vs running balance contradiction
+   - row must become needsReview
+
+5. Readable-text bank statement
+   - must still enter structured bank flow
+
+6. Normal readable non-bank PDF
+   - must still return normal document text
+
+7. bankMeta undefined
+   - import button must remain disabled
+
+8. importAllowed undefined
+   - import button must remain disabled
+
+9. reconciliationOk false
+   - import blocked
+
+10. extractionComplete false
+   - import blocked
+
+11. needsReview row exists
+   - import blocked
+
+12. all flags explicitly true and no review rows
+   - import allowed
+
+13. batch_create_money_transactions with positive expense amount + direction=expense
+   - must create expense, never income
+
+14. preview_bank_import
+   - must still use canonical array only
+   - must never accept an LLM transaction array
+
+==================================================
+BEFORE IMPLEMENTATION
+==================================================
+
+Report only:
+
+1. Exact files to change.
+2. Exact functions/sections to change.
+3. Confirm that no user-specific transaction data or totals will be hard-coded.
+4. Confirm that working canonical/ref/import architecture will remain intact.
+
+Then implement.
+
+==================================================
+AFTER IMPLEMENTATION
+==================================================
+
+Report:
+
+1. Exact files changed.
+2. Recovery logic before/after.
+3. How signed delta handling works.
+4. How balance validation works.
+5. How repeated identical transactions are preserved.
+6. How readable bank PDFs are detected.
+7. How the frontend import gate is now fail-closed.
+8. How batch money direction is now validated.
+9. ai.ts prompt conflicts removed.
+10. Build/typecheck results.
+11. Any remaining unresolved issue.
+
+Do not claim the PDF reader is fully fixed until it has been tested with real documents.

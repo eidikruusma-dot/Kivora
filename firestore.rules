@@ -1,0 +1,429 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null
+        && request.auth.uid == uid;
+    }
+
+    // USER PROFILE
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && request.resource.data.uid is string
+        && request.resource.data.uid == uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.trim().size() > 0
+        && request.resource.data.displayName.trim().size() <= 40
+        && request.resource.data.email is string
+        && request.resource.data.preferredLanguage in ['et', 'en']
+        && request.resource.data.timezone is string
+        && request.resource.data.timezone.size() > 0
+        && (
+          !('photoURL' in request.resource.data)
+          || request.resource.data.photoURL is string
+          || request.resource.data.photoURL == null
+        )
+        && (
+          !('phone' in request.resource.data)
+          || request.resource.data.phone is string
+        )
+        && (
+          !('birthday' in request.resource.data)
+          || request.resource.data.birthday is string
+        )
+        && (
+          !('preferences' in request.resource.data)
+          || request.resource.data.preferences is map
+        )
+        && (
+          !('appearance' in request.resource.data)
+          || request.resource.data.appearance is map
+        )
+        && (
+          !('notifications' in request.resource.data)
+          || request.resource.data.notifications is map
+        );
+
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName',
+          'phone',
+          'birthday',
+          'preferredLanguage',
+          'timezone',
+          'photoURL',
+          'preferences',
+          'appearance',
+          'notifications',
+          'updatedAt'
+        ])
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.trim().size() > 0
+        && request.resource.data.displayName.trim().size() <= 40
+        && (
+          !('preferredLanguage' in request.resource.data)
+          || request.resource.data.preferredLanguage in ['et', 'en']
+        )
+        && (
+          !('timezone' in request.resource.data)
+          || (
+            request.resource.data.timezone is string
+            && request.resource.data.timezone.size() > 0
+          )
+        )
+        && (
+          !('phone' in request.resource.data)
+          || request.resource.data.phone is string
+        )
+        && (
+          !('birthday' in request.resource.data)
+          || request.resource.data.birthday is string
+        )
+        && (
+          !('photoURL' in request.resource.data)
+          || request.resource.data.photoURL is string
+          || request.resource.data.photoURL == null
+        )
+        && (
+          !('preferences' in request.resource.data)
+          || request.resource.data.preferences is map
+        )
+        && (
+          !('appearance' in request.resource.data)
+          || request.resource.data.appearance is map
+        )
+        && (
+          !('notifications' in request.resource.data)
+          || request.resource.data.notifications is map
+        );
+
+      allow delete: if isOwner(uid);
+    }
+
+    // SETTINGS
+    match /users/{uid}/settings/{docId} {
+      allow read, create, update, delete: if isOwner(uid);
+    }
+
+    // NOTIFICATIONS
+    match /users/{uid}/notifications/{notifId} {
+      allow read, create, update, delete: if isOwner(uid);
+    }
+
+    // TASKS
+    match /users/{uid}/tasks/{taskId} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && request.resource.data.id is string
+        && request.resource.data.id == taskId
+        && request.resource.data.title is string
+        && request.resource.data.title.trim().size() > 0;
+
+      allow update: if isOwner(uid)
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.id == taskId
+        && request.resource.data.title is string
+        && request.resource.data.title.trim().size() > 0;
+
+      allow delete: if isOwner(uid);
+    }
+
+    // HABITS
+    match /users/{uid}/habits/{habitId} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && (
+          !('id' in request.resource.data)
+          || (
+            request.resource.data.id is string
+            && request.resource.data.id == habitId
+          )
+        );
+
+      allow update: if isOwner(uid)
+        && (
+          !('id' in resource.data)
+          || request.resource.data.id == resource.data.id
+        );
+
+      allow delete: if isOwner(uid);
+    }
+
+    // GOALS
+    match /users/{uid}/goals/{goalId} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && (
+          !('id' in request.resource.data)
+          || (
+            request.resource.data.id is string
+            && request.resource.data.id == goalId
+          )
+        );
+
+      allow update: if isOwner(uid)
+        && (
+          !('id' in resource.data)
+          || request.resource.data.id == resource.data.id
+        );
+
+      allow delete: if isOwner(uid);
+    }
+
+    // CALENDAR EVENTS
+    match /users/{uid}/calendarEvents/{eventId} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && (
+          !('id' in request.resource.data)
+          || (
+            request.resource.data.id is string
+            && request.resource.data.id == eventId
+          )
+        );
+
+      allow update: if isOwner(uid)
+        && (
+          !('id' in resource.data)
+          || request.resource.data.id == resource.data.id
+        );
+
+      allow delete: if isOwner(uid);
+    }
+
+    // NOTES
+    match /users/{uid}/notes/{noteId} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && (
+          !('id' in request.resource.data)
+          || (
+            request.resource.data.id is string
+            && request.resource.data.id == noteId
+          )
+        );
+
+      allow update: if isOwner(uid)
+        && (
+          !('id' in resource.data)
+          || request.resource.data.id == resource.data.id
+        );
+
+      allow delete: if isOwner(uid);
+    }
+
+    // SCHOOL
+    match /users/{uid}/schoolItems/{itemId} {
+      allow read, create, update, delete: if isOwner(uid);
+    }
+
+    // AI CONVERSATIONS
+    match /users/{uid}/aiConversations/{conversationId} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && (
+          !('id' in request.resource.data)
+          || request.resource.data.id is string
+        );
+
+      allow update: if isOwner(uid)
+        && (
+          !('id' in resource.data)
+          || request.resource.data.id == resource.data.id
+        );
+
+      allow delete: if isOwner(uid);
+    }
+
+    // AI MESSAGES
+    match /users/{uid}/aiConversations/{conversationId}/messages/{messageId} {
+      allow read, create, update, delete: if isOwner(uid);
+    }
+
+    // ENTITY LINKS
+    match /users/{uid}/entityLinks/{linkId} {
+      allow read, create, update, delete: if isOwner(uid);
+    }
+
+    // MONEY – TRANSACTIONS
+    match /users/{uid}/transactions/{txId} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && request.resource.data.id is string
+        && request.resource.data.id == txId
+        && request.resource.data.type in ['income', 'expense', 'savings']
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.title is string
+        && request.resource.data.title.trim().size() > 0;
+
+      allow update: if isOwner(uid)
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.id == txId
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0;
+
+      allow delete: if isOwner(uid);
+    }
+
+    // MONEY – BILLS
+    match /users/{uid}/bills/{billId} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && request.resource.data.id is string
+        && request.resource.data.id == billId
+        && request.resource.data.title is string
+        && request.resource.data.title.trim().size() > 0
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.status in ['upcoming', 'paid', 'overdue'];
+
+      allow update: if isOwner(uid)
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.id == billId
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0;
+
+      allow delete: if isOwner(uid);
+    }
+
+    // MONEY – MONTHLY BUDGETS
+    match /users/{uid}/monthlyBudgets/{budgetId} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && request.resource.data.id is string
+        && request.resource.data.id == budgetId
+        && request.resource.data.month is string
+        && request.resource.data.plannedIncome is number;
+
+      allow update: if isOwner(uid)
+        && request.resource.data.id == resource.data.id;
+
+      allow delete: if isOwner(uid);
+    }
+
+    // BACKUPS
+    match /users/{uid}/backups/{backupId} {
+      allow read, create, update, delete: if isOwner(uid);
+
+      match /chunks/{chunkId} {
+        allow read, create, update, delete: if isOwner(uid);
+      }
+    }
+
+    // PUBLIC CONTACT FORM
+    match /contactSubmissions/{submissionId} {
+      allow create: if
+        request.resource.data.senderName is string
+        && request.resource.data.senderName.trim().size() > 0
+        && request.resource.data.senderName.trim().size() <= 100
+        && request.resource.data.senderEmail is string
+        && request.resource.data.senderEmail.trim().size() > 0
+        && request.resource.data.senderEmail.size() <= 320
+        && (
+          request.resource.data.subject == null
+          || (
+            request.resource.data.subject is string
+            && request.resource.data.subject.size() <= 300
+          )
+        )
+        && request.resource.data.message is string
+        && request.resource.data.message.trim().size() > 0
+        && request.resource.data.message.size() <= 5000
+        && request.resource.data.type == 'contact'
+        && request.resource.data.source == 'contact_page'
+        && request.resource.data.uid == null
+        && request.resource.data.mayContact == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.emailDeliveryStatus == 'pending';
+
+      allow update: if
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'emailDeliveryStatus'
+        ])
+        && resource.data.emailDeliveryStatus == 'pending'
+        && request.resource.data.emailDeliveryStatus in ['sent', 'failed'];
+
+      allow read, delete: if false;
+    }
+
+    // AUTHENTICATED HELP AND SUPPORT
+    match /supportMessages/{submissionId} {
+      allow create: if
+        request.auth != null
+        && request.resource.data.message is string
+        && request.resource.data.message.trim().size() > 0
+        && request.resource.data.message.size() <= 5000
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.emailDeliveryStatus == 'pending'
+        && (
+          !('userId' in request.resource.data)
+          || request.resource.data.userId == request.auth.uid
+        );
+
+      allow update: if
+        request.auth != null
+        && (
+          !('userId' in resource.data)
+          || resource.data.userId == request.auth.uid
+        )
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'emailDeliveryStatus'
+        ])
+        && resource.data.emailDeliveryStatus == 'pending'
+        && request.resource.data.emailDeliveryStatus in ['sent', 'failed'];
+
+      allow read, delete: if false;
+    }
+
+    // AUTHENTICATED FEEDBACK AND BUG REPORTS
+    match /feedbackSubmissions/{submissionId} {
+      allow create: if
+        request.auth != null
+        && request.resource.data.message is string
+        && request.resource.data.message.trim().size() > 0
+        && request.resource.data.message.size() <= 5000
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.emailDeliveryStatus == 'pending'
+        && (
+          !('userId' in request.resource.data)
+          || request.resource.data.userId == request.auth.uid
+        );
+
+      allow update: if
+        request.auth != null
+        && (
+          !('userId' in resource.data)
+          || resource.data.userId == request.auth.uid
+        )
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'emailDeliveryStatus'
+        ])
+        && resource.data.emailDeliveryStatus == 'pending'
+        && request.resource.data.emailDeliveryStatus in ['sent', 'failed'];
+
+      allow read, delete: if false;
+    }
+
+    // DEFAULT DENY
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

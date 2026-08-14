@@ -1,0 +1,455 @@
+Fix ONLY the bank-statement canonical-data pipeline.
+
+DO NOT change any currently working Kivora AI functionality.
+
+LOCKED / DO NOT TOUCH:
+- Calendar AI actions
+- Tasks AI actions
+- Notes AI actions
+- Habits AI actions
+- Goals AI actions
+- individual Money income/expense actions
+- Google/Facebook authentication
+- PDF attachment UX
+- hidden attachment context architecture
+- AI textarea
+- message edit/delete
+- document storage/actions
+- PWA
+- Android/Capacitor
+- unrelated UI
+
+==================================================
+CONFIRMED PROBLEM
+==================================================
+
+The same real SEB Estonia statement.pdf produces different transaction interpretations in different chat requests.
+
+The latest incorrect chat response produced:
+
+- 17 income transactions = 1640.53 EUR
+- 26 expense transactions = 859.09 EUR
+
+and then incorrectly claimed:
+
+"All reports match the bank statement control totals."
+
+This is false.
+
+The real SEB statement control totals are:
+
+- Income: 1449.90 EUR
+- Income transaction count: 6
+- Expenses: 992.29 EUR
+- Opening balance: 503.61 EUR
+
+Previous extraction attempts have also produced different results for the same PDF.
+
+Examples of confirmed bad behaviour:
+- normal expenses such as Rimi, Benu, Google Play and Zone Media were later reclassified as income
+- VÄLISTE ANETE 17.90 EUR has changed direction between runs
+- summary/subtotal rows such as "Väljaminekud 45.83" and "DIGIKASSANNE 92.28" were interpreted as individual transactions
+- the chat model recalculated/reinterpreted transactions after PDF processing
+- the chat claimed reconciliation succeeded when the calculated totals did not match the statement
+
+This must stop.
+
+==================================================
+CORE ARCHITECTURE RULE
+==================================================
+
+The chat LLM must NEVER independently parse, reconstruct, reclassify, recalculate or "correct" bank-statement transactions.
+
+There must be ONE canonical BankStatementExtraction object produced by the backend PDF pipeline.
+
+After that object exists, it is the ONLY source of truth.
+
+The chat may:
+- explain it
+- summarize it
+- filter it
+- answer questions about it
+- request confirmation for import
+
+The chat may NOT:
+- recreate transaction arrays
+- change transaction direction
+- change dates
+- change amounts
+- invent missing rows
+- create subtotal rows as transactions
+- calculate different totals
+- claim reconciliation independently
+
+==================================================
+1. DEFINE ONE CANONICAL BANK STATEMENT OBJECT
+==================================================
+
+Create/use one strongly validated structure equivalent to:
+
+{
+  statementId: string,
+  bank: string,
+  account?: string,
+  periodStart: string,
+  periodEnd: string,
+
+  openingBalance?: number,
+  closingBalance?: number,
+
+  expectedIncomeTotal?: number,
+  expectedExpenseTotal?: number,
+
+  pagesTotal: number,
+  pagesProcessed: number,
+
+  transactions: [
+    {
+      id: string,
+      page: number,
+      rowIndex: number,
+      date: string,
+      description: string,
+      debit: number | null,
+      credit: number | null,
+      amount: number,
+      direction: "income" | "expense",
+      currency: "EUR",
+      needsReview: boolean
+    }
+  ],
+
+  incomeCount: number,
+  expenseCount: number,
+  calculatedIncomeTotal: number,
+  calculatedExpenseTotal: number,
+
+  reconciliationOk: boolean,
+  extractionComplete: boolean,
+  importAllowed: boolean,
+  validationErrors: string[]
+}
+
+Names may follow the existing codebase conventions, but the architecture must be equivalent.
+
+==================================================
+2. ONE EXTRACTION PER ATTACHMENT
+==================================================
+
+When statement.pdf is uploaded:
+
+- process it once through the backend extraction pipeline
+- perform any required recovery/second-pass extraction there
+- validate it there
+- create the canonical object there
+
+Do NOT re-run bank-statement extraction because the user later asks:
+"analüüsi uuesti"
+"näita tulusid"
+"kontrolli kulusid"
+etc.
+
+Those later questions must query the already-created canonical object.
+
+The same attachment in the same conversation must not produce a new independent interpretation on every user message.
+
+==================================================
+3. PAGE-LEVEL EXTRACTION
+==================================================
+
+Process every PDF page independently enough that page omissions can be detected.
+
+For each page preserve:
+- page number
+- transaction row order
+- debit
+- credit
+
+Do not flatten away the debit/credit source information before validation.
+
+pagesProcessed must equal pagesTotal before extractionComplete can be true.
+
+==================================================
+4. DETERMINISTIC DIRECTION
+==================================================
+
+Direction must be calculated in application code.
+
+credit > 0:
+income
+
+debit > 0:
+expense
+
+Never ask the chat model to determine income/expense from the description.
+
+If direction cannot be proven:
+needsReview = true.
+
+==================================================
+5. REMOVE SUMMARY/SUBTOTAL ROWS
+==================================================
+
+Rows representing:
+- page totals
+- "Väljaminekud"
+- "Sissetulekud"
+- balance summaries
+- "Digikassa" summary totals
+- opening/closing balance
+- statement control totals
+
+must NOT become individual transactions unless they are clearly actual transaction rows.
+
+Use row structure/page position/source columns to distinguish transactions from summaries.
+
+==================================================
+6. TOTALS MUST BE CALCULATED IN CODE
+==================================================
+
+The LLM must never provide authoritative totals.
+
+Application code calculates:
+
+incomeTransactions =
+transactions.filter(direction === "income")
+
+expenseTransactions =
+transactions.filter(direction === "expense")
+
+incomeCount = incomeTransactions.length
+expenseCount = expenseTransactions.length
+
+calculatedIncomeTotal =
+sum(incomeTransactions.amount)
+
+calculatedExpenseTotal =
+sum(expenseTransactions.amount)
+
+Round currency deterministically to cents.
+
+==================================================
+7. RECONCILIATION MUST BE CODE, NOT LLM TEXT
+==================================================
+
+reconciliationOk can only be true if the deterministic validation passes.
+
+For the current SEB statement:
+
+calculatedIncomeTotal must equal:
+1449.90 EUR
+
+calculatedExpenseTotal must equal:
+992.29 EUR
+
+If statement control totals exist and calculated totals differ:
+
+reconciliationOk = false
+extractionComplete = false
+importAllowed = false
+
+The chat must NEVER be able to override these flags.
+
+It must be impossible for the chat to say:
+"all control totals match"
+when reconciliationOk === false.
+
+==================================================
+8. CHAT RECEIVES CANONICAL DATA, NOT RAW PDF CONTENT
+==================================================
+
+After bank-statement extraction succeeds or fails, the AI chat must receive only a compact canonical bank-statement context.
+
+Do NOT inject:
+- raw PDF binary
+- OCR dump
+- garbled pdf-parse text
+- raw vision output
+- a second independently generated transaction interpretation
+
+For example the hidden context may contain:
+
+BANK_STATEMENT_CANONICAL_DATA
+statementId: ...
+reconciliationOk: false
+extractionComplete: false
+importAllowed: false
+transactions: [...]
+
+The system prompt must explicitly say:
+
+"Bank statement transaction data in BANK_STATEMENT_CANONICAL_DATA is authoritative. Do not reconstruct, reclassify, alter or invent transactions."
+
+==================================================
+9. USER QUESTIONS MUST USE THE SAME OBJECT
+==================================================
+
+If user asks:
+"Näita tulusid"
+
+→ filter canonical transactions where direction=income.
+
+If user asks:
+"Näita kulusid"
+
+→ filter canonical expenses.
+
+If user asks:
+"Mis on kogusumma?"
+
+→ use calculated totals already stored in canonical data.
+
+If user asks:
+"Kontrolli uuesti"
+
+→ report the existing validation/reconciliation result.
+
+Do not perform another free-form LLM interpretation.
+
+If a true re-extraction is needed, it must be an explicit backend action such as:
+"Reprocess document"
+and replace the canonical object only after full validation.
+
+==================================================
+10. IMPORT MUST USE THE SAME CANONICAL ARRAY
+==================================================
+
+preview_bank_import must receive the exact canonical transactions array.
+
+Visible review must also be generated from that exact array.
+
+There must be no separately generated visible review.
+
+Before confirmation:
+NO Money writes.
+
+After confirmation:
+use the exact approved canonical transaction IDs.
+
+Do not ask the LLM to recreate the actions from prose.
+
+==================================================
+11. HARD IMPORT GATE
+==================================================
+
+Money bulk import is allowed ONLY when:
+
+pagesProcessed === pagesTotal
+AND
+extractionComplete === true
+AND
+reconciliationOk === true
+AND
+importAllowed === true
+AND
+transactions.every(t => !t.needsReview)
+
+Otherwise:
+- confirmation/import button disabled
+- no Money write actions generated
+
+Show the real reason from validationErrors.
+
+==================================================
+12. DEFENSIVE CHAT RESPONSE
+==================================================
+
+The chat response must never expose raw internal JSON.
+
+If the model/API returns:
+
+{
+  "reply": "...",
+  "actions": [...]
+}
+
+render only reply.
+
+Keep actions internal.
+
+The user must never see the JSON wrapper.
+
+==================================================
+13. TEST THE ACTUAL REAL SEB PDF
+==================================================
+
+Use the latest real statement.pdf that has been used in production testing.
+
+Do not prove success with a generated sample PDF.
+
+Run the SAME PDF THREE TIMES from a clean extraction state.
+
+For each run record:
+
+- pagesTotal
+- pagesProcessed
+- transaction count
+- income count
+- income total
+- expense count
+- expense total
+- reconciliationOk
+- extractionComplete
+- importAllowed
+- hash/fingerprint of normalized canonical transactions
+
+The three normalized transaction fingerprints must be identical.
+
+Expected control values:
+
+Income:
+6 transactions
+1449.90 EUR
+
+Expenses:
+992.29 EUR
+
+All pages:
+processed
+
+If the extraction still cannot reliably reach the SEB control totals:
+DO NOT fake success.
+
+Return:
+reconciliationOk = false
+extractionComplete = false
+importAllowed = false
+
+and report exactly which page/rows remain unresolved.
+
+==================================================
+BEFORE CHANGING CODE, REPORT
+==================================================
+
+1. Where the canonical extraction object currently lives, if it exists.
+2. Where the chat currently receives bank-statement context.
+3. Why the chat can currently reinterpret the same PDF differently.
+4. Where visible review totals are currently generated.
+5. Where preview_bank_import transactions are generated.
+6. Exact files that need to change.
+7. Whether the latest implementation truly processes pages separately or still sends the whole PDF as one free-form extraction request.
+
+==================================================
+AFTER IMPLEMENTATION, REPORT
+==================================================
+
+1. Exact files changed.
+2. Final canonical data structure.
+3. How chat access to raw PDF/OCR data was removed.
+4. How deterministic debit/credit direction works.
+5. How subtotal rows are rejected.
+6. How reconciliation is calculated.
+7. Three-run results for the SAME real SEB PDF.
+8. Canonical transaction fingerprint for each run.
+9. Whether all three fingerprints match.
+10. Final:
+    - income count
+    - income total
+    - expense count
+    - expense total
+    - reconciliationOk
+    - extractionComplete
+    - importAllowed
+11. Any unresolved rows.
+
+Do not change anything outside this bank-statement canonical-data pipeline.

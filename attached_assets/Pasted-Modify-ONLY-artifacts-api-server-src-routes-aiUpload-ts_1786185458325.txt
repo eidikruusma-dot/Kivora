@@ -1,0 +1,420 @@
+Modify ONLY:
+
+artifacts/api-server/src/routes/aiUpload.ts
+
+Goal:
+Separate metadata/control-total extraction from transaction extraction.
+
+Do NOT redesign the rest of the PDF pipeline.
+Do NOT change transaction validation, running balance validation, retry logic, correction logic, deduplication, frontend, AI chat, Money actions, auth, or import confirmation.
+
+==================================================
+WHY THIS CHANGE IS NEEDED
+==================================================
+
+Current buildPagePrompt() asks a single Vision call per page to do all of this at once:
+
+1. identify page type
+2. detect table schema
+3. extract every transaction
+4. extract metadata
+5. extract opening/closing balances
+6. extract statement-period summary totals
+
+Real production testing now shows:
+- transaction rows are being extracted
+- but metadata/control totals are all null:
+  summaryIncome = null
+  summaryExpenses = null
+  openingBalance = null
+  closingBalance = null
+
+This causes:
+hasVerification = false
+extractionComplete = false
+importAllowed = false
+
+The likely issue is that the large transaction JSON response crowds out or destabilizes the metadata fields.
+
+We want two independent extraction tracks.
+
+==================================================
+1. KEEP TRANSACTION EXTRACTION SEPARATE
+==================================================
+
+Keep buildPagePrompt() focused on:
+
+- pageType
+- tableSchema
+- transactions
+
+Remove metadata extraction responsibility from this prompt.
+
+It should NOT return:
+- bank
+- accountNumber
+- period
+- openingBalance
+- closingBalance
+- summaryIncome
+- summaryExpenses
+
+Do NOT otherwise change the transaction instructions.
+
+Do NOT alter:
+- debit/credit rules
+- balance column logic
+- multi-line description handling
+- row skip rules
+- transaction JSON shape
+
+==================================================
+2. ADD A DEDICATED METADATA PROMPT
+==================================================
+
+Add a new function:
+
+buildMetadataPrompt(pageNum: number, totalPages: number): string
+
+This prompt must extract ONLY document metadata and statement-level control values.
+
+It must return JSON equivalent to:
+
+{
+  "bank": "bank name" | null,
+  "accountNumber": "IBAN/account number" | null,
+  "period": {
+    "from": "YYYY-MM-DD",
+    "to": "YYYY-MM-DD"
+  } | null,
+
+  "openingBalance": {
+    "found": true,
+    "value": 123.45,
+    "sourceLabel": "exact printed label"
+  } | {
+    "found": false
+  },
+
+  "closingBalance": {
+    "found": true,
+    "value": 123.45,
+    "sourceLabel": "exact printed label"
+  } | {
+    "found": false
+  },
+
+  "summaryIncome": {
+    "found": true,
+    "value": 123.45,
+    "sourceLabel": "exact printed label"
+  } | {
+    "found": false
+  },
+
+  "summaryExpenses": {
+    "found": true,
+    "value": 123.45,
+    "sourceLabel": "exact printed label"
+  } | {
+    "found": false
+  }
+}
+
+==================================================
+3. METADATA PROMPT RULES
+==================================================
+
+The metadata prompt must explicitly state:
+
+- Do NOT extract transactions.
+- Do NOT return transaction rows.
+- Do NOT calculate totals from transaction rows.
+- Copy only values visibly printed as document-level metadata/control values.
+- sourceLabel must be the exact text printed next to the value.
+
+Opening balance examples may include:
+- Opening balance
+- Algsaldo
+- Avamissaldo
+- Algjääk
+- Starting balance
+
+Closing balance examples may include:
+- Closing balance
+- Lõppsaldo
+- Sulgemissaldo
+- Lõppjääk
+- Ending balance
+
+Income summary examples may include:
+- Total credits
+- Total income
+- Sissetulekud
+- Laekumised
+- Krediteeriti kokku
+
+Expense summary examples may include:
+- Total debits
+- Total expenses
+- Väljaminekud
+- Maksed
+- Debiteeriti kokku
+
+IMPORTANT:
+These are semantic examples only.
+Do NOT hard-code any bank-specific amount or any user-specific value.
+
+Reject:
+- individual transaction amounts
+- running balance values
+- per-page subtotals
+- "Page total"
+- "Lehe kokku"
+- transaction-row "Jääk"/"Balance"
+- account opening/closing values as income/expense totals
+- income/expense totals as opening/closing balances
+
+If the field is not clearly visible on that page:
+return { "found": false }
+
+Do NOT guess.
+
+==================================================
+4. RUN TWO PARALLEL EXTRACTION TRACKS
+==================================================
+
+Inside extractBankStatementOCR():
+
+Track A:
+pageResponses
+
+Use buildPagePrompt() on every page for:
+- pageType
+- tableSchema
+- transactions
+
+Track B:
+metadataResponses
+
+Use buildMetadataPrompt() on every page for:
+- bank
+- accountNumber
+- period
+- openingBalance
+- closingBalance
+- summaryIncome
+- summaryExpenses
+
+Both tracks may run in parallel.
+
+For example conceptually:
+
+const [pageResponses, metadataResponses] = await Promise.all([
+  Promise.all(...transaction/page calls...),
+  Promise.all(...metadata calls...)
+])
+
+Do not serialize them unnecessarily.
+
+==================================================
+5. BUILD metaResults ONLY FROM metadataResponses
+==================================================
+
+Current code builds metaResults from pageResponses and flattens r.metadata.
+
+Remove that dependency.
+
+metaResults must now come ONLY from metadataResponses.
+
+The transaction extraction response must not be used as metadata authority.
+
+==================================================
+6. KEEP EXISTING METADATA PICKERS
+==================================================
+
+Keep the existing behaviour of:
+
+pickSummaryField()
+pickStr()
+pickPeriod()
+
+unless a minimal type/shape adjustment is needed because metadata is no longer nested.
+
+Do NOT rewrite them unnecessarily.
+
+pickSummaryField must still preserve:
+
+value
+sourceLabel
+page
+
+==================================================
+7. ADD METADATA DIAGNOSTIC LOGGING
+==================================================
+
+After metadataResponses are received, log privacy-safe per-page metadata detection.
+
+Do NOT log:
+- account number
+- IBAN
+- transaction descriptions
+- personal names
+
+Allowed diagnostic format:
+
+[pdf OCR META] Page 1:
+bank=true
+period=true
+openingBalance=true
+closingBalance=false
+summaryIncome=false
+summaryExpenses=false
+
+[pdf OCR META] Page 4:
+bank=false
+period=false
+openingBalance=false
+closingBalance=true
+summaryIncome=true
+summaryExpenses=true
+
+Then keep the existing provenance logs:
+
+Balances:
+opening=... (label="...", pX)
+closing=... (label="...", pX)
+
+Summary totals:
+income=... (label="...", pX)
+expenses=... (label="...", pX)
+
+Do NOT expose user-specific transaction data in diagnostic logs.
+
+==================================================
+8. HANDLE MULTIPLE CANDIDATES SAFELY
+==================================================
+
+If multiple pages return the same metadata field:
+
+Do NOT silently overwrite values.
+
+Current first-valid-value behaviour may remain for now, but add a diagnostic warning when conflicting numeric values are found.
+
+Example:
+
+[pdf OCR META] Conflicting summaryIncome candidates:
+p2 label="..." value=...
+p4 label="..." value=...
+
+Do not automatically reconcile or average conflicting values.
+
+If there is a conflict that cannot be deterministically resolved:
+prefer blocking import rather than guessing.
+
+A minimal implementation may:
+- preserve the first candidate
+- add a metadata conflict flag / validation error
+- make importAllowed false
+
+Do NOT choose values based on which one happens to match calculated transaction totals.
+
+==================================================
+9. DO NOT TOUCH TRANSACTION PIPELINE
+==================================================
+
+Do NOT modify:
+
+validateRawTransactions()
+applyRunningBalanceValidation()
+txnFingerprint()
+firstPassTransactions
+signed delta logic
+find-missing retry
+correction pass
+validatedTransactions
+direction derivation
+reconcileBalances()
+SUBTOTAL_RE
+
+The purpose of this change is ONLY to make metadata/control totals independently readable.
+
+==================================================
+10. FIX THE MISLEADING PAGE SUMMARY LINE
+==================================================
+
+Current summaryLines contains:
+
+`Pages: ${pageCount}/${pageCount} processed`
+
+Change it to:
+
+`Pages: ${pagesProcessed}/${pageCount} processed`
+
+No other summary text changes are needed.
+
+==================================================
+11. TESTING
+==================================================
+
+Run TypeScript/build checks.
+
+Then verify these cases:
+
+1. Transaction-heavy page:
+   - transaction response still extracts rows
+   - metadata response is independent
+
+2. Header page:
+   - bank / period / openingBalance can be detected
+
+3. Summary page:
+   - summaryIncome / summaryExpenses / closingBalance can be detected
+
+4. Page without metadata:
+   - returns found:false, does not guess
+
+5. Page subtotal:
+   - must NOT be accepted as statement-period summary
+
+6. Running balance:
+   - must NOT be accepted as summaryIncome/summaryExpenses
+
+7. Multiple conflicting metadata candidates:
+   - log conflict
+   - do not guess
+   - block import if conflict remains unresolved
+
+8. Transaction pipeline:
+   - transaction count and direction logic unchanged
+
+==================================================
+BEFORE IMPLEMENTATION
+==================================================
+
+Report only:
+
+1. Exact functions/sections in aiUpload.ts that will change.
+2. Confirm buildPagePrompt transaction rules will remain intact.
+3. Confirm no user-specific totals or bank-specific amounts will be hard-coded.
+4. Confirm no other files will be touched.
+
+Then implement.
+
+==================================================
+AFTER IMPLEMENTATION
+==================================================
+
+Report:
+
+1. Exact sections changed.
+2. New buildMetadataPrompt structure.
+3. How pageResponses and metadataResponses now run.
+4. How metaResults is built.
+5. How conflicts are handled.
+6. New metadata diagnostics.
+7. Confirm transaction extraction code was not changed.
+8. TypeScript/build result.
+9. Any unresolved issue.
+
+Do NOT claim the bank statement import is fully fixed until tested with a real uploaded statement.

@@ -1,0 +1,92 @@
+PDF/file handling cleanup and audit only. Do NOT redesign or implement new PDF logic.
+
+I want to clean up the current PDF/file-handling code because the project has accumulated multiple overlapping PDF extraction paths and experimental files.
+
+Goal
+
+Make the PDF-related codebase understandable and safe to continue manually.
+
+Do NOT try to fix bank statement extraction.
+Do NOT add new parsing logic.
+Do NOT change product behavior.
+Do NOT remove working functionality unless it is clearly dead/experimental and you first report it.
+
+First: audit everything
+
+Inspect the entire repository and identify all files/functions related to:
+
+generic PDF upload
+generic PDF text extraction
+OCR/scanned PDF handling
+bank statement extraction
+structural PDF extraction
+invoice/document extraction
+PDF test/probe/experimental files
+file upload routing
+
+Include especially anything under:
+
+artifacts/api-server/src/routes
+artifacts/api-server/src/lib
+frontend upload/import components
+Classify every PDF-related file/function into one of these groups
+Generic document handling
+Bank statement import
+Invoice/document-specific parsing
+Shared PDF utilities
+Tests
+Experimental/debug/temporary
+Dead/legacy
+Important
+
+I may have created some files in the wrong folders manually.
+
+Check whether any current PDF-related files are:
+
+in the wrong directory
+duplicated
+importing across layers incorrectly
+test files mixed with production files
+experimental helpers living in production routes
+production helpers living in test-only locations
+Files I expect you to inspect carefully
+
+Examples include:
+
+aiUpload.ts
+pdfTextProbe.ts
+parseEuropeanNumber.ts
+groupIntoRows.ts
+detectColumnMap.ts
+classifyTransactionRows.ts
+extractStructural.ts
+extractStructuralPdfBuffer.ts
+extractStructuralControls.ts
+reconcileStructuralTransactions.ts
+all related .test.ts files
+any statement.pdf or temporary PDF files
+Cleanup rules
+Remove temporary real-user PDF files if any exist in the repository.
+Remove temporary generated .mjs test artifacts if they are present.
+Do NOT delete test source files.
+Do NOT delete structural parser work.
+Do NOT delete legacy bank extraction yet.
+Do NOT modify /api/ai/bank-import behavior.
+Do NOT modify /api/ai/upload behavior.
+Do NOT change UI.
+What I want from you
+
+First produce a cleanup report containing:
+
+Every PDF-related file and its purpose.
+Which files are in the wrong location.
+Which files should be moved.
+Which files are safe to delete.
+Which files must stay.
+Which code paths overlap or conflict.
+A proposed clean folder structure.
+Any real-user/private files found that should be removed immediately.
+
+Do not make code changes yet.
+
+Wait for my approval after the report.

@@ -1,0 +1,61 @@
+Implement real Firestore persistence and real-time synchronization for these modules only:
+
+- Goals
+- Calendar events
+- Notes
+- AI conversation history
+
+Do not modify Tasks or Habits.
+
+Use these Firestore paths:
+
+users/{uid}/goals/{goalId}
+users/{uid}/calendarEvents/{eventId}
+users/{uid}/notes/{noteId}
+users/{uid}/aiConversations/{conversationId}
+
+Required behavior for every module:
+- Load the authenticated user's data from Firestore.
+- Use onSnapshot for real-time updates.
+- Creating an item writes it to Firestore.
+- Editing an item updates Firestore.
+- Deleting an item removes it from Firestore.
+- Changes must appear automatically in another browser or device signed in with the same account.
+- If Firestore is empty, show an empty state.
+- Do not automatically upload mock/demo data.
+- Remove the in-memory mock data layer for these modules.
+- Reuse the existing types, components, dialogs, filters, and UI.
+- Create one shared store/service per module.
+- Prevent duplicate listeners.
+- Clean up onSnapshot listeners on logout or unmount.
+- Keep Estonian and English localization.
+- Do not redesign any page.
+- Do not modify unrelated modules.
+
+Calendar-specific requirements:
+- Preserve all existing event fields.
+- Creating, editing, moving, resizing, completing, and deleting events must update Firestore.
+- Keep current calendar views and date/time preference support.
+
+Notes-specific requirements:
+- Support both quick notes and full notes.
+- Preserve title, content, type, timestamps, tags, pinned state, and any existing fields used by the UI.
+
+AI-specific requirements:
+- Persist conversation history only.
+- Do not store API keys, hidden prompts, or internal system instructions.
+- Store only user-visible messages, conversation title, timestamps, and conversation id.
+
+Security rules:
+- Add rules for:
+  users/{uid}/aiConversations/{conversationId}
+- Keep the existing rules for goals, calendarEvents, and notes unchanged.
+- Only the authenticated owner may read and write.
+
+After finishing:
+1. Run typecheck.
+2. List every modified file.
+3. Explain the Firestore structure.
+4. Explain how real-time sync works for each module.
+5. Show the exact new Firestore rules addition for AI conversations.
+6. Stop for manual testing.

@@ -1,0 +1,93 @@
+Fix ONLY the bank import review consistency.
+
+Confirmed bug with the latest real SEB statement:
+
+The visible review says:
+- 6 income transactions
+- total income 1449.90 EUR
+
+But the actual preview_bank_import transaction array classifies:
+- OÜ PORTMERK 60.00 EUR as expense
+- VÄLISTE ANETE 17.90 EUR as expense
+
+Those two transactions are actually income.
+
+The visible response compensates by inventing:
+- "Uus tulu: 0 €"
+- "Uus tulu: 0 €"
+
+This is incorrect and dangerous.
+
+STRICT SCOPE:
+- Do not modify PDF upload
+- Do not modify attachment UX
+- Do not modify Money write actions
+- Do not modify authentication
+- Do not redesign UI
+- Fix only bank transaction review/pending import consistency
+
+Required architecture:
+
+1. There must be ONE canonical validated transaction array.
+
+2. The following must ALL be derived from that exact same array:
+- visible income list
+- visible expense list
+- income count
+- expense count
+- total income
+- total expenses
+- preview_bank_import payload
+
+3. Never generate visible review rows separately from the transaction array.
+
+4. Never invent placeholder rows such as:
+- "Uus tulu: 0 €"
+
+5. For the latest SEB statement, these must be income:
+- SOTSIAALKINDLUSTUSAMET +710.00
+- VÄLISTE ANETE +150.00
+- OÜ PORTMERK +60.00
+- VÄLISTE ANETE +17.90
+- Andres Hall +252.00
+- PERJE KLETTENBERG +260.00
+
+Expected:
+6 income transactions
+Total income: 1449.90 EUR
+
+6. If statement summary totals/counts do not match the canonical transaction array:
+- DO NOT silently alter the visible response
+- DO NOT invent missing rows
+- mark extraction as inconsistent
+- block import
+- show:
+  "Kontroll vajalik: tehingute loend ei vasta pangaväljavõtte kontrollsummadele."
+
+7. preview_bank_import must only be created from the canonical validated transaction array.
+
+8. Before allowing confirmation, verify:
+- sum(income) matches displayed income total
+- sum(expense) matches displayed expense total
+- income count matches displayed count
+- expense count matches displayed count
+
+If any mismatch exists:
+- do not allow confirm/import
+
+Before changing code report:
+- where the visible review is generated
+- where preview_bank_import transactions are generated
+- why they can currently diverge
+- exact files to change
+
+After implementation test with the latest real SEB statement and report:
+- canonical income count
+- canonical income total
+- canonical expense count
+- canonical expense total
+- whether OÜ PORTMERK 60.00 is income
+- whether VÄLISTE ANETE 17.90 is income
+- whether review and preview_bank_import are byte-for-byte based on the same transaction objects
+
+Do not change anything outside this bank import review pipeline.

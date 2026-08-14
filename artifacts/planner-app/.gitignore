@@ -1,0 +1,16 @@
+
+# Capacitor Android build outputs
+android/app/build/
+android/.gradle/
+android/local.properties
+
+# Keystores — never commit signing keys
+android/app/kivora-release.keystore
+*.keystore
+*.jks
+
+# Android Vite build output
+dist/android/
+
+# Top-level build outputs (APK/AAB)
+/build-output/

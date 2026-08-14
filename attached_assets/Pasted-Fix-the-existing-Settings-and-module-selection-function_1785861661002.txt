@@ -1,0 +1,95 @@
+Fix the existing Settings and module-selection functionality.
+
+Do not perform another broad audit.
+Do not redesign the Settings page.
+Do not modify unrelated modules.
+Do not rewrite working systems.
+
+There are three confirmed bugs.
+
+BUG 1 — New user onboarding does not open
+
+A newly registered account currently enters the application without seeing the module-selection screen.
+
+Fix the routing and initialization so that:
+
+- a genuinely new user with no saved module settings is redirected to /onboarding;
+- onboarding appears only once;
+- after the user saves their selection, onboardingComplete becomes true;
+- refresh and logout/login do not show onboarding again;
+- existing users with saved settings are not redirected;
+- do not use an unreliable “account younger than 24 hours” rule;
+- the existence of users/{uid}/settings/modules must be the source of truth.
+
+BUG 2 — Settings → Modules switches do nothing
+
+The module toggle UI exists, but switching modules on or off has no visible effect.
+
+Fix it so that every toggle:
+
+- updates users/{uid}/settings/modules in Firestore;
+- updates the UI immediately;
+- hides or shows the correct sidebar item;
+- hides or shows the corresponding Dashboard widgets;
+- persists after refresh;
+- persists after logout and login;
+- never deletes module data.
+
+If the user disables the currently open module:
+- redirect safely to Home.
+
+Home, Notifications and Settings:
+- must always remain visible;
+- must not have working off switches.
+
+Selectable modules:
+
+- Calendar
+- Tasks
+- Notes
+- Habits
+- Goals
+- Finance
+- School
+- AI Assistant
+
+BUG 3 — Settings quick actions do not work
+
+Make these existing Settings quick actions functional:
+
+- Change password → open the existing Security/password-change view.
+- Download data → open or run the existing export functionality.
+- Check synchronization → open or run the existing synchronization check.
+- Contact support → open the existing Help & Support view.
+
+Do not create duplicate pages.
+Use the existing Settings routes and existing functionality.
+
+Important:
+
+- Keep Estonian and English support.
+- Do not hardcode visible text.
+- Do not change the current Settings design.
+- Do not add fake success states.
+- Do not claim a switch or quick action works unless the visible UI was tested.
+
+Test after fixing:
+
+1. Create a completely new disposable account.
+2. Confirm onboarding opens automatically.
+3. Select only Calendar, Tasks, Notes and Finance.
+4. Confirm the other optional modules disappear from the sidebar.
+5. Refresh and confirm the selection remains.
+6. Open Settings → Modules.
+7. Enable School and confirm it appears immediately.
+8. Disable School and confirm it disappears without deleting data.
+9. Re-enable School and confirm its previous data returns.
+10. Test every Settings quick action from the visible Settings page.
+
+After implementation report only:
+- exact cause of each bug;
+- files changed;
+- whether all ten visible tests passed;
+- anything still incomplete.
+
+Begin fixing these exact issues now.

@@ -1,0 +1,227 @@
+Kivora 1.0 – Final Fixes and School Integration
+
+Do not perform another broad audit.
+Do not redesign any page.
+Do not modify unrelated working systems.
+Reuse the existing stores, Firestore collections, entityLinks system and translation system.
+Implement all items in one task.
+
+==================================================
+1. NOTES – REAL-TIME SEARCH INDEX
+==================================================
+
+Confirmed bug:
+
+After creating, editing or deleting a note, the global search does not update immediately. The user must refresh the page before the note can be found.
+
+Fix this so that:
+
+- a newly created note appears in search immediately;
+- an edited note is searchable by its new title and content immediately;
+- a deleted note disappears from search immediately;
+- no page refresh is required;
+- search continues using the real live Notes store;
+- do not create a duplicate notes index or mock cache.
+
+Test create, edit, delete and search without refreshing.
+
+==================================================
+2. SCHOOL – REMOVE “HOMEWOR / HOMEWORK” TEXT BUG
+==================================================
+
+When editing a school assignment in Estonian, the type or label appears as:
+
+- “homewor”
+- “homework”
+
+This must never be shown as a raw internal value.
+
+Use the correct translated label:
+
+Estonian:
+Kodutöö
+
+English:
+Homework
+
+Internal enum values may remain unchanged, but all user-visible text must use the existing translation system.
+
+Check create, details and edit views.
+
+==================================================
+3. SCHOOL – CONSISTENT DATE PICKER
+==================================================
+
+School item forms currently use an inconsistent date-entry experience.
+
+Use the same existing Kivora calendar/date picker used in the other working modules.
+
+Apply it to:
+
+- school assignments;
+- tests;
+- exams;
+- timetable-related dated items where applicable.
+
+Requirements:
+
+- selecting a date must be visual and consistent;
+- the selected date must remain exact;
+- no UTC one-day shift;
+- create and edit forms must use the same picker;
+- support Estonian and English.
+
+Do not create another date-picker component if an existing one can be reused.
+
+==================================================
+4. SCHOOL SUBJECTS ↔ TIMETABLE
+==================================================
+
+The Timetable must use the same real subjects created in the School Subjects section.
+
+Rules:
+
+- a subject is entered only once;
+- when adding or editing a timetable lesson, the user selects an existing subject;
+- do not ask the user to type the same subject again;
+- subject name, color and other shared information come from the same subject object;
+- editing a subject updates its timetable display;
+- deleting a subject must not silently corrupt timetable items;
+- show a clear confirmation if linked timetable entries exist.
+
+Do not create a second subject system.
+
+Use the existing entityLinks system where appropriate.
+
+==================================================
+5. SCHOOL ASSIGNMENTS ↔ TASKS
+==================================================
+
+School assignments must integrate with the existing Tasks module.
+
+When creating or editing a school assignment, provide a clear option:
+
+Estonian:
+Lisa ka ülesannetesse
+
+English:
+Add to Tasks
+
+When enabled:
+
+- create or update one linked Task;
+- use the same title, description and due date;
+- assign it to the Learning / Õppimine category or list;
+- preserve one source of truth and a real link between the School item and Task;
+- do not create duplicates after repeated edits;
+- completing the linked task should be reflected consistently;
+- deleting the School assignment should safely handle the linked Task;
+- show the link in the School item detail view;
+- allow opening the related Task.
+
+If a linked Task already exists, show that it is already connected instead of creating another one.
+
+==================================================
+6. TIMETABLE → QUICK SCHOOL ASSIGNMENT
+==================================================
+
+From a timetable lesson, allow the user to quickly create a School assignment for that subject.
+
+The subject must already be selected automatically from the timetable lesson.
+
+The user then enters only:
+
+- title;
+- description;
+- due date;
+- priority, if supported;
+- whether to add it to Tasks.
+
+Do not duplicate the subject or timetable data.
+
+==================================================
+7. PHONE NOTIFICATIONS – HONEST STATUS
+==================================================
+
+Review the current notification implementation only enough to report its real status.
+
+Do not fake phone notifications.
+
+Confirm whether Kivora currently supports:
+
+- in-app notifications only;
+- browser notifications;
+- installable PWA push notifications;
+- Android/iOS native push notifications.
+
+If the existing project already has browser/PWA notification infrastructure, connect real due reminders safely.
+
+If that infrastructure does not yet exist, do not build an unrelated large push system in this task. Report it clearly as the next PWA/release step.
+
+The application must never claim that a phone notification was scheduled if only an in-app notification exists.
+
+==================================================
+8. DATA AND SAFETY
+==================================================
+
+- Do not delete existing real user data.
+- Do not create duplicate subjects, tasks or school assignments.
+- Editing must update existing documents.
+- Preserve existing document IDs.
+- All changes must persist after refresh and logout/login.
+- Do not introduce mock data or fake success states.
+- Do not weaken Firestore security rules.
+
+If a new Firestore field or permission is genuinely required, make only the smallest necessary change and provide the complete updated rules file.
+
+==================================================
+9. TESTING
+==================================================
+
+Test visibly:
+
+Notes:
+1. Create a note.
+2. Search immediately without refreshing.
+3. Edit it and search using the new text.
+4. Delete it and confirm it disappears immediately.
+
+School translation:
+1. Create and edit a School assignment in Estonian.
+2. Confirm “Kodutöö” is displayed, never “homewor” or raw “homework”.
+
+Date picker:
+1. Create an assignment, test and exam.
+2. Edit each date.
+3. Confirm dates remain exact after refresh.
+
+Subjects and timetable:
+1. Create one subject.
+2. Add it to the timetable.
+3. Edit the subject name and color.
+4. Confirm the timetable updates.
+
+School and Tasks:
+1. Create a School assignment with “Add to Tasks” enabled.
+2. Confirm exactly one linked Task appears in Õppimine / Learning.
+3. Edit the School assignment.
+4. Confirm the linked Task updates without duplication.
+5. Open the linked Task from the School detail view.
+6. Delete the test data safely.
+
+==================================================
+REPORT
+==================================================
+
+After implementation report only:
+
+- files changed;
+- Notes real-time search result;
+- translation bug result;
+- date-picker result;
+- Subject ↔ Timetable result;
+- School Assignment ↔ Tasks result;
+- exact phone notification status;
+- any remaining issue before Kivora 1.0.
+
+Begin implementation now.

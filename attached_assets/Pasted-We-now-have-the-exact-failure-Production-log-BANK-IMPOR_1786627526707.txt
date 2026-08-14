@@ -1,0 +1,93 @@
+We now have the exact failure.
+
+Production log:
+
+[BANK IMPORT FAILURE]
+name: 'Error'
+message: 'BANK_IMPORT_SERVICE_ERROR'
+status: undefined
+code: undefined
+type: undefined
+stack: Error: BANK_IMPORT_SERVICE_ERROR
+  at extractBankStatementViaOpenAI(...)
+
+Browser proves the uploaded file is real:
+
+name: statement.pdf
+size: 86660
+type: application/pdf
+
+Therefore this is NOT an OpenAI SDK/API error.
+It is our own explicit BANK_IMPORT_SERVICE_ERROR throw inside extractBankStatementViaOpenAI.
+
+DO NOT refactor anything.
+DO NOT change pdfjs.
+DO NOT change frontend.
+DO NOT add another fallback.
+
+TASK:
+
+1. Search the ACTIVE code for every exact occurrence of:
+
+throw new Error("BANK_IMPORT_SERVICE_ERROR")
+
+2. Show me the exact condition around each throw.
+
+3. Inspect the signature of:
+
+extractBankStatementViaOpenAI(...)
+
+4. Inspect EVERY call site of extractBankStatementViaOpenAI.
+
+Verify that the production /api/ai/bank-import route passes:
+
+file.buffer
+
+as the Buffer argument — NOT:
+- b64
+- base64 string
+- file
+- file.data
+- undefined
+- text
+- any previous intermediate value
+
+5. Immediately before calling extractBankStatementViaOpenAI, temporarily log ONLY:
+
+console.log("[BANK IMPORT BEFORE AI]", {
+  isBuffer: Buffer.isBuffer(file.buffer),
+  bufferLength: file.buffer?.length ?? null
+});
+
+6. At the FIRST LINE inside extractBankStatementViaOpenAI, temporarily log ONLY:
+
+console.log("[BANK IMPORT AI ENTRY]", {
+  isBuffer: Buffer.isBuffer(buffer),
+  bufferLength: Buffer.isBuffer(buffer) ? buffer.length : null,
+  argType: typeof buffer
+});
+
+No PDF contents, financial values, transaction data, IBANs or extracted text.
+
+7. If the call site is passing anything other than the original non-empty file.buffer, FIX THAT CALL SITE.
+
+The function must be called exactly with the original Buffer, for example:
+
+await extractBankStatementViaOpenAI(file.buffer, file.originalname)
+
+Do not convert it to base64 before calling the helper.
+
+8. Run:
+
+pnpm exec tsc --noEmit
+pnpm run build
+
+Then report:
+- exact BANK_IMPORT_SERVICE_ERROR throw condition
+- exact old call to extractBankStatementViaOpenAI
+- exact corrected call
+- whether BEFORE AI bufferLength and AI ENTRY bufferLength are identical
+- tsc result
+- build result
+
+Do not do any other architectural work.

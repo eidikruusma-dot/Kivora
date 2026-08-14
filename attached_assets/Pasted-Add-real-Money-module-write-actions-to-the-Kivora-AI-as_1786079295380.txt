@@ -1,0 +1,149 @@
+Add real Money module write actions to the Kivora AI assistant.
+
+Current confirmed behaviour:
+- The AI can now read bank statement PDFs and extract transactions.
+- The AI can identify positive and negative amounts.
+- The user asks things like:
+  “Pane mu sissetulekud tuludesse ja väljaminekud kuludesse.”
+- The AI does not know how to write those transactions into the actual Money module.
+
+Goal:
+When the user explicitly asks to add bank statement transactions to the Money module, the AI must create real Money records.
+
+Strict scope:
+- Do not modify PDF extraction.
+- Do not modify attachment handling.
+- Do not modify authentication.
+- Do not modify Notes.
+- Do not redesign the Money UI.
+- Do not modify unrelated modules.
+
+Before changing code, inspect and report:
+
+1. The exact Firestore collections/schema currently used by the Money module.
+2. The exact fields required for:
+   - income records
+   - expense records
+   - accounts
+   - categories
+   - balances
+3. The existing functions used by the Money UI to create:
+   - income
+   - expense
+   - transaction
+   - account
+4. Whether the Money module uses one transaction collection with a type field, or separate income/expense collections.
+5. Which existing Money functions can be safely reused by the AI.
+
+Do not create a parallel finance system.
+
+Required AI actions:
+
+- create_money_income
+- create_money_expense
+- batch_create_money_transactions
+
+Use the existing Money module data layer.
+
+Mapping rules:
+
+- Positive amount → income
+- Negative amount → expense
+- Preserve the original transaction date.
+- Preserve the original description.
+- Preserve the original amount.
+- Preserve currency.
+- Preserve source account if known.
+- Never invert signs incorrectly.
+
+Example:
+
++252.00 EUR → Income
+-44.57 EUR → Expense
+
+Confirmation rules:
+
+If the user explicitly says:
+“Pane need Raha moodulisse”
+or
+“Pane sissetulekud tuludesse ja väljaminekud kuludesse”
+
+then show one review summary before writing:
+
+“Leidsin 25 tehingut:
+5 sissetulekut
+20 väljaminekut
+Kas kinnitad?”
+
+After the user confirms:
+- execute the actual Money writes
+- do not ask again
+- do not create Notes
+- do not merely say that the data was saved
+
+After execution, report the real result:
+
+- income records created
+- expense records created
+- skipped
+- failed
+- updated balance if applicable
+
+Example final response:
+
+“Valmis.
+Lisasin Raha moodulisse:
+5 sissetulekut
+20 väljaminekut
+0 ebaõnnestus.”
+
+Categories:
+
+- Reuse existing Money module categories.
+- If a transaction can be confidently matched to an existing category, use it.
+- If category confidence is low, use the existing default/uncategorized category.
+- Do not invent new categories automatically unless the existing Money architecture explicitly allows it.
+
+Duplicates:
+
+Before importing a bank statement transaction, check for likely duplicates using at minimum:
+- date
+- amount
+- description
+- account
+
+Do not silently import the same bank statement transactions twice.
+
+Balance:
+
+Do not manually overwrite an account balance unless that is how the existing Money module already works.
+Use the existing Money module balance calculation logic.
+
+Critical rule:
+
+The AI must never claim that transactions were saved unless the underlying Firestore writes actually succeeded.
+
+Verification tests:
+
+1. One manual income:
+   “Lisa 100 € sissetulekuks.”
+2. One manual expense:
+   “Lisa 25 € kuluks.”
+3. Actual SEB statement PDF.
+4. Confirm import.
+5. Verify positive transactions appear in Income.
+6. Verify negative transactions appear in Expenses.
+7. Reload the Money page.
+8. Verify the records persist.
+9. Import the same statement again and verify duplicates are detected.
+10. Cancel before confirmation and verify no Money records are written.
+
+Before implementation, report:
+- current Money Firestore schema
+- existing Money write functions
+- exact files that need to change
+- how duplicate detection will work
+- how account balance is currently calculated
+
+Then make the smallest possible implementation.
+Do not change anything outside the AI action layer and existing Money data layer.

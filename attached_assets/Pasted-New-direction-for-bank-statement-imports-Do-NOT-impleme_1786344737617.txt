@@ -1,0 +1,117 @@
+New direction for bank statement imports. Do NOT implement anything yet. First inspect the existing code and produce an implementation plan.
+
+We are changing the product architecture for bank statement imports.
+
+Product decision
+
+Bank statement importing should no longer depend on the AI chat workflow.
+
+The Money module should have its own explicit action:
+
+“Impordi pangaväljavõte” / “Import bank statement”
+
+Desired user flow:
+
+Money module → Import bank statement → select PDF → extract transactions → validate → show review card → user confirms → import transactions into Money
+
+There must be exactly one final user confirmation before writing transactions.
+
+Important separation
+
+AI chat and Money import are now separate use cases.
+
+AI chat
+
+PDFs remain usable as normal documents.
+The user can ask questions about a bank statement like any other PDF.
+AI chat does NOT need to trigger Money imports.
+
+Money module
+
+Explicit “Import bank statement” action.
+Because the user explicitly selected bank-statement import, this flow must NOT depend on looksLikeBankStatement() to decide whether to attempt extraction.
+The specialized bank extractor should validate whether the selected document is actually a usable bank statement.
+If it is not a bank statement, show a clear error and do not import anything.
+Reuse existing work
+
+Do NOT rebuild everything.
+
+Inspect and reuse where appropriate:
+
+BankTransaction
+BankMeta
+extractBankStatementDirect()
+normalization
+computeValidationStatus()
+importAllowed
+needsReview
+duplicate detection
+Money transaction category resolution
+MoneyImportReviewCard
+confirmMoneyImport() / existing safe Firestore write logic
+
+The current safety behavior must remain:
+
+No transactions are written to Money until the user sees the extracted transactions and explicitly confirms the import.
+
+review_required must remain blocked.
+
+Do NOT weaken reconciliation or validation just to make an import pass.
+
+Extraction reliability
+
+We have confirmed that the current direct AI extraction is not yet deterministic enough for financial importing: the same real statement has returned different transaction counts on different runs.
+
+Therefore do NOT assume that moving the existing extractor into the Money module solves extraction reliability.
+
+In your plan, separately identify:
+
+UI/import-flow architecture.
+Extraction reliability.
+Validation/reconciliation.
+
+Recommend how the extraction layer can eventually become deterministic enough for financial data, preferably by extracting transaction rows structurally and using AI only where interpretation is genuinely required.
+
+Do NOT hardcode any values, transaction counts, account numbers, bank names, personal data, or values from my test statement.
+
+Privacy cleanup
+
+We temporarily added diagnostic logging while debugging.
+
+Identify all temporary debug logs we added, including things such as:
+
+UPLOAD RESPONSE DEBUG
+EXTRACT PDF RESULT DEBUG
+SCANNED OCR DEBUG
+INCOME ROWS DEBUG
+BANK DEBUG
+
+Some of these may expose financial/document information.
+
+They must be removed before this feature is considered production-ready.
+
+What I want from you now
+
+NO CODE CHANGES.
+
+Inspect the existing Money module, AI upload flow and bank-import implementation.
+
+Then report:
+
+Which files would need to change.
+Where the “Import bank statement” button should live in the Money UI.
+The proposed component/state flow.
+Which existing bank-import code can be reused unchanged.
+Which AI-chat-specific bank-import code becomes unnecessary or legacy.
+How /api/ai/upload should be separated from a dedicated bank-import endpoint, if you recommend that.
+How the review card should be integrated directly into Money.
+How confirmation writes safely into the existing Money store.
+How duplicates are handled.
+How failed/partial/review-required extraction is presented to the user.
+A plan for making transaction extraction deterministic and testable.
+Which temporary privacy-sensitive debug logs must be removed.
+A phased implementation plan with the smallest safe first phase.
+
+Do not implement after writing the report. Wait for my approval.
+
+The goal is to simplify the architecture, not add another layer on top of the current AI-chat import flow.

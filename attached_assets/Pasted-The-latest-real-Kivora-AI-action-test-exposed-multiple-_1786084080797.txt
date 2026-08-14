@@ -1,0 +1,223 @@
+The latest real Kivora AI action test exposed multiple confirmed integration failures.
+
+DO NOT add new features.
+DO NOT redesign anything.
+DO NOT modify authentication, PDF/OCR, attachments, PWA, Android, or unrelated modules.
+
+Fix ONLY the existing AI → module write integrations.
+
+CONFIRMED TEST RESULTS
+
+1. CALENDAR
+
+User:
+“Lisa kalendrisse homseks kell 14:00–15:00 sündmus „Kivora testkohtumine“.”
+
+AI reported:
+“Sündmus "Kivora testkohtumine" lisatud kalendrisse.”
+
+Actual result:
+The Calendar is EMPTY.
+The event does not appear in the Calendar UI.
+
+This means create_calendar_event is reporting success without creating a record that the real Calendar module can read.
+
+2. NOTES
+
+User:
+“Loo märge pealkirjaga „AI testmärge“ ja sisuga „See märge loodi Kivora AI funktsioonide testimiseks.“”
+
+AI responded:
+“Märkme loomine ei õnnestunud, kuna praegu ei ole selles moodulis ühtegi kirjet.”
+
+This is incorrect.
+
+An empty Notes module MUST allow the AI to create the first note.
+Existing records must never be a prerequisite for create_note.
+
+3. MONEY
+
+User:
+“Lisa Raha moodulisse 75 € tulu kirjeldusega „AI testtulu“.”
+
+AI reported:
+✓ Sissetulek "AI testtulu" 75 EUR (2023-10-06) lisatud.
+
+User:
+“Lisa Raha moodulisse 18,50 € kulu kirjeldusega „AI testkulu“.”
+
+AI reported:
+✓ Kulu "AI testkulu" 18.5 EUR (2023-10-06) lisatud.
+
+Actual result:
+The records do NOT appear under the Money module's Income or Expenses views.
+
+There is also a critical date bug:
+The AI used 2023-10-06.
+The actual current date is 2026-08-07.
+
+For a request with no explicit date, Kivora must use the user's actual current local date, not a model-generated or hardcoded date.
+
+REQUIRED DIAGNOSIS BEFORE CHANGING CODE
+
+For Calendar, Notes and Money independently:
+
+1. Find the exact store/data-layer function used when the USER manually creates the same record through the module UI.
+
+2. Find the exact function currently called by the corresponding AI action.
+
+3. Compare:
+- Firestore collection/path
+- required fields
+- field names
+- data types
+- timestamps
+- user uid
+- default values
+- module-specific metadata
+
+4. Report the differences.
+
+5. The AI MUST reuse the existing module write function whenever possible.
+
+Do NOT create parallel schemas or duplicate collections.
+
+CALENDAR FIX
+
+create_calendar_event must use the SAME persistence path/function as manually creating an event from the Calendar UI.
+
+Required fields must match the existing CalendarEvent schema exactly.
+
+For:
+“homseks kell 14:00–15:00”
+
+the AI must resolve “tomorrow” from the user's current local date/time.
+
+Current test context:
+2026-08-07 → tomorrow = 2026-08-08.
+
+Expected event:
+Title: Kivora testkohtumine
+Date: 2026-08-08
+Start: 14:00
+End: 15:00
+
+After writing:
+read the created event back using the Calendar module's own data layer.
+
+Only return success if the read-back succeeds.
+
+NOTES FIX
+
+create_note must work when users/{uid}/notes is completely empty.
+
+It must call the same add/create function used by the Notes UI.
+
+No condition such as:
+“if there are no existing notes, fail”
+is allowed.
+
+Expected:
+Title: AI testmärge
+Content: See märge loodi Kivora AI funktsioonide testimiseks.
+
+After writing:
+read the note back before reporting success.
+
+MONEY FIX
+
+First inspect the real Money UI implementation.
+
+Determine exactly where manually created Income and Expense records are stored and which functions create them.
+
+The AI must call those SAME functions.
+
+Do not merely create a generic Firestore finance document if the Money UI does not read it.
+
+Required mapping:
+
+75 EUR “AI testtulu”
+→ actual Money INCOME record
+
+18.50 EUR “AI testkulu”
+→ actual Money EXPENSE record
+
+No explicit date was provided, therefore:
+date = 2026-08-07 in the user's local timezone.
+
+Never invent historical dates.
+
+After each write:
+read the record back using the Money module's own query/store.
+
+Only then return success.
+
+DATE RESOLUTION — GLOBAL AI ACTION RULE
+
+Fix the action layer so relative/missing dates are resolved deterministically.
+
+- today → current user-local date
+- tomorrow → current user-local date + 1 day
+- yesterday → current user-local date - 1 day
+- no date supplied for a transaction → current user-local date
+
+Never allow the LLM to invent a date such as 2023-10-06.
+
+Pass the current local date/time explicitly into the AI action context/system prompt.
+
+ACTION SUCCESS CONTRACT
+
+An action is NOT successful merely because a Firestore write did not throw.
+
+For Calendar, Notes and Money:
+
+WRITE
+→ READ BACK THROUGH THE REAL MODULE DATA LAYER
+→ verify required fields
+→ only then success=true.
+
+If the module cannot see the created record:
+success=false
+error="POST_WRITE_VERIFICATION_FAILED"
+
+Final AI responses must use these verified results only.
+
+Do not say:
+“lisatud”
+“salvestatud”
+“õnnestus”
+or show ✓
+unless verification succeeded.
+
+RETEST THESE EXACT CASES
+
+A. Calendar
+Create tomorrow 14:00–15:00:
+“Kivora testkohtumine”
+Expected visible in Calendar on 2026-08-08.
+
+B. Notes
+Start with zero notes.
+Create:
+“AI testmärge”
+Expected visible in Notes.
+
+C. Money
+Create:
++75 EUR “AI testtulu”
+-18.50 EUR “AI testkulu”
+Expected date: 2026-08-07.
+Expected visible in the actual Income and Expenses views.
+
+After implementation report:
+
+- exact root cause for Calendar
+- exact root cause for Notes
+- exact root cause for Money
+- why 2023-10-06 was generated
+- exact files changed
+- existing module store functions reused
+- Firestore document IDs created during tests
+- post-write verification results
+
+Do not change anything outside these three AI integrations and shared date/action verification logic.

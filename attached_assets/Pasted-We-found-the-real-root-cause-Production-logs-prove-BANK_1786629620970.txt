@@ -1,0 +1,97 @@
+We found the real root cause.
+
+Production logs prove:
+
+[BANK IMPORT BEFORE AI] { isBuffer: true, bufferLength: 0 }
+[BANK IMPORT AI ENTRY]  { isBuffer: true, bufferLength: 0 }
+
+But the browser upload is:
+
+size: 86660
+type: application/pdf
+
+The buffer is becoming zero-length BEFORE the AI fallback.
+
+PDF.js documentation states that TypedArray data passed to getDocument()
+may be transferred to the worker thread, taking ownership of the TypedArray.
+
+Therefore the structural PDF parser must NOT consume the same Buffer instance
+that is later needed by the AI fallback.
+
+TASK:
+
+1. In POST /api/ai/bank-import, preserve the original uploaded buffer immediately:
+
+const originalPdfBuffer = Buffer.from(file.buffer);
+
+2. NEVER pass originalPdfBuffer directly into a PDF.js path that may transfer/detach it.
+
+For structural extraction, pass a COPY:
+
+const structuralBuffer = Buffer.from(originalPdfBuffer);
+
+const structural = await extractStructuralPdfBuffer(structuralBuffer);
+
+3. If structural extraction is not usable, call the AI fallback with the untouched original:
+
+await extractBankStatementViaOpenAI(
+  originalPdfBuffer,
+  file.originalname,
+);
+
+4. Do not reuse file.buffer after structural extraction.
+
+5. Also harden pdfTextProbe.ts so getDocument() receives its own copied byte array.
+
+Immediately before pdfjs.getDocument(...), create an independent copy:
+
+const pdfData = Uint8Array.from(buffer);
+
+Then pass:
+
+pdfjs.getDocument({
+  data: pdfData,
+  ...
+});
+
+Do NOT pass the caller's Buffer/Uint8Array directly to PDF.js.
+
+6. Keep the current legacy pdfjs import:
+pdfjs-dist/legacy/build/pdf.mjs
+
+7. Remove the temporary logs after verifying:
+[BANK IMPORT BEFORE AI]
+[BANK IMPORT AI ENTRY]
+
+8. Add a regression test that proves:
+
+- create a non-empty PDF Buffer
+- pass one copy through structural extraction
+- verify the original Buffer still has the same byteLength afterward
+- verify AI fallback receives a non-empty Buffer
+
+The test should fail on the old implementation and pass after this fix.
+
+9. Run:
+
+pnpm exec tsc --noEmit
+pnpm run test:extractStructuralPdfBuffer
+pnpm run test:extractStructuralControls
+pnpm run test:reconcileStructuralTransactions
+pnpm run test:extraction
+pnpm run build
+
+Report:
+- original buffer length before structural extraction
+- original buffer length after structural extraction
+- structural copy length
+- whether the original remains unchanged
+- regression test result
+- tsc result
+- build result
+
+Do not change frontend.
+Do not change Firestore.
+Do not change OpenAI API logic.
+Do not add another fallback.
+Fix only the buffer ownership/detachment bug.

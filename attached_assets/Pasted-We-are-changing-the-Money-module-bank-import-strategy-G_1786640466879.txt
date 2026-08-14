@@ -1,0 +1,279 @@
+We are changing the Money-module bank import strategy.
+
+GOAL:
+Remove PDF bank-statement import from the Money module and replace it with structured CSV + Excel import.
+
+IMPORTANT:
+- Do NOT change generic AI document upload.
+- PDF must continue to work in /api/ai/upload for normal documents.
+- Remove PDF only from the Money-module bank transaction import flow.
+- Do NOT add OpenAI/AI parsing to CSV/XLSX import.
+- Do NOT send bank files to OpenAI.
+- Use deterministic parsing only.
+
+TASK 1 — MONEY IMPORT UI
+
+In FinancePage / BankImportModal:
+
+Replace the current PDF-only upload with:
+
+Supported formats:
+- .csv
+- .xlsx
+- .xls
+
+Update UI copy to something like:
+
+ET:
+"Impordi pangatehingud"
+"Laadi panga väljavõte CSV- või Excel-failina."
+"CSV või Excel annab kõige täpsema tulemuse."
+
+EN:
+"Import bank transactions"
+"Upload your bank statement as CSV or Excel."
+"CSV or Excel provides the most accurate result."
+
+The file input should accept:
+.csv,
+.xlsx,
+.xls,
+text/csv,
+application/vnd.ms-excel,
+application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+
+Remove PDF from the Money import accept list.
+
+TASK 2 — BACKEND ROUTE
+
+Refactor POST /api/ai/bank-import so it accepts CSV and Excel only.
+
+Rename internally if useful, but keep the existing endpoint for now to avoid unnecessary frontend changes.
+
+Decision tree:
+
+1. Validate file exists.
+2. Detect CSV vs XLS/XLSX.
+3. Parse deterministically:
+   - CSV: parse text rows
+   - XLS/XLSX: use the existing xlsx dependency if available
+4. Detect the header row.
+5. Detect relevant columns semantically.
+6. Normalize every transaction to canonical BankTransaction.
+7. Compute totals in application code.
+8. Return:
+   {
+     transactions,
+     bankMeta
+   }
+9. Never write to Firestore during parsing.
+10. Import still requires explicit user confirmation.
+
+TASK 3 — COLUMN DETECTION
+
+Do NOT hardcode a single bank format.
+
+Support common column meanings using header matching and structural validation.
+
+Recognize possible date headers:
+- date
+- kuupäev
+- booking date
+- transaction date
+- value date
+
+Recognize description headers:
+- description
+- selgitus
+- details
+- transaction
+- payee
+- payer
+- beneficiary
+- saaja
+- maksja
+- reference
+
+Recognize amount structures:
+
+A) separate debit / credit columns
+B) one signed amount column
+C) amount + direction/type column
+
+Recognize possible headers:
+- debit
+- deebet
+- credit
+- kreedit
+- amount
+- summa
+- balance
+- saldo
+- jääk
+- currency
+- valuuta
+
+Do not infer direction from merchant names or descriptions.
+
+Direction rules:
+- credit > 0 => income
+- debit > 0 => expense
+- signed amount > 0 => income
+- signed amount < 0 => expense
+
+Store amount as positive.
+
+TASK 4 — CSV ROBUSTNESS
+
+Support:
+- comma delimiter
+- semicolon delimiter
+- tab delimiter if detected
+- UTF-8
+- UTF-8 BOM
+- quoted fields
+- decimal comma and decimal point
+- spaces as thousands separators
+
+Do not assume the first row is always the header.
+Search the first ~20 rows for a plausible header row.
+
+Skip:
+- empty rows
+- summary rows
+- totals
+- opening balance
+- closing balance
+- daily turnover
+- debit/credit turnover
+- page/header metadata rows
+
+TASK 5 — EXCEL ROBUSTNESS
+
+For XLS/XLSX:
+- inspect all worksheets
+- choose the sheet that contains the most plausible transaction table
+- do not import every sheet blindly
+- detect the header row and columns using the same logic as CSV
+
+TASK 6 — PENDING / RESERVED PAYMENTS
+
+If the source file clearly has pending/reserved rows or a status column:
+
+mark:
+pending: true
+
+Pending rows:
+- may be shown in preview
+- must NOT be included in posted income/expense totals
+- must NOT be imported as normal posted transactions
+- must NOT affect reconciliation unless explicitly supported later
+
+Keep the existing client-side pending guard.
+
+TASK 7 — VALIDATION
+
+Because CSV/XLSX is structured, do not require PDF-style OCR reconciliation.
+
+Validation should be based on:
+
+- valid date
+- valid amount
+- valid direction
+- non-empty description or reference
+- supported currency
+- duplicate detection
+- optional running balance consistency if a balance column exists
+
+If a balance column exists, use it as an optional deterministic control.
+
+Do NOT invent opening/closing balances if not present.
+
+If there are no usable transactions:
+return a clean error:
+NO_TRANSACTIONS_FOUND
+
+If column structure cannot be understood:
+return:
+UNSUPPORTED_BANK_FILE_FORMAT
+
+TASK 8 — PREVIEW
+
+Reuse MoneyImportReviewCard if practical.
+
+Preview should show:
+- number of income transactions
+- number of expense transactions
+- income total
+- expense total
+- pending count if any
+- transaction rows
+- review warnings if any
+
+Do not expose parser internals.
+
+TASK 9 — PDF REMOVAL FROM MONEY FLOW
+
+Remove all PDF-specific logic from the Money bank-import route:
+- no pdfjs
+- no structural PDF parser
+- no OpenAI Files API
+- no OCR
+- no PDF fallback
+- no BANK_IMPORT_SERVICE_ERROR caused by PDF parsing
+
+Do NOT delete generic PDF support used by /api/ai/upload.
+
+If old bank-PDF-specific code is now unreachable:
+- remove it from production path
+- delete/move dead code only if safe
+- do not break generic AI PDF upload
+
+TASK 10 — TESTS
+
+Add deterministic tests using SYNTHETIC DATA ONLY.
+
+Do NOT use real user bank data.
+
+Required tests:
+
+1. CSV with separate debit/credit columns
+2. CSV with signed amount column
+3. semicolon-delimited CSV
+4. decimal comma parsing
+5. UTF-8 BOM
+6. quoted description containing delimiter
+7. header row not on first row
+8. summary/control rows skipped
+9. pending row marked and excluded from totals
+10. XLSX transaction sheet parsed correctly
+11. non-transaction sheet ignored
+12. unsupported file structure returns UNSUPPORTED_BANK_FILE_FORMAT
+13. empty file returns NO_TRANSACTIONS_FOUND or appropriate validation error
+14. duplicate rows are not imported twice
+15. client import loop skips pending=true rows
+
+Run:
+pnpm exec tsc --noEmit
+pnpm run test:extraction
+pnpm run build
+
+Also run any new CSV/XLSX bank-import test script you add.
+
+FINAL REPORT MUST INCLUDE:
+
+- files changed
+- whether PDF was fully removed from Money import only
+- whether generic AI PDF upload still works unchanged
+- CSV parser behavior
+- Excel parser behavior
+- column detection strategy
+- pending handling
+- validation strategy
+- every test result
+- TypeScript result
+- build result
+
+Do NOT deploy automatically.
+Do NOT use any real bank data in tests or logs.
+Do NOT send CSV/XLSX bank files to OpenAI.

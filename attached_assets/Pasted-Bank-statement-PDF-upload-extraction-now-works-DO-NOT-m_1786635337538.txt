@@ -1,0 +1,136 @@
+Bank-statement PDF upload/extraction now works. DO NOT modify the upload path,
+OpenAI Files API, pdfjs buffer-copy fix, generic /api/ai/upload, or Firestore.
+
+We now need to fix transaction ordering and reconciliation.
+
+IMPORTANT:
+The real bank statement is displayed newest-first.
+For balance validation it must be processed chronologically:
+OLDEST → NEWEST (visually bottom → top across the statement).
+
+Do not assume PDF display order equals accounting order.
+
+TASK 1 — TRANSACTION ORDER
+
+After extraction and normalization, sort bank transactions deterministically
+from oldest to newest before reconciliation.
+
+For transactions on the same date, preserve the statement's actual running-balance
+sequence. Do not arbitrarily reorder same-day transactions by description or amount.
+
+If row/page metadata is needed to preserve statement order, use it.
+
+TASK 2 — RUNNING BALANCE RECONCILIATION
+
+Where the statement provides a running balance, validate the transaction chain.
+
+For each consecutive posted transaction:
+
+previousBalance
++ credit
+- debit
+≈ currentBalance
+
+Use a 0.01 EUR tolerance.
+
+A mismatch must flag the relevant transaction for review and block automatic import.
+
+Do NOT use the running balance to decide whether a transaction is income or expense.
+Direction still comes only from debit/credit columns.
+
+TASK 3 — OPENING/CLOSING BALANCES
+
+Use opening and closing balances as controls, but respect chronological order.
+
+Validate:
+
+opening balance
+→ chronological posted transactions
+→ closing balance
+
+Do not simply sum transactions in the PDF's top-to-bottom display order.
+
+TASK 4 — DAILY/SUMMARY ROWS
+
+Rows representing things such as:
+
+- debit turnover / deebetkäive
+- credit turnover / kreeditkäive
+- daily balance / päeva jääk
+- opening balance
+- closing balance
+- subtotals / totals
+
+are CONTROL ROWS, not transactions.
+
+Never import them as income or expense.
+
+Use them only for validation when their meaning is unambiguous.
+
+TASK 5 — RESERVED/PENDING CARD PAYMENTS
+
+Do not mix reserved/pending card payments with posted/booked transactions.
+
+If the statement contains a separate reservations/pending section:
+
+- classify them separately
+- do not include them in posted income/expense totals
+- do not use them in the posted running-balance chain unless the statement
+  explicitly defines that balance as including reservations
+- do not write them to Firestore as normal posted transactions
+
+If the current BankTransaction model cannot represent pending/reserved status,
+report that first and propose the smallest safe model extension.
+Do not guess.
+
+TASK 6 — PRINTED TOTALS
+
+Printed statement totals are secondary controls.
+
+Do not block an otherwise internally consistent transaction chain merely because
+a label was misidentified as "printed income total".
+
+First determine what the printed field actually represents.
+
+The strongest controls should be:
+
+1. transaction running-balance chain, when present
+2. opening → posted transactions → closing balance
+3. clearly identified printed debit/credit turnover totals
+
+TASK 7 — TEST THE REAL FAILURE MODE
+
+Add regression tests covering:
+
+- statement rows supplied newest-first
+- reconciliation processes them oldest-first
+- same-day transaction order is preserved correctly
+- running balances validate across multiple transactions
+- summary/control rows are excluded
+- pending/reserved rows are excluded from posted totals
+- a wrong transaction produces a balance-chain mismatch
+- zero or ambiguous controls do not create false reconciliation success
+
+Keep the existing tests green.
+
+Run:
+
+pnpm exec tsc --noEmit
+pnpm run test:extractStructuralPdfBuffer
+pnpm run test:extractStructuralControls
+pnpm run test:reconcileStructuralTransactions
+pnpm run test:extraction
+pnpm run build
+
+DO NOT deploy automatically.
+
+Final report must state:
+
+- how chronological order is determined
+- how same-day order is preserved
+- how running balances are validated
+- how pending/reserved payments are represented
+- which rows are excluded as controls
+- whether BankTransaction types changed
+- every test result
+- build result

@@ -1,0 +1,82 @@
+Kivora Core – Finance Module
+
+Use the attached image as the exact desktop reference for the Finance module.
+
+Recreate the page to match the reference as closely as possible.
+
+Important:
+
+- Match the layout, proportions, card positions, hierarchy, spacing and overall visual structure from the image.
+- Keep the existing Kivora sidebar, typography, colors, icons, border radii and design system consistent.
+- Do not redesign the page.
+- Do not simplify the reference.
+- Do not add unrelated elements.
+- Do not modify any other module.
+- Do not rewrite existing working systems.
+- Reuse existing Kivora components where possible, but the final result must visually match the attached reference.
+
+The Finance page must include:
+
+1. Header
+- Greeting
+- Quick action button
+- Notifications
+- AI shortcut
+
+2. Top summary cards
+- Available money
+- This month's income
+- This month's expenses
+- Total savings
+
+3. Today's tasks
+4. Today's calendar
+5. Quick actions
+6. Monthly plan
+7. AI recommendations
+8. Recent transactions
+9. Savings goals
+10. Upcoming bills
+
+The Finance module must be connected conceptually with:
+
+- Calendar
+- Tasks
+- Goals
+- AI Assistant
+
+Examples:
+
+- A bill can appear in Calendar.
+- A bill can create or use an existing Task.
+- Savings goals use the same Goals data.
+- AI recommendations show whether Calendar or Task links already exist.
+
+Localization requirements:
+
+The entire page must support Estonian and English.
+
+Do not hardcode any visible text.
+
+Add all new translation keys to the existing translation system for both languages.
+
+This includes:
+
+- headings
+- buttons
+- card labels
+- status labels
+- helper texts
+- AI recommendation texts
+- dates and time-related labels
+- empty states
+- error messages
+- success messages
+
+Before implementation:
+
+1. Audit whether a Finance module already exists.
+2. List the exact files that need to be created or modified.
+3. Confirm which current Kivora components will be reused.
+4. Confirm how the page will be connected to the existing translation system.
+5. Wait for my approval before changing code.

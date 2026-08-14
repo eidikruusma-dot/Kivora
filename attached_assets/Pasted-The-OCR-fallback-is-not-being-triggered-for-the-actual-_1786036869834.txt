@@ -1,0 +1,70 @@
+The OCR fallback is not being triggered for the actual uploaded SEB statement.
+
+I tested the real PDF. It is a visually clear, normal 3-page SEB Estonia bank statement, but its embedded text layer uses broken/custom character encoding.
+
+Current failure:
+- pdf-parse returns a long non-empty string of symbols such as:
+  !" #$% ABB.0? C=DEA
+- isGarbledText() incorrectly classifies it as usable because it contains many ASCII characters, digits and punctuation.
+- The system therefore skips pdftoppm + GPT-4o vision.
+- The gibberish is forwarded to the AI.
+
+Fix ONLY the PDF extraction decision logic.
+
+Required fix:
+
+1. Do not classify text as readable based only on the percentage of ASCII/Latin characters.
+
+2. Add semantic readability detection:
+   - count alphabetic words with at least 2 consecutive letters
+   - calculate the ratio of letters to punctuation/symbols
+   - detect excessive punctuation density
+   - detect repeated symbol patterns
+   - detect text where most tokens contain no normal words
+   - require recognizable natural-language words or bank-statement labels
+
+3. For an SEB statement, require several recognizable labels such as:
+   - KONTO VÄLJAVÕTE
+   - Kuupäev
+   - Maksja
+   - Saaja
+   - Deebet
+   - Kreedit
+   - Algsaldo
+   - Konto jääk
+   - Väljaminekud
+   - Sissetulekud
+
+4. If the extracted text does not contain readable words or expected statement structure, force the OCR path:
+   pdftoppm → page PNGs → GPT-4o vision.
+
+5. The original garbled pdf-parse text must never be:
+   - shown in chat
+   - added to the message
+   - sent to the AI
+   - stored as attachment content
+
+6. For SEB Estonia PDFs, prefer OCR whenever the text layer fails the semantic readability check.
+
+7. Add a final safety check before returning text:
+   - reject content with high punctuation density
+   - reject content with fewer than 10 readable words
+   - reject content where fewer than 40% of non-space characters are letters or digits in readable word sequences
+
+8. Test with the actual uploaded statement.pdf, not a generated test PDF.
+
+Expected result from this exact PDF:
+- bank: SEB
+- statement period: 01.08.2026–06.08.2026
+- opening balance: 503.61 EUR
+- transactions extracted as structured rows
+- no gibberish shown anywhere
+- ReviewCard displayed before sending data to AI
+
+Before changing code, report:
+- why the existing isGarbledText() returned false for this PDF
+- whether OCR was called
+- the number of rendered pages
+- the exact structured OCR result count
+
+Do not modify the Money module, AI actions, UI layout, authentication or unrelated files.
