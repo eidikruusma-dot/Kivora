@@ -1,0 +1,65 @@
+Implement real Firestore persistence and real-time synchronization for the Tasks module only.
+
+Current problem:
+- Tasks are stored only in in-memory mock data.
+- Reloading the page resets tasks.
+- Tasks do not sync across devices.
+- Do not modify Habits, Goals, Calendar, Notes, or other modules in this task.
+
+Required Firestore architecture:
+- Store tasks under:
+  users/{uid}/tasks/{taskId}
+
+Each task document should preserve all existing task fields used by the current UI, including:
+- id
+- title
+- description
+- dueDate
+- dueTime
+- priority
+- status/completed state
+- category
+- labels/tags
+- createdAt
+- updatedAt
+- any other existing Task fields already required by the current components
+
+Required behavior:
+- Load the authenticated user’s tasks from Firestore.
+- Use onSnapshot for real-time updates.
+- Creating a task writes it to Firestore.
+- Editing a task updates Firestore.
+- Completing or reopening a task updates Firestore.
+- Deleting a task removes it from Firestore.
+- Changes must appear automatically in another browser or device signed in with the same account.
+- Each user may only access their own tasks.
+
+Migration:
+- Do not keep mock tasks as permanent user data.
+- If Firestore has no task documents for the user, start with an empty task list.
+- Do not automatically upload demo/mock tasks into Firestore.
+
+Security rules:
+- Extend firestore.rules with:
+  users/{uid}/tasks/{taskId}
+- Allow read/write only when request.auth.uid == uid.
+- Add sensible validation without weakening existing user-profile or notes rules.
+
+Architecture:
+- Reuse the existing Task types, components, dialogs, filters, and UI.
+- Replace only the in-memory task data layer.
+- Create one shared tasks store/service instead of putting Firestore calls directly into many components.
+- Handle loading and error states.
+- Prevent duplicate listeners.
+- Clean up onSnapshot subscriptions on unmount or logout.
+- Keep Estonian and English localization.
+- Do not redesign the Tasks page.
+- Do not modify unrelated modules.
+
+After finishing:
+1. Run typecheck.
+2. List every modified file.
+3. Explain the Firestore collection structure.
+4. Explain how create, update, complete, delete, and real-time listening now work.
+5. Show the exact Firestore rules additions.
+6. Stop for manual testing.

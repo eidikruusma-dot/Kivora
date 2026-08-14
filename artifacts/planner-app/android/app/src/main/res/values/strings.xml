@@ -1,0 +1,25 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Kivora</string>
+    <string name="title_activity_main">Kivora</string>
+    <string name="package_name">com.kivora.app</string>
+    <string name="custom_url_scheme">com.kivora.app</string>
+
+    <!--
+        Facebook Login credentials.
+        Replace the three REPLACE_WITH_* placeholders below with values from
+        https://developers.facebook.com → Your App → Settings → Basic.
+
+        facebook_app_id        : the numeric App ID  (e.g. 1234567890)
+        facebook_client_token  : Settings → Advanced → Client Token
+        fb_login_protocol_scheme: "fb" + the App ID  (e.g. fb1234567890)
+
+        After filling these in, also register your app in the Facebook Developer
+        Console (Settings → Basic → Android) with:
+          Package Name : com.kivora.app
+          Key Hash     : see NATIVE_AUTH_SETUP.md for how to generate it
+    -->
+    <string name="facebook_app_id">REPLACE_WITH_FACEBOOK_APP_ID</string>
+    <string name="facebook_client_token">REPLACE_WITH_FACEBOOK_CLIENT_TOKEN</string>
+    <string name="fb_login_protocol_scheme">fbREPLACE_WITH_FACEBOOK_APP_ID</string>
+</resources>

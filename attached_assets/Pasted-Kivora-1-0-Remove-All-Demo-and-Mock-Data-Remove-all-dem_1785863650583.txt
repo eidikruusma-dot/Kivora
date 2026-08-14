@@ -1,0 +1,144 @@
+Kivora 1.0 – Remove All Demo and Mock Data
+
+Remove all demo, mock, placeholder and test data from the application.
+
+Do not redesign anything.
+Do not modify unrelated working systems.
+Do not perform another broad audit.
+Do not delete any real Firestore user data.
+
+Goal:
+
+A brand-new user must start with a clean Kivora account.
+
+Remove all preloaded demo content, including:
+
+- demo tasks;
+- demo calendar events;
+- demo notes;
+- mock habits;
+- demo goals;
+- demo school items;
+- demo Finance transactions;
+- demo bills;
+- demo savings data;
+- demo notifications;
+- demo AI conversations or recommendations;
+- fake dashboard statistics;
+- placeholder user names such as Martin;
+- any hardcoded example content shown as real user data.
+
+Important:
+
+1. New users
+
+A new user with no saved data must see honest empty states.
+
+Examples:
+
+- No tasks yet.
+- No events today.
+- No notes yet.
+- No habits yet.
+- No goals yet.
+- No Finance data yet.
+- No school items yet.
+- No notifications yet.
+
+Do not show example data as if it belongs to the user.
+
+2. Existing users
+
+Do not delete or overwrite any existing Firestore data.
+
+If real user data exists:
+- display it normally;
+- do not replace it with empty data;
+- do not reset stores on page refresh.
+
+3. Habits
+
+The habits module previously used mockHabits in memory.
+
+Replace the mock initialization with an empty state or the real persistent habits source if one now exists.
+
+Do not preload mock habits for new users.
+
+4. Dashboard
+
+All Dashboard widgets must use real stores only.
+
+If a widget has no data:
+- show a compact bilingual empty state;
+- do not show fake numbers;
+- do not show demo charts;
+- do not leave broken large empty areas.
+
+5. Finance
+
+Remove all example balances, transactions, bills, savings and monthly-plan values.
+
+Finance summary cards must calculate only from real saved data.
+
+For no data, show 0.00 € or an honest empty-state message according to the existing design.
+
+6. AI
+
+Remove hardcoded demo recommendations.
+
+AI recommendations must come only from real user data.
+
+If there is no relevant data, show an honest empty state instead of invented advice.
+
+7. User identity
+
+Use the real authenticated user's display name.
+
+If no display name exists, use a neutral greeting.
+
+Do not use Martin or any other demo name.
+
+8. Localization
+
+All empty states and helper text must support Estonian and English through the existing translation system.
+
+No visible hardcoded text.
+
+9. Cleanup
+
+Remove:
+- unused demo imports;
+- unused mock arrays;
+- fake delays;
+- fake success states;
+- console-only demo submission logic;
+- test-only visible UI;
+- placeholder values used as production data.
+
+Do not remove reusable types, interfaces or UI components just because demo data is removed.
+
+10. Testing
+
+Test with:
+
+A. Brand-new disposable account
+- all modules empty;
+- no demo data visible;
+- Dashboard remains clean;
+- AI does not invent data.
+
+B. Existing account with real data
+- all real data remains visible;
+- nothing is deleted;
+- refresh and logout/login preserve data.
+
+After completion, report only:
+
+- files changed;
+- demo sources removed;
+- which modules now show empty states;
+- whether any module still uses mock or in-memory data;
+- whether both new-user and existing-user tests passed;
+- anything still incomplete.
+
+Begin now.

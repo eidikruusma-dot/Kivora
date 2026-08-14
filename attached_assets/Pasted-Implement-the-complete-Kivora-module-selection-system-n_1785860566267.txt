@@ -1,0 +1,239 @@
+Implement the complete Kivora module selection system now.
+
+Do not perform another broad audit.
+Do not redesign unrelated pages.
+Do not rewrite working systems.
+Use the existing Kivora design system and translation system.
+
+GOAL
+
+A new user chooses which modules they want to use.
+
+If a module is not selected:
+- its sidebar item is hidden;
+- its Dashboard widgets are hidden;
+- its data is not deleted.
+
+If the user enables the module later:
+- the sidebar item returns;
+- the Dashboard widgets return;
+- all previous data is still available.
+
+ALWAYS VISIBLE
+
+These cannot be disabled:
+
+- Home
+- Notifications
+- Settings
+
+SELECTABLE MODULES
+
+- Calendar
+- Tasks
+- Notes
+- Habits
+- Goals
+- Finance
+- School
+- AI Assistant
+
+Do not include Family.
+Family is a future product after Pro.
+
+PART 1 — NEW USER MODULE SELECTION
+
+After registration and profile setup, show a one-time module selection step before entering the main application.
+
+Heading:
+
+Estonian:
+“Milleks soovid Kivorat kasutada?”
+
+English:
+“What would you like to use Kivora for?”
+
+Allow multiple selections.
+
+Suggested purpose choices:
+
+- Personal life
+- Learning
+- Finance planning
+- Work
+
+These purpose choices should activate suitable modules, but the user must also be able to review and change the individual module selection before continuing.
+
+The user must not be permanently locked into their initial choices.
+
+Include:
+
+- Continue
+- Select all
+- Clear optional selections
+- Short explanation that modules can later be changed in Settings
+
+Do not show fake demo data during onboarding.
+
+PART 2 — SETTINGS → MODULES
+
+Create or complete:
+
+Settings → Modules
+
+Show every selectable module with:
+
+- module icon;
+- module name;
+- short description;
+- on/off switch.
+
+When a module is disabled:
+
+- hide its sidebar item;
+- hide its Home Dashboard widgets;
+- do not delete Firestore data;
+- do not clear local data;
+- do not remove entity links;
+- do not delete settings or history.
+
+When re-enabled:
+
+- show it again immediately;
+- restore access to all existing data.
+
+PART 3 — PERSISTENCE
+
+Save the user’s module preferences to the existing user settings/profile system.
+
+Requirements:
+
+- preferences persist after refresh;
+- preferences persist after logout and login;
+- preferences synchronize through Firestore;
+- different users have separate selections;
+- no mock-only or local-memory-only implementation.
+
+PART 4 — SIDEBAR
+
+Sidebar visibility must use the saved module settings.
+
+Keep the existing order:
+
+- Home
+- Calendar
+- Tasks
+- Notes
+- Habits
+- Goals
+- Finance
+- School
+- AI Assistant
+- Notifications
+- Settings
+
+Home, Notifications and Settings are always shown.
+
+Do not leave empty gaps or broken routes.
+
+If the user is currently inside a module and disables it:
+- safely redirect to Home;
+- do not show a blank or forbidden page.
+
+PART 5 — HOME DASHBOARD
+
+The Home Dashboard must respect module selection.
+
+Examples:
+
+- Tasks disabled → task widgets hidden.
+- Calendar disabled → calendar widgets hidden.
+- Finance disabled → finance widgets hidden.
+- Goals disabled → goal widgets hidden.
+- Habits disabled → habit widgets hidden.
+- School disabled → school widgets hidden.
+
+The Dashboard layout must close gaps cleanly.
+Do not leave large empty spaces.
+
+PART 6 — AI BEHAVIOR
+
+Do not remove or break the AI Assistant.
+
+If AI Assistant itself is disabled:
+- hide its sidebar item and Dashboard entry points.
+
+If another module is disabled:
+- AI should not proactively recommend that module;
+- AI must not claim that the user’s data was deleted;
+- existing data remains stored.
+
+Do not weaken existing AI access or rewrite the AI system.
+
+PART 7 — LOCALIZATION
+
+Everything must support Estonian and English.
+
+No visible text may be hardcoded.
+
+Translate:
+
+- onboarding headings;
+- module names;
+- module descriptions;
+- buttons;
+- helper text;
+- settings labels;
+- success and error messages;
+- empty states.
+
+PART 8 — SAFETY
+
+Do not delete any user data.
+
+Do not change Firestore collection structure unless absolutely necessary.
+
+If a new settings field is required, add only the smallest field needed.
+
+Existing users who do not yet have module settings must receive a safe default:
+- all current Core modules enabled.
+
+This prevents existing accounts from suddenly losing menu items.
+
+PART 9 — TESTING
+
+Test with two disposable accounts.
+
+Account A:
+- select Calendar, Tasks, Notes and Finance;
+- confirm other optional modules are hidden;
+- refresh;
+- log out and back in;
+- confirm the same selection remains.
+
+Account B:
+- select Learning and enable School;
+- confirm School is visible;
+- disable School in Settings;
+- confirm School disappears but its data remains;
+- re-enable School;
+- confirm the old School data returns.
+
+Also test:
+
+- disabling the currently open module redirects to Home;
+- Home, Notifications and Settings can never be disabled;
+- Dashboard layout closes gaps;
+- Estonian and English both work;
+- existing accounts default to all Core modules enabled.
+
+After implementation, report only:
+
+- files created;
+- files modified;
+- where preferences are stored;
+- default behavior for existing users;
+- whether all tests passed;
+- anything still incomplete.
+
+Begin implementation now.

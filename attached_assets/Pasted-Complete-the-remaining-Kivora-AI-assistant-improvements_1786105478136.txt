@@ -1,0 +1,504 @@
+Complete the remaining Kivora AI assistant improvements in one focused implementation.
+
+There are THREE remaining areas:
+
+A. Make SEB/bank-statement PDF extraction reliable enough for real use.
+B. Improve the AI chat input/message layout for long text.
+C. Add edit and delete functionality for user chat messages.
+
+STRICT SCOPE:
+- Do not modify authentication.
+- Do not modify Google/Facebook login.
+- Do not modify Calendar, Tasks, Habits, Goals, Notes or Money UI except where Money import verification is directly required.
+- Do not modify attachment upload UX that already works.
+- Do not redesign the entire AI page.
+- Do not modify Android, Capacitor, PWA or service worker.
+- Reuse the existing architecture.
+
+==================================================
+A. FINAL BANK-STATEMENT PDF EXTRACTION FIX
+==================================================
+
+Current confirmed state:
+
+- PDF upload works.
+- Attachments remain compact and hidden context is working.
+- OpenAI Responses API receives the PDF.
+- Single Money income/expense AI actions work.
+- Bulk import confirmation exists.
+- Import is correctly blocked when reconciliation fails.
+
+Remaining problem:
+
+The latest real SEB Estonia statement still produces incomplete/inconsistent extraction.
+
+Known statement control totals:
+
+Income:
+6 transactions
+1449.90 EUR
+
+Expenses:
+992.29 EUR
+
+The current extraction has previously returned:
+- missing expense rows
+- inconsistent income counts
+- wrong classifications
+- only 3/4 pages effectively extracted
+- different totals between runs
+
+The system correctly sets:
+extractionComplete = false
+importAllowed = false
+
+but the extraction itself must now be made reliable.
+
+REQUIRED ARCHITECTURE:
+
+1. Process the PDF PAGE BY PAGE.
+
+Do not rely on one giant vision request for the entire PDF.
+
+For each page:
+- send that page or page-specific PDF input to OpenAI vision/file processing
+- extract only the transaction rows visible on that page
+- preserve:
+  - page number
+  - row order
+  - date
+  - exact description
+  - debit amount
+  - credit amount
+  - currency
+
+Return structured JSON only.
+
+2. Keep debit and credit as separate source fields.
+
+Canonical transaction structure should contain something equivalent to:
+
+{
+  page: number,
+  rowIndex: number,
+  date: "YYYY-MM-DD",
+  description: string,
+  debit: number | null,
+  credit: number | null,
+  amount: number,
+  direction: "income" | "expense",
+  currency: "EUR",
+  needsReview: boolean
+}
+
+3. Direction must be deterministic.
+
+If credit > 0:
+direction = income
+
+If debit > 0:
+direction = expense
+
+Never infer direction from:
+- description
+- person's name
+- merchant
+- words like loan, insurance, transfer, savings, payment
+
+If both debit and credit exist or neither can be determined:
+needsReview = true
+
+4. Date parsing.
+
+SEB Estonia uses European dates.
+
+DD.MM.YYYY must always become:
+YYYY-MM-DD
+
+Examples:
+07.08.2026 → 2026-08-07
+06.08.2026 → 2026-08-06
+01.08.2026 → 2026-08-01
+
+Never interpret DD.MM as MM.DD.
+
+5. Process ALL pages.
+
+The backend must know:
+- total PDF page count
+- pages successfully processed
+- pages failed
+
+extractionComplete cannot be true unless every page is processed successfully.
+
+6. Merge all page results in application code.
+
+Do not ask the LLM to calculate final totals.
+
+Application code must calculate:
+
+incomeCount
+expenseCount
+totalIncome
+totalExpenses
+
+from the canonical validated transaction array.
+
+7. Reconciliation.
+
+Read the statement's own summary:
+- opening balance
+- closing balance
+- total income
+- total expenses
+- period
+
+Compare it against the canonical transaction array.
+
+Expected for the current SEB test statement:
+
+Income:
+6
+1449.90 EUR
+
+Expenses:
+992.29 EUR
+
+If totals do not match:
+- extractionComplete = false
+- reconciliationOk = false
+- importAllowed = false
+
+Never invent missing transactions such as:
+"Uus tulu: 0 €"
+
+8. Automatic recovery pass.
+
+If reconciliation fails:
+
+Run a second targeted extraction ONLY for the pages where:
+- rows appear missing
+- totals do not reconcile
+- OCR confidence/readability was poor
+
+The second pass must receive the ORIGINAL visual page, not the first-pass extracted text.
+
+Provide the already-found rows to avoid duplicates.
+
+Merge only genuinely missing/corrected rows.
+
+9. Deterministic deduplication.
+
+Use at minimum:
+- date
+- description
+- debit/credit amount
+- page
+- row order where available
+
+Do not remove legitimate repeated transactions such as two identical Replit payments on the same day unless they are truly the same row.
+
+10. Single canonical transaction array.
+
+The following must ALL come from the exact same validated array:
+
+- visible review
+- income list
+- expense list
+- counts
+- totals
+- preview_bank_import
+- final Money import after confirmation
+
+There must never be separate AI-generated review data and action data.
+
+11. Import safety.
+
+Before confirmation:
+
+NO create_money_income
+NO create_money_expense
+NO Firestore Money writes
+
+Only:
+preview_bank_import
+
+After user confirmation:
+- convert the canonical approved array into actual Money actions
+- await every write
+- verify using the Money module's real data layer
+- report created/skipped/failed counts
+
+12. Never allow import if:
+- extractionComplete = false
+- reconciliationOk = false
+- needsReview transactions remain
+- visible review differs from canonical array
+
+13. Test using the actual latest SEB statement.pdf.
+
+Do NOT use only generated sample PDFs.
+
+Run the same PDF extraction at least THREE times.
+
+All three runs must produce identical:
+- transaction count
+- income count
+- expense count
+- income total
+- expense total
+- directions
+- dates
+
+Expected income:
+6 transactions
+1449.90 EUR
+
+Expected expense total:
+992.29 EUR
+
+Report the three-run comparison.
+
+==================================================
+B. AI CHAT INPUT AND LONG-TEXT LAYOUT
+==================================================
+
+Current issue:
+
+The AI text input is too short for longer messages.
+
+When the user writes a long message it should NOT continue as one long horizontal line.
+
+Required behaviour:
+
+1. Change the AI input to an auto-growing multiline textarea.
+
+2. Initial height:
+approximately the current compact input height.
+
+3. As the user types:
+- wrap text naturally
+- increase height downward
+- keep the width unchanged
+
+4. Maximum height:
+use a reasonable responsive max height, approximately 5–7 lines.
+
+After max height:
+- keep the textarea height fixed
+- scroll internally
+
+5. Do NOT make the whole composer horizontally scroll.
+
+6. Long words/URLs must wrap safely:
+- overflow-wrap: anywhere
+- word-break where necessary
+
+7. Enter behaviour:
+- Enter = send
+- Shift + Enter = new line
+
+On mobile, preserve a natural multiline typing experience and do not make the keyboard/send behaviour awkward.
+
+8. The composer itself may become slightly taller when needed.
+
+Do not allow the growing textarea to cover:
+- attachment buttons
+- send button
+- chat messages
+
+9. Long user and assistant messages must wrap vertically inside their message bubbles.
+
+No message bubble should expand beyond the available viewport width.
+
+Mobile:
+- leave appropriate side margins
+- message bubble max-width must fit the screen
+- no horizontal page scrolling
+
+Desktop:
+- keep the existing visual proportions
+- allow readable message width
+
+Do not redesign the AI page.
+
+==================================================
+C. EDIT AND DELETE AI CHAT MESSAGES
+==================================================
+
+Add message editing and deletion.
+
+USER MESSAGES:
+
+1. Every user-created chat message should have actions:
+- Edit
+- Delete
+
+Use either a small menu (⋯) or the existing Kivora interaction pattern.
+
+Do not clutter every bubble with large permanent buttons.
+
+2. EDIT:
+
+When the user chooses Edit:
+- open the message text in an editable textarea
+- preserve the original attachments
+- allow text changes
+- Save
+- Cancel
+
+After Save:
+- update the message in Firestore
+- update updatedAt
+- visually update the conversation immediately
+
+3. Conversation consistency after edit:
+
+Editing an old user message changes the context of later AI messages.
+
+Do NOT pretend later AI responses are still guaranteed to match the edited message.
+
+Use one of these safe behaviours:
+
+Preferred:
+When editing a user message that has later assistant messages:
+- warn:
+  "Selle sõnumi muutmine muudab vestluse konteksti. Kas soovid sellest kohast vestluse uuesti jätkata?"
+- after confirmation:
+  - update the message
+  - remove later AI/user messages from that branch OR create a new branch from the edited message
+  - regenerate only when the user explicitly asks
+
+Do not silently keep contradictory future responses.
+
+4. Attachments:
+
+Editing message text must not:
+- delete attachment metadata
+- reveal hiddenContext
+- convert hidden file context into visible text
+
+5. DELETE:
+
+User can delete their own message.
+
+If deleting the latest isolated user message:
+- delete normally
+
+If deleting a message that has later conversation dependent on it:
+show a warning.
+
+Recommended:
+"Kui kustutad selle sõnumi, eemaldatakse ka sellele järgnevad vestlussõnumid. Kas jätkata?"
+
+Only delete after explicit confirmation.
+
+6. Assistant messages:
+
+Allow the user to delete assistant messages as well.
+
+Editing assistant-generated text is NOT required unless there is already a product reason for it.
+
+For assistant messages:
+- Delete is sufficient.
+
+7. Firestore:
+
+Use the existing conversation/message schema.
+
+Do not create a parallel chat history system.
+
+Add store functions equivalent to:
+- updateChatMessage(...)
+- deleteChatMessage(...)
+- deleteMessagesAfter(...)
+
+Reuse existing conversation store architecture.
+
+8. Internal fields:
+
+Never expose or allow the user to manually edit:
+- hiddenContext
+- actions
+- attachment extraction data
+- internal tool results
+- internal action payloads
+
+Only visible user content is editable.
+
+9. RAW INTERNAL JSON MUST NEVER BE SHOWN.
+
+The user has previously seen responses like:
+
+{
+  "reply": "...",
+  "actions": [...]
+}
+
+This must never appear in the visible chat.
+
+The UI should render only:
+reply
+
+Actions remain internal.
+
+Add a final defensive parser:
+if the AI response contains the expected JSON wrapper,
+extract reply for display and keep actions internal.
+
+If malformed:
+show a safe localized error instead of dumping raw JSON.
+
+==================================================
+TESTING
+==================================================
+
+Test on both desktop and Android Chrome.
+
+INPUT TESTS:
+1. Short message
+2. Very long paragraph
+3. 10-line message
+4. Shift+Enter new lines
+5. Long URL/string
+6. Mobile keyboard
+7. Attach PDF + long instruction
+
+MESSAGE TESTS:
+8. Edit latest user message
+9. Cancel edit
+10. Edit older user message
+11. Verify context warning
+12. Delete latest message
+13. Delete older message
+14. Verify dependent-message warning
+15. Delete assistant message
+16. Reload page and confirm edits/deletions persist
+
+PDF TESTS:
+17. Latest real SEB statement
+18. Extract three times
+19. All pages processed
+20. 01.08 transactions present
+21. Income = 6 / 1449.90 EUR
+22. Expenses = 992.29 EUR
+23. reconciliationOk = true
+24. extractionComplete = true
+25. importAllowed = true
+26. Review and preview_bank_import use the exact same canonical array
+27. Do not import during testing unless explicitly requested
+
+Before implementation report:
+- exact files that need to change
+- current PDF extraction failure point
+- current chat composer implementation
+- current Firestore chat-message update/delete capabilities
+
+After implementation report:
+- exact files changed
+- three-run PDF extraction results
+- desktop/mobile composer test results
+- edit/delete test results
+- any remaining unsupported behaviour
+
+Do not change unrelated functionality.

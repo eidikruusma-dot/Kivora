@@ -1,0 +1,252 @@
+Fix the bank-statement PDF import properly. Do not add another diagnostic patch on top of the current code.
+
+Current verified facts:
+
+- Frontend sends a real File correctly.
+- Browser log shows:
+  name: statement.pdf
+  size: 86660
+  type: application/pdf
+- /api/ai/bank-import receives the request and returns 422.
+- Multer/file upload is therefore not the problem.
+- Structural extraction runs, but on the real statement:
+  structuralSuccess=false
+  structuralTransactions=0
+  reconciliationOk=true
+- The structural parser therefore cannot read this particular real statement.
+- The AI fallback must handle it.
+- The old base64 input_file path failed with OpenAI:
+  "Expected a base64-encoded data URL ... but got empty base64-encoded bytes."
+- We already changed the AI fallback to upload the Buffer through the OpenAI Files API and pass file_id to Responses API.
+- Current production result is still:
+  PDF_NO_TEXT
+  outputTextLength=0
+  jsonParseOk=false
+  isBankStatement=null
+  status=null
+  errorCode=null
+  errorMessage=null
+  incompleteReason=null
+  outputTypes=none
+  refusal=false
+
+IMPORTANT:
+Do not assume the OpenAI response shape is the problem.
+Do not blindly patch output_text again.
+Trace the actual execution path and prove where it fails.
+
+GOAL
+
+The Money module flow must be:
+
+FinancePage
+→ POST /api/ai/bank-import
+→ receive original PDF Buffer
+→ deterministic structural extraction first
+→ if structural extraction cannot produce usable verified transactions,
+   use ONE working OpenAI PDF extraction fallback
+→ normalize transactions in application code
+→ calculate totals in application code
+→ validate/reconcile
+→ return { transactions, bankMeta }
+→ frontend shows preview
+→ nothing is written to Firestore until user explicitly confirms import.
+
+Generic AI chat uploads MUST remain separate:
+POST /api/ai/upload must continue supporting DOCX, school files, generic PDFs, images, etc.
+Do not route generic AI attachments into bank-import logic.
+
+TASK 1 — INSPECT BEFORE EDITING
+
+Inspect these active files and all direct dependencies:
+
+artifacts/api-server/src/routes/aiUpload.ts
+artifacts/api-server/src/lib/extractStructuralPdfBuffer.ts
+artifacts/api-server/src/lib/pdfTextProbe.ts
+artifacts/api-server/src/lib/extractStructural.ts
+artifacts/api-server/src/lib/extractStructuralControls.ts
+artifacts/api-server/src/lib/reconcileStructuralTransactions.ts
+
+Also inspect:
+artifacts/api-server/package.json
+the installed openai package version
+the OpenAI SDK type definitions for files.create and responses.create
+
+Do not use files from .migration-backup.
+
+TASK 2 — BUILD AN ISOLATED OPENAI PDF INTEGRATION TEST FIRST
+
+Before changing production bank-import logic, create a temporary test/script that proves the OpenAI PDF path works independently.
+
+Generate a synthetic PDF in memory using pdf-lib containing simple machine-readable text such as:
+
+BANK STATEMENT
+Opening Balance 500.00
+01.08.2026 Test Expense Debit 25.50 Balance 474.50
+02.08.2026 Test Income Credit 100.00 Balance 574.50
+Closing Balance 574.50
+
+Then use the EXACT SAME OpenAI mechanism intended for production:
+
+Buffer
+→ OpenAI Files API upload
+→ purpose supported by the installed SDK/API
+→ Responses API input_file using the returned file_id
+→ simple input_text instruction
+→ inspect the actual returned response object
+
+The test must print ONLY safe metadata:
+
+- uploaded file id exists yes/no
+- response object type
+- response status if present
+- output item types
+- content item types
+- output text length
+- whether valid JSON was parsed
+
+Do not log full document contents.
+
+Do not continue until this isolated test actually returns non-empty model output.
+
+If the call throws, print the actual OpenAI exception:
+name
+status
+code
+type
+message
+
+Do not convert it to PDF_NO_TEXT.
+
+TASK 3 — FIX THE OPENAI CALL BASED ON THE TEST
+
+Once the isolated test works, extract that implementation into ONE helper used by production bank import.
+
+Requirements:
+
+- helper accepts Buffer + filename
+- reject zero-byte buffers before API call
+- upload the Buffer as a real PDF file
+- pass file_id correctly to Responses API
+- use a model that actually supports PDF input
+- use the current installed OpenAI SDK API correctly
+- parse the actual returned response according to the installed SDK
+- never silently replace empty output with "{}"
+- never turn OpenAI API/network/schema errors into PDF_NO_TEXT
+- PDF_NO_TEXT is only for a genuinely unreadable/empty document
+- OpenAI/API failures must remain distinguishable server errors
+- delete the temporary uploaded OpenAI file in finally/best-effort cleanup
+
+TASK 4 — CLEAN THE PRODUCTION BANK IMPORT FLOW
+
+Refactor POST /api/ai/bank-import so its production decision tree is obvious:
+
+1. Validate uploaded file exists.
+2. Validate PDF.
+3. Validate file.buffer.length > 0.
+4. Try extractStructuralPdfBuffer(file.buffer).
+5. Structural result is usable ONLY if:
+   - transactions.length > 0
+   - reconciliation is genuinely valid
+   - no review-blocking structural errors
+6. IMPORTANT:
+   zero transactions must NEVER result in a meaningful reconciliation success.
+7. If structural result is not usable:
+   call the proven OpenAI PDF fallback.
+8. Normalize output to BankTransaction[].
+9. Compute:
+   incomeCount
+   expenseCount
+   calculatedIncomeTotal
+   calculatedExpenseTotal
+   entirely in application code.
+10. Determine validationStatus/importAllowed.
+11. Return only:
+   {
+     transactions,
+     bankMeta
+   }
+
+Do not return raw OpenAI internals to the frontend.
+
+TASK 5 — REMOVE PRODUCTION DEAD/CONFUSING PATHS
+
+The current aiUpload.ts contains a lot of old legacy per-page bank extraction logic.
+
+Do not keep multiple competing production bank extraction paths.
+
+Either:
+A) remove unreachable legacy bank extraction code, OR
+B) isolate it into a clearly named legacy module that is not imported by production.
+
+Production /api/ai/bank-import must have ONE structural path and ONE AI fallback path.
+
+Keep /api/ai/upload generic.
+
+Remove temporary UI-facing diagnostics such as:
+outputTextLength=
+jsonParseOk=
+isBankStatement=
+status=
+etc.
+
+User-facing errors should be clean, e.g.:
+
+NOT_A_BANK_STATEMENT
+PDF_NO_TEXT
+BANK_IMPORT_SERVICE_ERROR
+
+Log technical details server-side only.
+
+TASK 6 — DO NOT TOUCH FIRESTORE IMPORT CONFIRMATION LOGIC
+
+Do not write any bank transactions during extraction/preview.
+
+Import must still require explicit user confirmation.
+
+Do not weaken importAllowed validation.
+
+TASK 7 — TESTS
+
+Run existing tests and keep them green:
+
+pnpm exec tsc --noEmit
+pnpm run test:extractStructuralPdfBuffer
+pnpm run test:extractStructuralControls
+pnpm run test:reconcileStructuralTransactions
+pnpm run test:extractStructural
+pnpm run test:extraction
+pnpm run build
+
+Also add tests covering:
+
+1. zero-byte bank-import PDF rejected before OpenAI
+2. structural success skips OpenAI fallback
+3. structural zero transactions triggers fallback
+4. OpenAI fallback result normalizes correctly
+5. OpenAI exception does NOT become PDF_NO_TEXT
+6. non-bank result becomes NOT_A_BANK_STATEMENT
+7. zero transactions cannot be treated as successful reconciliation
+8. generic /api/ai/upload behavior is unchanged
+
+If an existing script name differs, inspect package.json and use the correct script.
+
+TASK 8 — FINAL REPORT
+
+When complete, report exactly:
+
+- root cause found
+- files changed
+- files deleted/moved if any
+- final /api/ai/bank-import decision tree
+- result of isolated OpenAI PDF integration test
+- tsc result
+- every relevant test result
+- build result
+- whether any diagnostic code remains
+- whether generic AI document upload changed
+- whether Firestore write behavior changed
+
+Do not stop after making code compile.
+Do not claim success unless the isolated OpenAI PDF integration test produces actual non-empty output and all local tests/build pass.
+Do not ask me to manually edit individual lines. Make the code changes yourself.

@@ -1,0 +1,253 @@
+Finance Categories + AI Integration
+
+Implement these two connected improvements together:
+
+1. Expand Finance categories.
+2. Connect real Finance data to the existing AI Assistant.
+
+Do not redesign the Finance page.
+Do not modify unrelated modules.
+Do not perform a broad audit.
+Do not create duplicate Finance data.
+Use the existing Finance store as the single source of truth.
+
+PART 1 — FINANCE CATEGORIES
+
+Income must support categories.
+
+Add these income categories:
+
+- Salary
+- Benefits
+- Side income
+- Refund
+- Gift
+- Sale
+- Other income
+
+Estonian:
+
+- Palk
+- Toetused
+- Lisatulu
+- Tagasimakse
+- Kingitus
+- Müük
+- Muu tulu
+
+Expense categories:
+
+- Housing
+- Food
+- Transport
+- Children and family
+- Health
+- Education
+- Shopping
+- Entertainment
+- Subscriptions
+- Debt payments
+- Insurance
+- Pets
+- Travel
+- Other expense
+
+Estonian:
+
+- Elamine
+- Toit
+- Transport
+- Lapsed ja pere
+- Tervis
+- Haridus
+- Ostlemine
+- Meelelahutus
+- Tellimused
+- Võlamaksed
+- Kindlustus
+- Lemmikloomad
+- Reisimine
+- Muu kulu
+
+Bill categories must be more specific.
+
+Add these bill categories:
+
+Housing:
+- Electricity
+- Water
+- Heating
+- Rent
+- Home loan
+- Waste collection
+- Home insurance
+
+Communication:
+- Mobile service
+- Internet
+- TV service
+
+Transport:
+- Car lease
+- Car insurance
+- Parking
+- Public transport
+
+Subscriptions:
+- Streaming service
+- Music service
+- Cloud storage
+- Software subscription
+- Other subscription
+
+Family:
+- Kindergarten
+- School
+- Hobby activity
+- Childcare
+
+Finance:
+- Loan payment
+- Credit card
+- Insurance
+- Tax
+
+Other:
+- Other bill
+
+Estonian:
+
+Kodu:
+- Elektriteenus
+- Vesi
+- Küte
+- Üür
+- Kodulaen
+- Prügivedu
+- Kodukindlustus
+
+Side:
+- Mobiiliteenus
+- Internet
+- TV teenus
+
+Transport:
+- Autoliising
+- Autokindlustus
+- Parkimine
+- Ühistransport
+
+Tellimused:
+- Voogedastusteenus
+- Muusikateenus
+- Pilvesalvestus
+- Tarkvaratellimus
+- Muu tellimus
+
+Pere:
+- Lasteaed
+- Kool
+- Huvitegevus
+- Lapsehoid
+
+Raha:
+- Laenumakse
+- Krediitkaart
+- Kindlustus
+- Maks
+
+Muu:
+- Muu arve
+
+Requirements:
+
+- Add category selection to income creation and editing.
+- Keep category selection for expenses.
+- Replace the current limited bill categories with the expanded bill category list.
+- Existing saved items must continue working.
+- Do not delete or corrupt existing category values.
+- Use a safe fallback category for older records.
+- Category labels must support Estonian and English.
+- Do not hardcode visible category text.
+- Use the existing translation system.
+
+PART 2 — FINANCE TO AI INTEGRATION
+
+The existing AI Assistant currently does not see real Finance data.
+
+Connect the existing Finance data to the AI context.
+
+The AI must use real user data from the existing Finance store:
+
+- income transactions;
+- expense transactions;
+- savings transactions;
+- bills;
+- bill statuses;
+- bill due dates;
+- monthly budgets;
+- available money;
+- savings totals;
+- linked goals where available.
+
+Do not duplicate data.
+Do not create a separate AI Finance database.
+Do not change the AI chat UI.
+
+The AI must understand and answer questions such as:
+
+- How much income do I have this month?
+- How much have I spent this month?
+- What are my biggest expense categories?
+- Which bills are due soon?
+- Which bills are overdue?
+- How much money remains after known obligations?
+- How much have I saved?
+- How is my savings goal progressing?
+- Did I spend more on food this month?
+- What recurring payments do I have?
+- What should I pay attention to before my next income?
+
+The AI must use the expanded categories so it can answer naturally, for example:
+
+- You spent 245 € on food this month.
+- Your mobile, internet and TV bills total 89 €.
+- Salary makes up most of your income.
+- You have two subscription payments due this week.
+
+Important:
+
+- AI must never invent missing Finance data.
+- If no Finance data exists, say so honestly.
+- AI must distinguish between planned and actual amounts.
+- AI must distinguish between upcoming, paid and overdue bills.
+- AI must use the user’s selected language.
+- AI must not make financial decisions for the user.
+- AI may explain, summarize, compare and suggest.
+- AI must not silently edit Finance data.
+
+Testing requirements:
+
+1. Add one salary income with category Salary / Palk.
+2. Add one food expense.
+3. Add one TV service bill.
+4. Add one electricity bill.
+5. Add one savings transaction.
+6. Ask the AI:
+   - How much income do I have this month?
+   - Which bills are due?
+   - How much did I spend on food?
+   - How much have I saved?
+7. Confirm that the AI answers using the real saved data.
+8. Refresh the page and confirm categories and Finance data persist.
+
+After implementation, report only:
+
+- files changed;
+- new translation keys added;
+- Finance categories implemented;
+- how Finance data is passed to AI;
+- which AI questions were tested successfully;
+- anything that still does not work.
+
+Begin implementation.

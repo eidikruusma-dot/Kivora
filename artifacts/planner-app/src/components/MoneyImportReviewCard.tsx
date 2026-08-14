@@ -1,0 +1,292 @@
+/**
+ * MoneyImportReviewCard
+ *
+ * Shared review UI for bank-statement imports.
+ * Used by:
+ *   - AIAssistantPage  (legacy AI-chat import path, kept intact for now)
+ *   - BankImportModal in FinancePage  (new explicit Money-module import path)
+ *
+ * Direction comes ONLY from the server extraction pipeline — never re-derived here.
+ * Import is blocked while any needsReview transaction exists or validation fails.
+ */
+
+import { X } from "lucide-react";
+import type { BankTransaction, BankMeta } from "@/types/bank";
+
+export type { BankTransaction, BankMeta };
+
+export interface MoneyImportReviewCardProps {
+  transactions: BankTransaction[];
+  bankMeta?: BankMeta;
+  lang: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+export default function MoneyImportReviewCard({
+  transactions,
+  bankMeta,
+  lang,
+  onConfirm,
+  onCancel,
+}: MoneyImportReviewCardProps) {
+  const et = lang === "et";
+
+  // Split using server-validated direction — never re-derive
+  const income = transactions.filter(
+    (t) => !t.needsReview && t.direction === "income",
+  );
+  const expenses = transactions.filter(
+    (t) => !t.needsReview && t.direction === "expense",
+  );
+  const needsReview = transactions.filter((t) => t.needsReview);
+
+  // Totals always computed in code from the validated arrays
+  const totalIncome = income.reduce((s, t) => s + t.amount, 0);
+  const totalExpenses = expenses.reduce((s, t) => s + t.amount, 0);
+
+  // Validation status from the direct-extraction pipeline.
+  // Older pipeline responses carry reconciliationOk/extractionComplete instead;
+  // both are read for backward compat but validationStatus takes precedence.
+  const validationStatus = bankMeta?.validationStatus;
+  const isUnverified = validationStatus === "unverified";
+
+  // Fail-closed gate:
+  //   review_required → blocked (ambiguous rows or control total mismatch)
+  //   unverified      → allowed with warning (no control data, but structure is valid)
+  //   verified        → allowed (structure valid + at least one control check passes)
+  //   no bankMeta     → blocked
+  // Legacy pipeline compat: when validationStatus is absent, fall back to old flags.
+  // importAllowed is the single canonical gate (set by postProcessBankTransactions).
+  // needsReview.length === 0 is an extra client-side safety net.
+  const canImport =
+    bankMeta != null &&
+    bankMeta.importAllowed === true &&
+    needsReview.length === 0;
+  const blocked = !canImport;
+
+  // First validation error from the pipeline, shown near the blocked button
+  const blockReason = bankMeta?.validationErrors?.[0] ?? null;
+
+  // Transaction table — no per-table scroll; parent scrollable area handles overflow
+  const TxTable = ({
+    rows,
+    color,
+    showReason,
+  }: {
+    rows: BankTransaction[];
+    color: string;
+    showReason?: boolean;
+  }) => (
+    <div className="rounded-lg border border-[#ECECF2] bg-white overflow-hidden mb-3">
+      <table className="w-full text-xs">
+        <tbody>
+          {rows.map((t, i) => (
+            <tr key={i} className={i > 0 ? "border-t border-[#F2F2F2]" : ""}>
+              <td className="px-2.5 py-1.5 text-[#64748B] whitespace-nowrap w-[76px]">
+                {t.date || "—"}
+              </td>
+              <td className="px-2.5 py-1.5 text-[#1A1F36] min-w-0">
+                <div className="truncate max-w-[180px]">{t.description}</div>
+                {showReason && t.reviewReason && (
+                  <div className="text-[9px] text-[#F59E0B] truncate mt-0.5">
+                    {t.reviewReason}
+                  </div>
+                )}
+              </td>
+              <td
+                className={`px-2.5 py-1.5 text-right font-medium whitespace-nowrap ${color}`}
+              >
+                {t.direction === "income" ? "+" : "−"}
+                {t.amount.toFixed(2)} {t.currency}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const borderBg = blocked
+    ? "border-[#FCD34D] bg-[#FFFBEB]"
+    : "border-[#BBF7D0] bg-[#F0FDF4]";
+  const footerBg = blocked ? "bg-[#FFFBEB]" : "bg-[#F0FDF4]";
+
+  return (
+    // Card: flex-column bounded by its absolutely-positioned wrapper.
+    // max-h-full = wrapper height (never exceeds it).
+    // overflow-hidden clips internal content so the parent's overflow-hidden
+    // cannot reach in and clip the footer.
+    <div
+      className={`rounded-xl border flex flex-col overflow-hidden max-h-full ${borderBg}`}
+    >
+      {/* ── HEADER — always visible ───────────────────────────────────────── */}
+      <div className="flex items-start justify-between px-4 pt-4 pb-3 flex-shrink-0">
+        <div>
+          <p className="text-sm font-semibold text-[#1A1F36]">
+            {et ? "Raha mooduli import" : "Money module import"}
+          </p>
+          {bankMeta?.period && (
+            <p className="text-[10px] text-[#64748B] mt-0.5">
+              {bankMeta.bank ? `${bankMeta.bank} · ` : ""}
+              {bankMeta.period.from} – {bankMeta.period.to}
+              {bankMeta.accountNumber
+                ? ` · ${bankMeta.accountNumber.slice(0, 4)}…${bankMeta.accountNumber.slice(-4)}`
+                : ""}
+            </p>
+          )}
+        </div>
+        <button
+          onClick={onCancel}
+          className="text-[#94A3B8] hover:text-[#1A1F36] transition-colors ml-2 mt-0.5 flex-shrink-0"
+          aria-label={et ? "Sulge" : "Close"}
+        >
+          <X size={14} />
+        </button>
+      </div>
+
+      {/* ── SUMMARY — always visible ──────────────────────────────────────── */}
+      <div className="px-4 pb-3 flex-shrink-0 border-b border-black/[0.07]">
+        {/* Counts + totals */}
+        <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px]">
+          {income.length > 0 && (
+            <span className="text-[#16A34A] font-medium">
+              {income.length} {et ? "sissetulekut" : "income"} · +
+              {totalIncome.toFixed(2)} EUR
+            </span>
+          )}
+          {expenses.length > 0 && (
+            <span className="text-[#DC2626] font-medium">
+              {expenses.length} {et ? "väljaminekut" : "expenses"} · −
+              {totalExpenses.toFixed(2)} EUR
+            </span>
+          )}
+          {needsReview.length > 0 && (
+            <span className="text-[#F59E0B] font-medium">
+              {needsReview.length} {et ? "vajab kontrolli" : "needs review"}
+            </span>
+          )}
+          <span className="text-[#64748B]">
+            {transactions.length} {et ? "tehingut kokku" : "transactions total"}
+          </span>
+        </div>
+        {/* Balances */}
+        {(bankMeta?.openingBalance != null ||
+          bankMeta?.closingBalance != null) && (
+          <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] mt-0.5">
+            {bankMeta.openingBalance != null && (
+              <span className="text-[#64748B]">
+                {et ? "Algsaldo" : "Opening"}:{" "}
+                {bankMeta.openingBalance.toFixed(2)} €
+              </span>
+            )}
+            {bankMeta.closingBalance != null && (
+              <span className="text-[#64748B]">
+                {et ? "Lõppsaldo" : "Closing"}:{" "}
+                {bankMeta.closingBalance.toFixed(2)} €
+              </span>
+            )}
+          </div>
+        )}
+        {/* Reconciliation note — legacy field from old pipeline, shown when present */}
+        {bankMeta?.reconciliationNote && (
+          <p
+            className={`text-[10px] mt-1 leading-relaxed ${bankMeta.reconciliationOk === false ? "text-[#DC2626]" : "text-[#16A34A]"}`}
+          >
+            {bankMeta.reconciliationOk === false ? "⚠ " : "✓ "}
+            {bankMeta.reconciliationNote}
+          </p>
+        )}
+        {/* Second-pass diagnostic */}
+        {bankMeta?.secondPassRecovered != null &&
+          bankMeta.secondPassRecovered > 0 && (
+            <p className="text-[10px] text-[#64748B] mt-0.5">
+              {et
+                ? `✓ Teine skannimisring taastas ${bankMeta.secondPassRecovered} puuduvat tehingut`
+                : `✓ Second scan recovered ${bankMeta.secondPassRecovered} missing transaction(s)`}
+            </p>
+          )}
+      </div>
+
+      {/* ── SCROLLABLE TRANSACTION LIST ───────────────────────────────────── */}
+      {/* min-h-0 is required: flex children default to min-height:auto, which
+          prevents overflow-y:auto from kicking in. Without it, this div
+          would expand to its full content height and never scroll. */}
+      <div className="flex-1 overflow-y-auto min-h-0 px-4 py-3">
+        {income.length > 0 && (
+          <>
+            <p className="text-[11px] font-semibold text-[#16A34A] mb-1 uppercase tracking-wide">
+              {et ? "Tulud" : "Income"} ({income.length}) · +
+              {totalIncome.toFixed(2)} EUR
+            </p>
+            <TxTable rows={income} color="text-[#16A34A]" />
+          </>
+        )}
+        {expenses.length > 0 && (
+          <>
+            <p className="text-[11px] font-semibold text-[#DC2626] mb-1 uppercase tracking-wide">
+              {et ? "Kulud" : "Expenses"} ({expenses.length}) · −
+              {totalExpenses.toFixed(2)} EUR
+            </p>
+            <TxTable rows={expenses} color="text-[#DC2626]" />
+          </>
+        )}
+        {needsReview.length > 0 && (
+          <>
+            <p className="text-[11px] font-semibold text-[#F59E0B] mb-1 uppercase tracking-wide">
+              {et ? "Vajab kontrolli" : "Needs review"} ({needsReview.length})
+            </p>
+            <TxTable rows={needsReview} color="text-[#F59E0B]" showReason />
+          </>
+        )}
+      </div>
+
+      {/* ── STICKY ACTION FOOTER — always visible ────────────────────────── */}
+      <div
+        className={`flex-shrink-0 px-4 pt-3 pb-4 border-t border-black/[0.07] ${footerBg}`}
+        style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+      >
+        {/* Unverified: import is allowed but no control totals were found */}
+        {!blocked && isUnverified && (
+          <p className="text-[11px] text-[#B45309] font-medium mb-2 leading-snug">
+            {et
+              ? "⚠ Automaatseid kontrollandmeid ei leitud. Kontrolli tehingud enne importimist."
+              : "⚠ No automated control data found. Review transactions before importing."}
+          </p>
+        )}
+        {/* Blocked: review_required or legacy extraction failure */}
+        {blocked && (
+          <p className="text-[11px] text-[#DC2626] font-medium mb-2 leading-snug">
+            {blockReason
+              ? `⛔ ${blockReason}`
+              : et
+                ? "⛔ Import blokeeritud — tehingud vajavad kontrolli."
+                : "⛔ Import blocked — transactions need review."}
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          {/* Confirm — disabled while any gate is unmet; never bypassed */}
+          <button
+            onClick={onConfirm}
+            disabled={blocked}
+            className={`flex-1 py-2.5 rounded-lg text-white text-sm font-medium transition-colors ${
+              blocked
+                ? "bg-[#94A3B8] cursor-not-allowed opacity-70"
+                : "bg-[#16A34A] hover:bg-[#15803D] active:bg-[#166534]"
+            }`}
+          >
+            {et ? "Kinnita import" : "Confirm import"}
+          </button>
+          {/* Cancel — always enabled */}
+          <button
+            onClick={onCancel}
+            className="px-4 py-2.5 rounded-lg border border-[#BBF7D0] text-sm text-[#16A34A] font-medium hover:bg-[#DCFCE7] active:bg-[#BBF7D0] transition-colors"
+          >
+            {et ? "Tühista" : "Cancel"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

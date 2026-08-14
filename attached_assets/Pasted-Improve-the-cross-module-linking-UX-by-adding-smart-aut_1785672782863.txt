@@ -1,0 +1,108 @@
+Improve the cross-module linking UX by adding smart automatic link suggestions and fixing link removal.
+
+Current problems:
+- Users must manually search for every related item.
+- This is slow and frustrating.
+- Obvious relationships are not suggested automatically.
+- Existing links cannot be reliably removed.
+
+Goal:
+Make Kivora suggest and optionally create relevant cross-module links based on the item's content, date, category, subject, title, description, tags, and existing related records.
+
+Required behavior:
+
+1. Smart link suggestions
+- When creating or editing any supported entity, analyze its:
+  - title
+  - description
+  - category
+  - subject
+  - tags
+  - date
+  - time
+  - existing linked entities
+- Suggest the most relevant existing items from other modules.
+- Show no more than 3–5 suggestions.
+- Rank suggestions by relevance.
+- Exclude the current entity.
+- Exclude already linked entities.
+- Do not suggest unrelated items.
+
+2. Automatic obvious links
+- For clearly related records, allow an “Auto-link obvious matches” option.
+- Example:
+  - school item with subject “Matemaatika”
+  - note titled “Matemaatika valemid”
+  - goal titled “Matemaatika hinne 5”
+- Only auto-create links when confidence is high.
+- For lower-confidence matches, show suggestions and require confirmation.
+- AI must not silently create uncertain links.
+
+3. Calendar suggestions
+- Any item with a date/time should offer:
+  - Add to calendar
+  - Link to existing calendar event
+- If no suitable event exists, suggest creating one automatically.
+- Use valid calendarId values only.
+- Default to calendarId: mine.
+- Prevent duplicate calendar events.
+
+4. Better suggestion UI
+- Add a compact “Suggested links” section above “Linked items”.
+- Each suggestion must show:
+  - icon
+  - title
+  - type
+  - date/time when relevant
+  - reason for suggestion
+- Actions:
+  - Link
+  - Dismiss
+  - Link all high-confidence suggestions
+- Keep the existing Kivora design.
+- Do not redesign unrelated pages.
+
+5. Fix removal completely
+- Every linked item row must have a visible Remove action.
+- Removing from either side must delete the single shared entityLinks document.
+- The link must disappear immediately from both entities.
+- The change must sync in real time across browsers.
+- Removal must work for all entity types:
+  - task
+  - calendar
+  - note
+  - habit
+  - goal
+  - school
+  - ai
+- Show a confirmation only if needed.
+- Do not delete the actual linked entities, only the relationship.
+
+6. Architecture
+- Reuse entityLinksStore, LinkedItemsPanel, LinkPickerModal, entityResolver, and existing stores.
+- Do not create a second relationship system.
+- Add one shared linkSuggestions service/helper.
+- Keep Firestore schema unchanged unless strictly necessary.
+- Do not rewrite working module stores.
+- Do not modify unrelated UI.
+
+7. Testing before stopping
+For each entity type:
+- create an item
+- verify suggestions appear
+- accept one suggestion
+- verify two-way link
+- remove the link
+- verify it disappears from both sides
+- verify real-time sync in another browser
+- verify dismissed suggestions do not immediately reappear
+- verify duplicates are prevented
+
+After finishing:
+1. Run TypeScript typecheck.
+2. Check runtime console.
+3. List every modified file.
+4. Explain the suggestion ranking logic.
+5. Explain the confidence rules for auto-linking.
+6. Confirm link removal works for all entity types.
+7. Stop for manual testing.

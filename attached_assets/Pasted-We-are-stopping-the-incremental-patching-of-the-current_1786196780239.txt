@@ -1,0 +1,486 @@
+We are stopping the incremental patching of the current bank-statement parser.
+
+I want you to rebuild ONLY the bank-statement extraction layer into a GENERAL, BANK-AGNOSTIC, LOW-COST architecture.
+
+This must work for arbitrary users and arbitrary bank statement layouts.
+
+DO NOT optimize for, hard-code, or mention any specific user's statement, amounts, transaction counts, account numbers, bank, page count, or known expected values.
+
+The goal is NOT to make one test PDF pass.
+The goal is a generic production architecture.
+
+==================================================
+CORE ARCHITECTURE
+==================================================
+
+Replace the current expensive multi-call bank extraction flow with:
+
+ORIGINAL PDF
+→ ONE direct OpenAI Responses API input_file request
+→ strict structured extraction
+→ deterministic application-code validation
+→ user review card
+→ confirmed Money import
+
+The original PDF must be sent directly as input_file.
+
+Do NOT split the PDF into pages during the normal path.
+
+Do NOT run a separate metadata call for every page.
+
+Do NOT run 8 parallel vision calls for a 4-page document.
+
+Do NOT run correction/retry AI calls automatically unless the first direct extraction itself fails technically.
+
+Cost matters.
+
+Target:
+ONE OpenAI model request per normal bank-statement upload.
+
+==================================================
+1. FILE TO CHANGE
+==================================================
+
+Primary file:
+
+artifacts/api-server/src/routes/aiUpload.ts
+
+Do not touch unrelated features.
+
+Frontend changes are allowed ONLY if strictly necessary to support the new validation status semantics described below.
+
+Before touching frontend, report which file and why.
+
+==================================================
+2. DIRECT PDF EXTRACTION
+==================================================
+
+Use OpenAI Responses API with the ORIGINAL uploaded PDF:
+
+{
+  role: "user",
+  content: [
+    {
+      type: "input_file",
+      filename: file.originalname,
+      file_data: "data:application/pdf;base64,..."
+    },
+    {
+      type: "input_text",
+      text: BANK_STATEMENT_EXTRACTION_PROMPT
+    }
+  ]
+}
+
+Do not use pdf-lib page splitting in the primary extraction path.
+
+The existing PDF page-splitting code may remain temporarily as dead/fallback code during implementation, but the production bank-statement path must not invoke it after this change.
+
+==================================================
+3. STRUCTURED OUTPUTS
+==================================================
+
+Use strict Structured Outputs / json_schema if the current Responses API SDK configuration supports it.
+
+Do not assume it requires a different API surface without checking the currently installed OpenAI SDK types/API.
+
+OpenAI documentation supports JSON schema structured outputs for supported model/configurations.
+
+If json_schema cannot actually be used with the installed SDK/model, document the exact technical reason and use json_object temporarily.
+
+Do not silently fall back.
+
+Schema must represent:
+
+{
+  "document": {
+    "isBankStatement": boolean,
+    "bankName": string | null,
+    "accountNumber": string | null,
+    "currency": string | null,
+    "periodFrom": string | null,
+    "periodTo": string | null,
+    "openingBalance": number | null,
+    "closingBalance": number | null,
+    "printedIncomeTotal": number | null,
+    "printedExpenseTotal": number | null
+  },
+  "transactions": [
+    {
+      "date": string,
+      "description": string,
+      "debit": number | null,
+      "credit": number | null,
+      "balance": number | null,
+      "currency": string | null,
+      "sourcePage": number | null,
+      "confidence": "high" | "medium" | "low"
+    }
+  ],
+  "warnings": [
+    {
+      "code": string,
+      "message": string
+    }
+  ]
+}
+
+Do NOT ask the model to produce:
+direction
+amount
+incomeCount
+expenseCount
+calculatedIncomeTotal
+calculatedExpenseTotal
+reconciliationOk
+importAllowed
+
+Those are application-code responsibilities.
+
+==================================================
+4. UNIVERSAL EXTRACTION PROMPT
+==================================================
+
+The prompt must be bank-agnostic.
+
+Do not hard-code:
+SEB
+Swedbank
+LHV
+specific column numbers
+specific page locations
+specific summary labels as mandatory
+specific test amounts
+
+Semantic examples are allowed, but they must be examples only.
+
+The model must:
+
+- identify the transaction table from the actual PDF
+- identify date, description, debit, credit and optional balance semantics from the document itself
+- preserve every genuine transaction exactly once
+- keep debit and credit separate
+- never infer direction from merchant/payee text
+- never manufacture a running balance if none exists
+- never treat opening balance, closing balance, page subtotal, statement total or table headers as transactions
+- merge multi-line descriptions belonging to one transaction
+- return low confidence rather than guessing when a row is unclear
+- copy printed summary totals only if explicitly identifiable as statement-period totals
+- return null when metadata is absent
+- never calculate missing printed totals itself
+
+==================================================
+5. DETERMINISTIC APPLICATION-CODE NORMALIZATION
+==================================================
+
+After model output, application code must build canonical BankTransaction objects.
+
+Direction rules remain deterministic:
+
+debit > 0 and credit empty → expense
+credit > 0 and debit empty → income
+both populated → needsReview
+neither populated → needsReview
+
+amount = the populated debit/credit value only.
+
+Do not derive direction from:
+description
+merchant
+payer
+category
+balance
+
+Validate dates properly.
+
+A valid YYYY-MM-DD date must not create needsReview.
+
+Keep all existing useful canonical identity fields:
+id
+page/sourcePage
+rowIndex
+date
+description
+debit
+credit
+balance
+amount
+direction
+currency
+needsReview
+reviewReason
+
+==================================================
+6. REMOVE CONTROL TOTALS AS A HARD REQUIREMENT
+==================================================
+
+This is critical.
+
+A bank statement is NOT invalid merely because the model cannot find:
+
+printedIncomeTotal
+printedExpenseTotal
+openingBalance
+closingBalance
+
+Different banks and statement formats expose different metadata.
+
+Therefore:
+
+Missing printed totals MUST NOT automatically set extractionComplete=false.
+
+Missing opening/closing balances MUST NOT automatically set extractionComplete=false.
+
+Instead introduce validation status:
+
+"verified"
+"review_required"
+"unverified"
+
+Meaning:
+
+VERIFIED:
+- extraction structurally valid
+- no ambiguous transactions
+- AND at least one available independent control check matches
+
+UNVERIFIED:
+- transactions structurally valid
+- no ambiguous transactions
+- but no independent control totals/balance pair are available
+
+REVIEW_REQUIRED:
+- ambiguous transaction rows
+- duplicate uncertainty
+- malformed dates
+- both debit+credit
+- neither debit+credit
+- explicit control totals are present AND materially disagree with calculated totals
+- clear balance contradiction
+
+IMPORTANT:
+UNVERIFIED is NOT the same as INVALID.
+
+A user must still be allowed to open the review card and manually confirm an UNVERIFIED statement after reviewing the transactions.
+
+Do not tell the user that their statement is wrong merely because summary totals were not printed/read.
+
+==================================================
+7. RECONCILIATION
+==================================================
+
+Calculate in application code only:
+
+calculatedIncomeTotal
+calculatedExpenseTotal
+incomeCount
+expenseCount
+
+If printedIncomeTotal exists:
+compare against calculatedIncomeTotal.
+
+If printedExpenseTotal exists:
+compare against calculatedExpenseTotal.
+
+If both openingBalance and closingBalance exist:
+compare:
+
+openingBalance + income - expenses ≈ closingBalance
+
+If a control value does NOT exist:
+skip that check.
+
+Do not invent a failure for missing controls.
+
+==================================================
+8. RUNNING BALANCE VALIDATION
+==================================================
+
+Do NOT use running balance as a mandatory validation source.
+
+Only use it if:
+- a reliable balance value exists for consecutive rows
+- transaction ordering can be determined safely
+- the mathematical relationship is clear
+
+If not reliable, skip it.
+
+A running-balance heuristic must never mass-flag transactions simply because the PDF layout is unfamiliar.
+
+==================================================
+9. RETRIES AND COST
+==================================================
+
+Normal upload:
+ONE direct PDF model call.
+
+Do not run automatic second-pass model calls just because totals mismatch.
+
+If extraction contains low-confidence or ambiguous rows:
+return them to the review UI.
+
+Let the user decide.
+
+Only allow ONE retry call if:
+- API returned malformed/unparseable output, OR
+- extraction returned zero transactions despite isBankStatement=true
+
+No repeated page scans.
+No per-page metadata scans.
+No automatic correction scans.
+
+==================================================
+10. IMPORT BEHAVIOUR
+==================================================
+
+The review card must always be able to show structurally extracted transactions.
+
+Import policy:
+
+verified:
+normal confirmation allowed
+
+unverified:
+confirmation allowed, but show a clear warning:
+"Automaatseid kontrollandmeid ei leitud. Kontrolli tehingud enne importimist."
+
+review_required:
+block confirmation until ambiguous rows are resolved
+
+Do NOT block the entire import solely because control totals are unavailable.
+
+Do NOT auto-import without user confirmation.
+
+preview_bank_import canonical-only architecture stays.
+
+Money writes stay behind the confirmation button.
+
+==================================================
+11. PRIVACY
+==================================================
+
+Never log:
+transaction descriptions
+payer/payee names
+account numbers
+IBANs
+raw PDF contents
+
+Logs may include only:
+transaction count
+income count
+expense count
+calculated totals
+whether control values were found
+validation status
+ambiguous-row count
+model call count
+processing duration
+
+==================================================
+12. DELETE OR DISABLE OBSOLETE PRODUCTION COMPLEXITY
+==================================================
+
+Once the new direct path is working and type-safe, the normal production path must no longer execute:
+
+per-page transaction extraction
+per-page metadata extraction
+automatic find-missing passes
+automatic correction passes
+bank-specific profiles
+multiple-model-call reconciliation attempts
+
+Do not leave two active competing extraction systems.
+
+Keeping old helper code temporarily is acceptable only if it is unreachable from production and clearly marked legacy.
+
+==================================================
+13. COST DIAGNOSTICS
+==================================================
+
+Add one privacy-safe log per upload:
+
+[BANK IMPORT]
+modelCalls=1
+pages=<PDF page count if cheaply available locally>
+transactions=N
+incomeCount=N
+expenseCount=N
+controlIncomeFound=true/false
+controlExpenseFound=true/false
+openingBalanceFound=true/false
+closingBalanceFound=true/false
+validationStatus=verified|unverified|review_required
+reviewCount=N
+durationMs=N
+
+No personal data.
+
+==================================================
+14. TESTS
+==================================================
+
+Do not use one user's known correct totals as tests.
+
+Add generic unit-level tests or test helpers for:
+
+1. debit-only row → expense
+2. credit-only row → income
+3. both debit+credit → review_required
+4. neither → review_required
+5. valid ISO date → accepted
+6. DD.MM.YYYY → normalized
+7. missing printed totals → UNVERIFIED, not invalid
+8. matching printed totals → VERIFIED
+9. mismatching printed totals → REVIEW_REQUIRED
+10. missing balances → does not fail
+11. matching balances → valid control
+12. duplicate-looking but genuinely separate rows are preserved
+13. subtotal/header rows from model output can be safely rejected
+14. one low-confidence row → review_required
+15. zero transactions from a declared bank statement → one retry maximum
+
+==================================================
+15. BEFORE IMPLEMENTATION
+==================================================
+
+Before changing code, report:
+
+1. Exact files that need to change.
+2. Which existing production extraction functions will become unused.
+3. Which model will be used and why.
+4. Whether strict Responses API json_schema works with the currently installed OpenAI SDK.
+5. Exact maximum number of OpenAI calls per normal upload and retry case.
+6. How verified / unverified / review_required will be represented.
+7. How frontend compatibility will be handled.
+8. Confirm there are ZERO user-specific values or bank-specific assumptions.
+
+Do not implement until this report is complete.
+
+==================================================
+16. AFTER IMPLEMENTATION
+==================================================
+
+After implementation report:
+
+1. Exact files changed.
+2. Old production path disabled/replaced.
+3. Final Responses API request structure.
+4. Final structured schema.
+5. Model used.
+6. Normal API calls per upload.
+7. Maximum calls with retry.
+8. Validation-status rules.
+9. Import rules.
+10. TypeScript/build/test results.
+11. Any unresolved limitations.
+
+Do NOT claim universal 100% accuracy.
+Do NOT claim the problem is fixed until at least one real upload has been tested.
+
+The objective is:
+simple
+general
+safe
+reviewable
+and cheap.

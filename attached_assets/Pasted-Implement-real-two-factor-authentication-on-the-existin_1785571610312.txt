@@ -1,0 +1,47 @@
+Implement real two-factor authentication on the existing Security settings page using Firebase Authentication TOTP MFA.
+
+Do not create a fake toggle or placeholder-only flow.
+
+Before changing code, verify:
+
+whether Firebase Authentication with Identity Platform is enabled,
+whether the installed Firebase Web SDK supports TOTP MFA,
+whether the current user’s email is verified.
+
+Required Security page behavior:
+
+Show whether two-factor authentication is enabled or disabled.
+“Enable” starts the TOTP enrollment flow.
+Reauthenticate the user before enrollment when required.
+Generate the Firebase TOTP secret.
+Display a QR code compatible with authenticator apps.
+Also display the manual secret key.
+Ask for the 6-digit authenticator code.
+Complete enrollment only after successful verification.
+Allow the enrolled factor to be removed after confirmation and reauthentication when required.
+Keep all text fully localized in Estonian and English using the existing localization system.
+Preserve the current Security page design and password-change functionality.
+
+Sign-in flow:
+
+Update the active email/password sign-in flow to catch auth/multi-factor-auth-required.
+Show a localized verification-code step.
+Resolve sign-in with the enrolled TOTP factor.
+Do not create a second login system or duplicate authentication logic.
+
+Error handling:
+
+Handle unverified email, invalid code, expired session, recent-login requirement, unsupported configuration, and network errors with localized messages.
+
+Scope:
+
+Modify only the Security page, the active authentication/sign-in flow, required localization keys, and narrowly required Firebase configuration/helpers.
+Do not redesign unrelated pages or weaken security.
+Do not claim success if Identity Platform or TOTP MFA is not enabled. Explain the exact Firebase Console or project-configuration step still required.
+
+After finishing:
+
+run typecheck,
+list every modified file,
+explain any Firebase Console configuration I must perform,
+stop for manual testing.

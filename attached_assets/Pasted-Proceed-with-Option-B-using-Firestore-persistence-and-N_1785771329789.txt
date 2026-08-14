@@ -1,0 +1,81 @@
+Proceed with Option B using Firestore persistence and Nodemailer with the existing Kivora SMTP email accounts.
+
+Do not use Resend, SendGrid, Mailgun, or another external email provider.
+
+Use the official Kivora addresses as follows:
+
+- Contact form notifications → info@kivora.ee
+- Help and Support notifications → support@kivora.ee
+- Feedback and bug report notifications → support@kivora.ee
+- Firebase Authentication emails remain handled by Firebase using noreply@kivora.ee
+
+Implementation requirements:
+
+1. Save every valid submission to Firestore before attempting email delivery.
+
+Use these collections:
+
+- contactSubmissions
+- supportMessages
+- feedbackSubmissions
+
+Each document must include:
+
+- authenticated user ID when available;
+- sender name when available;
+- sender email;
+- submission type;
+- subject when available;
+- message;
+- mayContact value when available;
+- createdAt using serverTimestamp();
+- emailDeliveryStatus;
+- source page.
+
+2. Add minimal API endpoints to the existing Express API server:
+
+- POST /api/contact
+- POST /api/support
+- POST /api/feedback
+
+3. Use Nodemailer with SMTP credentials stored only in Replit Secrets/environment variables.
+
+Expected environment variables:
+
+- SMTP_HOST
+- SMTP_PORT
+- SMTP_SECURE
+- SMTP_USER
+- SMTP_PASSWORD
+- CONTACT_RECIPIENT
+- SUPPORT_RECIPIENT
+
+Do not hardcode SMTP passwords, usernames, recipients, or secrets in source files.
+
+4. Before implementing SMTP sending, tell me exactly which Zone SMTP values are still required from me.
+
+Do not guess the SMTP host, port, encryption method, username, or password.
+
+5. Add proper validation and error handling.
+
+A form must not display a successful email delivery message unless the API confirms delivery.
+
+If Firestore saving succeeds but email delivery fails:
+
+- keep the submission in Firestore;
+- mark emailDeliveryStatus as failed;
+- show the user an honest message that the submission was saved but email delivery could not be confirmed.
+
+6. Remove all fake delays, console.log-only submission logic, unconditional success states, and related TODO comments from these three forms.
+
+7. Do not modify Firebase Authentication email verification or password-reset code.
+
+8. Do not rewrite existing working systems. Modify only the files required for these forms, the new API routes, and email configuration.
+
+Before changing code, provide:
+
+- the exact files you plan to create or modify;
+- the Zone SMTP details still required;
+- the smallest implementation sequence.
+
+Wait for my approval and SMTP credentials before writing the email-sending implementation.

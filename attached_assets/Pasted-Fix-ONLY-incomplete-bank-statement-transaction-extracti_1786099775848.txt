@@ -1,0 +1,113 @@
+Fix ONLY incomplete bank-statement transaction extraction.
+
+Confirmed with the latest real SEB Estonia statement:
+
+The statement summary says:
+- Income: 1449.90 EUR
+- Expenses: 992.29 EUR
+
+The canonical extraction now correctly finds:
+- 6 income transactions
+- Income total: 1449.90 EUR
+
+But it finds only:
+- 38 expense transactions
+- Expense total: 913.44 EUR
+
+Difference:
+992.29 - 913.44 = 78.85 EUR
+
+The extracted expense array is incomplete.
+
+Confirmed evidence:
+- Transactions from 2026-08-01 are missing entirely from the extracted expense list.
+- Asking the chat model to “check again” does not recover them because it only sees the already-extracted hidden context.
+
+STRICT SCOPE:
+- Do not modify Money writes.
+- Do not modify confirmation flow.
+- Do not modify attachment UX.
+- Do not modify authentication.
+- Do not modify unrelated AI actions.
+- Fix only bank-statement extraction completeness and reconciliation.
+
+REQUIRED ARCHITECTURE:
+
+1. The backend must reconcile the canonical transaction array BEFORE returning it to the client.
+
+2. Use the bank statement's own summary values as validation only:
+   - expected income total
+   - expected expense total
+   - opening balance
+   - closing balance
+   - statement period
+
+3. Never alter transactions or invent placeholder transactions just to make totals match.
+
+4. First extraction pass:
+   - extract all transaction rows from every PDF page
+   - preserve page number for every extracted transaction
+
+5. Validate:
+   - every PDF page was processed
+   - transaction dates cover the statement period where transactions exist
+   - calculated income total
+   - calculated expense total
+   - reconciliation against statement summary
+
+6. If totals do not reconcile:
+   automatically run a SECOND vision extraction pass.
+
+The second pass must receive the ORIGINAL PDF, not the first-pass text.
+
+Tell the model:
+- expected expense total
+- current extracted expense total
+- exact difference
+- already extracted transactions
+- inspect every page specifically for omitted or misread transaction rows
+- return ONLY genuinely missing/corrected rows with page numbers
+
+7. Merge second-pass results deterministically:
+   - deduplicate by date + amount + description + page/row where available
+   - never duplicate an existing transaction
+   - recalculate totals in application code
+
+8. If reconciliation still fails:
+   - extractionComplete = false
+   - importAllowed = false
+   - show the user the exact difference
+   - do not pretend missing transactions were identified
+   - do not allow Money import
+
+9. The chat model must never be responsible for repairing an incomplete extraction after upload.
+Extraction completeness belongs to the backend PDF pipeline.
+
+TEST WITH THE ACTUAL LATEST SEB statement.pdf.
+
+Expected:
+Income:
+6 transactions
+1449.90 EUR
+
+Expenses:
+must reconcile to 992.29 EUR
+
+Specifically verify that the 2026-08-01 expense transactions are present.
+
+Before changing code report:
+- why page/date 2026-08-01 transactions were omitted
+- whether all 4 PDF pages reached the first vision call
+- which page contains the missing rows
+- exact files that need to change
+
+After implementation report:
+- first-pass transaction count/totals
+- second-pass recovered transactions
+- final income count/total
+- final expense count/total
+- reconciliation result
+- extractionComplete
+- importAllowed
+
+Do not write any test transactions into the Money module.

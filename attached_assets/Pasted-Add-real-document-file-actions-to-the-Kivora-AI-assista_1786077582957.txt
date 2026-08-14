@@ -1,0 +1,138 @@
+Add real document/file actions to the Kivora AI assistant.
+
+Goal:
+The AI must be able to read uploaded documents and then actually place, organize and sort them inside Kivora when the user asks.
+
+Examples of expected behaviour:
+
+User uploads a PDF and says:
+“Pane see Kooli alla matemaatika materjalidesse.”
+→ AI saves the actual document into the correct Kivora location.
+
+User uploads several documents and says:
+“Sorteeri need ära.”
+→ AI analyzes the files, proposes a logical destination/category for each one, asks for one confirmation, and then moves/saves them.
+
+User says:
+“Pane see märkmete alla.”
+→ AI creates/saves the document in the Notes/document area, not just a chat message.
+
+Strict scope:
+- Do not modify authentication.
+- Do not modify PDF/OCR extraction that already works.
+- Do not redesign the AI page.
+- Do not modify unrelated modules.
+- Inspect and extend only the AI action layer plus the existing document/file storage layer.
+
+Before changing code, report:
+
+1. Where Kivora currently stores uploaded documents/files.
+2. Existing Firestore collections and Storage paths for:
+   - Notes
+   - School
+   - other document-capable modules
+3. Existing functions for:
+   - upload file
+   - create document
+   - move document
+   - rename document
+   - assign category/folder
+   - delete document
+4. Which of those actions the AI can currently call.
+5. Which actions are missing.
+
+Required AI document tools:
+
+- saveDocument
+- moveDocument
+- renameDocument
+- categorizeDocument
+- createFolder if supported by the existing product
+- linkDocumentToModule
+- batchOrganizeDocuments
+
+Use the project’s existing storage/data functions wherever possible.
+Do not create a second parallel document system.
+
+Behaviour rules:
+
+A. Explicit destination
+If the user clearly specifies the destination, for example:
+“Pane see Kooli alla”
+or
+“Salvesta see Märkmetesse”
+
+→ perform the action directly.
+No extra confirmation is necessary because the user already explicitly requested the write action.
+
+B. AI-selected sorting
+If the user says:
+“Sorteeri need ära”
+and the AI must choose destinations itself:
+
+1. Analyze the files.
+2. Show a review plan, for example:
+
+statement.pdf → Raha / Pangaväljavõtted
+matemaatika.pdf → Kool / Matemaatika
+leping.pdf → Dokumendid / Lepingud
+
+3. Ask once:
+“Kas kinnitad selle jaotuse?”
+
+4. Only after confirmation perform all writes/moves.
+
+C. Ambiguous request
+If the requested destination does not exist or is unclear, ask one short clarification instead of guessing.
+
+D. Success reporting
+Never claim a document was saved, moved or sorted unless the actual Storage/Firestore operation succeeded.
+
+After execution report:
+- files successfully placed
+- destination for each
+- skipped files
+- failed files with exact reason
+
+E. File integrity
+- Never modify the original document contents.
+- Preserve original filename unless the user asks to rename it.
+- Preserve MIME type and file metadata.
+- Do not convert PDF/document contents into Notes as a fallback.
+- Do not paste extracted document text into visible chat messages.
+
+F. Duplicate handling
+Before saving:
+- detect if the same file already exists when technically possible
+- avoid silently creating duplicate copies
+- ask or clearly offer:
+  “Fail on juba olemas. Kas loon uue koopia või kasutan olemasolevat?”
+
+G. AI context
+The AI may read extracted document content as hidden context for classification.
+Raw extracted text must remain hidden from the visible conversation.
+
+H. Security
+All created/moved documents must remain under the authenticated user’s own uid and existing Firestore/Storage security model.
+
+Verification tests:
+
+1. Upload one PDF → “Pane see Kooli alla.”
+2. Upload one PDF → “Pane see Märkmetesse.”
+3. Upload multiple different files → “Sorteeri need ära.”
+4. Cancel the proposed sorting.
+5. Confirm the proposed sorting.
+6. Ask to move an existing document.
+7. Ask to rename an existing document.
+8. Try an invalid/nonexistent destination.
+9. Try a duplicate document.
+10. Reload Kivora and confirm all placed documents remain in the correct locations.
+
+Do not change unrelated files.
+
+After implementation report:
+- exact files changed
+- AI document tools added
+- existing storage schema reused
+- confirmation logic
+- test results

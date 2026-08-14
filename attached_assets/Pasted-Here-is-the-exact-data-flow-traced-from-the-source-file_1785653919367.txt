@@ -1,0 +1,59 @@
+Here is the exact data flow, traced from the source files with no guesses.
+
+1. Where the link is written
+SchoolPage.tsx, line 2201–2204, inside MaterialsLinks:
+
+const persist = (next: StoredLinks) => {
+  setStored(next);
+  _cachedLinks = next;
+  if (uid) saveSettings(uid, "schoolLinks", next).catch(() => {});
+};
+
+persist is called by every add/edit/delete handler. It calls saveSettings from settingsStore.ts.
+
+2. Which Firestore path
+settingsStore.ts, line 16:
+
+function ref(uid: string, docId: string) {
+  return doc(db, 'users', uid, 'settings', docId)
+}
+
+Path: users/{uid}/settings/schoolLinks — a single document, not a collection.
+
+3. Whether onSnapshot is used
+No. settingsStore.ts imports exactly:
+
+import { doc, getDoc, setDoc } from 'firebase/firestore'
+
+onSnapshot is not imported. onSnapshot is never called. The entire file is two functions — loadSettings uses getDoc, saveSettings uses setDoc. That is the complete implementation.
+
+4. Whether Browser B subscribes to the same path
+No. Browser B runs the same MaterialsLinks component, which fires this useEffect on mount (line 2186–2191):
+
+useEffect(() => {
+  if (!uid) return;
+  loadSettings<StoredLinks>(uid, "schoolLinks", STORED_LINKS_DEFAULTS).then(
+    (s) => { setStored(s); _cachedLinks = s; },
+  );
+}, [uid]);
+
+This calls getDoc exactly once — at mount time. After that, there is no active listener. Browser B has no subscription to users/{uid}/settings/schoolLinks.
+
+5. Whether Firestore actually contains the document after saving
+Yes. saveSettings calls setDoc, which is a real, unconditional write to Firestore. The document at users/{uid}/settings/schoolLinks is genuinely updated. Browser A's local state is also immediately correct via the optimistic setStored(next) call. The data is in Firestore.
+
+6. Why Browser B does not receive the update
+Root cause: getDoc is a point-in-time read. It has no channel back from Firestore.
+
+The sequence is:
+
+Browser B loads the school page → useEffect fires → getDoc fetches the document once → state is set.
+Browser A saves a new link → setDoc writes to Firestore.
+Firestore now holds the updated document. But Browser B has no onSnapshot listener, so Firestore has no subscriber to notify.
+Browser B's React state still holds the snapshot from step 1. Nothing triggers a re-read.
+Browser B will only see the link if the MaterialsLinks component is unmounted and remounted (e.g. navigating away and back), which would trigger a fresh getDoc call — but that is a manual re-fetch, not real-time sync.
+
+Summary: settingsStore.ts is a simple read/write helper with getDoc/setDoc — by design it has no real-time capability. The MaterialsLinks component reads once on mount and never again. To achieve cross-browser sync, settingsStore.ts would need to use onSnapshot instead of getDoc, or MaterialsLinks would need its own onSnapshot subscription that stays active while the component is mounted.
+
+
+Worked for 34 seconds

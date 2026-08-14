@@ -1,0 +1,84 @@
+We are fixing ONLY the CSV signed-amount direction bug.
+
+Do NOT change:
+- PDF logic
+- OpenAI
+- Firestore
+- UI layout
+- pending logic
+- worksheet selection
+- date parsing
+- generic AI upload
+
+Current confirmed rule for bank CSV imports:
+positive signed amount = income
+negative signed amount = expense
+
+The current preview incorrectly classifies many negative bank transactions as income.
+
+TASK:
+
+1. Inspect:
+artifacts/api-server/src/lib/parseBankCsv.ts
+and every helper it calls for amount parsing / normalization.
+
+2. Trace the exact signed amount flow:
+raw CSV cell
+→ parsed numeric value
+→ direction
+→ absolute amount stored in BankTransaction
+
+3. Find whether the negative sign is lost before direction is determined.
+
+The correct order MUST be:
+
+const signedAmount = parseAmount(rawValue)
+
+direction = signedAmount < 0 ? "expense" : "income"
+amount = Math.abs(signedAmount)
+
+NOT:
+
+amount = Math.abs(...)
+direction = amount > 0 ? "income" : "expense"
+
+4. For separate debit/credit columns, keep existing deterministic rules:
+credit > 0 => income
+debit > 0 => expense
+
+5. Do NOT infer direction from:
+- description
+- merchant name
+- payment method
+- transaction type wording
+
+6. Add SYNTHETIC tests only.
+
+Required regression tests:
+- "+100.00" => income 100
+- "-25.00" => expense 25
+- "+100,00" => income 100
+- "-25,00" => expense 25
+- "1 234,56" => income 1234.56
+- "-1 234,56" => expense 1234.56
+- quoted signed amount stays signed
+- debit/credit-column mode remains unchanged
+
+7. Verify that parseEuropeanNumber / parseAmount does NOT strip "-" before returning the signed numeric value.
+
+8. Run:
+pnpm exec tsc --noEmit
+pnpm run test:parseBankCsv
+pnpm run build
+
+Do not deploy automatically.
+
+Final report must show:
+- exact bug found
+- exact old logic
+- exact corrected logic
+- test results
+- TypeScript result
+- build result
+
+Do not use any real user bank data in code, tests, prompts, logs, or hardcoded values.

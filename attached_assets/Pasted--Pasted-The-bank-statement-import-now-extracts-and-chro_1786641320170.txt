@@ -1,0 +1,199 @@
+
+
+Pasted-The-bank-statement-import-now-extracts-and-chronologica_1786638594210.txt
+44 minutes ago
+
+3 actions
+Let me read the relevant files in parallel.
+
+
+
+3 actions
+Now I have a clear picture. Let me trace the exact failure before writing the fix:
+
+INCOME_PATTERNS contains /\blaekumised\b/i — bare word, no scope qualifier
+A real SEB statement has a per-day row labeled just "Laekumised" (daily credit total = 937.90) that appears before any statement-wide total
+The code picks the first matching row, so it gets 937.90 and ignores everything that follows
+The actual statement-wide total (or no total) never registers
+Fix: tighten patterns to require an explicit scope marker ("kokku"/"total"), add DAILY_SCOPE_EXCLUSION patterns as belt-and-suspenders, and update the tests.
+
+
+
+2 actions
+Now update the test file with the new tests required by the spec.
+
+
+
+2 actions
+Now run all five required test suites and the build in parallel.
+
+
+
+6 actions
+All tests pass and build is clean. Updating memory before the final report.
+
+
+
+2 actions
+Final report
+
+Where 937.90 was being extracted from
+
+A per-day summary row on an early page of the statement, labeled simply "Laekumised" (the Estonian word for "payments received / income"), with value 937.90. In SEB statements this label appears once per calendar day as a daily credit subtotal — not as a statement-wide period total.
+
+Why it was incorrectly treated as statement-wide income
+
+The old INCOME_PATTERNS included /\blaekumised\b/i — a bare word match with no scope qualifier. The extraction loop processes rows in page/row order and takes the first match; subsequent matches are discarded (with a conflict warning only if the values differ). The daily "Laekumised 937,90" row on page 1 was encountered before any statement-wide label, so 937.90 was locked in and the true total (if any exists on the statement) was silently ignored.
+
+New rule for statement-wide printed totals
+
+A row may only populate printedIncomeTotal or printedExpenseTotal when its label unambiguously scopes to the entire statement period. Two independent defences were added:
+
+Tightened patterns — every INCOME_PATTERNS and EXPENSE_PATTERNS entry now requires an explicit scope qualifier: the Estonian "kokku" (= total/altogether) or unambiguous English multi-word phrases ("total income", "income total", "total credits", etc.). Bare words laekumised, sissetulekud, väljaminekud were removed.
+
+DAILY_SCOPE_EXCLUSION_PATTERNS — belt-and-suspenders. Even if a future pattern could match, any row also containing päeva, kreeditkäive, deebetkäive, daily, subtotal, vahesumma, pending, or reserveeritud is skipped with a warning. Applied only to printed income/expense totals; opening/closing balance patterns are inherently statement-level and need no extra filter.
+
+Missing printed totals are treated as "control unavailable" — they never produce a failure. The running-balance chain (opening → each posted transaction → closing) remains the primary and strongest validation.
+
+Test results
+
+Suite	Before	After
+test:extractStructuralControls	10 passed	21 passed
+test:reconcileStructuralTransactions	17 passed	17 passed
+test:postProcessBankTransactions	8 passed	8 passed
+test:extraction	36 passed	36 passed
+New tests include: bare "Laekumised" → null (the 937.90 regression), "Laekumised" (937.90) + "Laekumised kokku" (1432.00) → 1432.00 wins, three daily "Kreeditkäive" rows → null, three daily "Deebetkäive" rows → null, "Päeva laekumised" → null, full mix of daily rows + statement-wide totals → correct values extracted, no statement-wide label at all → null (control unavailable, not failure).
+
+Build result
+
+tsc --noEmit — clean. pnpm run build — clean (390 ms). Not deployed.
+
+
+
+Worked for 11 minutes
+
+Checkpoint made
+33 minutes ago
+
+Pasted-We-are-changing-the-Money-module-bank-import-strategy-G_1786640466879.txt
+13 minutes ago
+
+3 actions
+Large task. Let me explore the key files in parallel before writing any code.
+
+
+
+5 actions
+Good — xlsx is already a dependency. Let me read the bank-import route and the modal in parallel.
+
+
+
+13 actions
+Now I have all the context I need. Let me plan the full implementation before writing code:
+
+New lib: parseBankCsv.ts (CSV + Excel, deterministic, no AI)
+New test: parseBankCsv.test.ts (15 tests)
+package.json: add test script
+aiUpload.ts: replace bank-import handler body; remove pdf+structural imports
+FinancePage.tsx: update modal file accept, validation, copy
+Writing the parser first.
+
+
+
+2 actions
+Now writing the test file, updating package.json, the route, and the modal all in parallel.
+
+
+
+2 actions
+Now updating package.json, the route handler, and the modal all in parallel.
+
+
+
+3 actions
+Need to see the closing of the bank-import handler before replacing it.
+
+
+
+2 actions
+Now replacing the bank-import handler body and updating the modal in parallel.
+
+
+
+2 actions
+Now updating the FinancePage modal and running tsc in parallel.
+
+
+
+3 actions
+Fix the test, update the remaining modal UI copy, all in parallel.
+
+
+
+5 actions
+Running tsc and all tests in parallel.
+
+
+
+4 actions
+Test 9 fails because "Pending" lands in the date column position, so !getCell(fields, map.dateCol) is false. Fixing the pending-header detection to check for a valid date instead.
+
+
+
+4 actions
+All 15 CSV tests pass. Running the full build now.
+
+
+
+2 actions
+Build clean. Here is the task 4 final report.
+
+Task 4 — Final Report: CSV/Excel bank import
+What was implemented
+parseBankCsv.ts — deterministic CSV/Excel parser
+
+Concern	Approach
+File formats	CSV (any delimiter auto-detected via frequency count on first non-empty row), Excel .xlsx/.xls via xlsx CJS package (multi-sheet: first sheet with more than 5 rows is used)
+BOM / encoding	BOM stripped before parsing; UTF-8 assumed
+Quoted fields	Full RFC 4180 quoted-field support including embedded newlines
+Column detection	Scores each header cell against scored regex patterns for date, description, debit, credit, amount (signed), balance, currency, status; highest scorer wins per role; ambiguous layouts fall back to positional heuristics
+Date parsing	DD.MM.YYYY, DD/MM/YYYY, YYYY-MM-DD, MM/DD/YYYY, DD-MM-YYYY all normalised to YYYY-MM-DD
+Amount parsing	European (1.234,56) and international (1,234.56) formats; negative credit treated as debit and vice-versa
+Control rows	SKIP_PATTERNS filters section headers, running totals, and label rows that match but contain no amounts
+Opening/closing balance	Detected from control rows (saldo alguses, opening balance, closing balance, lõppsaldo, etc.)
+Pending section	Section header (row matching pending keyword with no valid date and no amounts) sets inPendingSection = true; subsequent rows marked pending: true; status column values matching reserved/pending/ootel/blokeeritud also mark individual rows pending
+/api/ai/bank-import handler
+
+Accepts .csv, .xlsx, .xls only; PDF is rejected with a clear error.
+Calls parseBankFile deterministically — zero OpenAI usage.
+Normalises ParsedBankRow[] → BankTransaction[] in application code (direction = credit ≠ null → income, else expense).
+Passes result through postProcessBankTransactions for chronological sort, running-balance validation against detected opening/closing balances, mismatch flagging, and totals.
+If no opening/closing balance detected → validationStatus = "unverified", importAllowed = true.
+Logs detectedFormat (csv / xlsx / xls), transaction counts, and income/expense totals.
+FinancePage.tsx — BankImportModal
+
+File input accept changed to .csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,...
+Client-side format check validates extension + MIME; rejects anything else with a localised error (ET/EN)
+Error messages updated: UNSUPPORTED_BANK_FILE_FORMAT and NO_TRANSACTIONS_FOUND replace former PDF-specific codes
+Modal title: "Impordi pangatehingud" / "Import bank transactions"
+Drop-zone copy: "Laadi panga väljavõte CSV- või Excel-failina" / "Upload your bank statement as CSV or Excel"
+Upload-phase copy: "Töötlen väljavõtet…" / "Processing statement…"
+Footer note: "CSV või Excel annab kõige täpsema tulemuse · Import nõuab kinnitust" / "CSV or Excel provides the most accurate result · Confirmation required"
+Existing pending guards in runImport() and AIAssistantPage.tsx confirmMoneyImport() preserved
+Test results
+parseBankCsv:                  15 passed, 0 failed
+postProcessBankTransactions:    8 passed, 0 failed
+test:extraction:               36 passed, 0 failed   (structural PDF suite, unchanged)
+pnpm exec tsc --noEmit:        0 errors
+pnpm run build:                ✓ (dist/index.mjs 2.4 MB, 441 ms)
+
+One bug was found and fixed during the test run: the pending-section header detector originally used !getCell(fields, map.dateCol) (empty date cell). When "Pending" occupies the first column (the date position), that check is false. Fixed to !parseDate(dateCell) && noAmounts — a row is treated as a section header only when neither a valid date nor monetary amounts are present, regardless of which column the keyword lands in.
+
+
+
+Worked for 12 minutes
+
+Checkpoint made
+just now
+
+Scroll to latest

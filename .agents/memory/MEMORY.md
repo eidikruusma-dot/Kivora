@@ -1,0 +1,17 @@
+- [Firebase auth config](firebase-auth-config.md) — projectId kivora-f1281; authDomain must stay firebaseapp.com; kivora.ee NOT on Firebase Hosting; auth/unauthorized-domain was silent.
+- [Push notifications](push-notifications.md) — VAPID Web Push; SW at public/sw.js; Firestore subscriptions; API server sends; NotifItem has link field.
+- [School store design](school-store-design.md) — schoolStore.tsx (not .ts) uses JSX for icon reconstruction; ReactNode fields stripped before Firestore writes.
+- [esbuild CJS externals](esbuild-cjs-externals.md) — CJS packages (pdf-parse, mammoth, xlsx) must be in build.mjs externals list and accessed via `(globalThis as any).require()`.
+- [pdf-parse v2 API](pdf-parse-v2-api.md) — v2 exports PDFParse class (not callable fn); v1 pattern silently fails; empty text = PDF_NO_TEXT code for client localization.
+- [Bank statement OCR pipeline](bank-statement-ocr.md) — canonical BankTransaction[]+BankMeta; importAllowed gate; SEB root causes: null summaryTotals, trivial extractionComplete, chat re-interpretation.
+- [Structural PDF parser](structural-pdf-parser.md) — pdfjs-dist@5.4.296 confirmed in Node; DOMMatrix polyfill via @napi-rs/canvas; steps 2+3 done: parseEuropeanNumber + groupIntoRows in src/lib/.
+- [PDF page-by-page extraction](pdf-page-by-page.md) — pdf-lib splits per page; metadata sent to ALL pages (SEB totals on last page); temperature=0; hasVerification gate blocks import when no printed totals found.
+- [Chat message edit/delete](chat-edit-delete.md) — updateChatMessage/deleteChatMessage/deleteMessagesFrom in aiConversationsStore; cascade warn + safeContent defensive parser in AIAssistantPage.
+- [AI document actions](ai-document-actions.md) — save_document/move_document/rename_document/batch_save_documents; documentsStore.ts; File object kept in AttachedFile.file; pendingFilesRef snapshot before clear.
+- [Firestore store pattern](firestore-store-pattern.md) — all stores follow identical singleton onSnapshot + pub/sub + React hook pattern; see file for template.
+- [Entity links system](entity-links-system.md) — unified cross-module linking; architecture, school ID encoding, integration points, and what NOT to duplicate.
+- [Link suggestions engine](link-suggestions.md) — computeSuggestions() scoring rules, confidence thresholds, dismiss storage (localStorage), and SuggestedLinksPanel integration points.
+- [Firestore sanitizer](firestore-sanitizer.md) — shared recursive sanitizeForFirestore in firestoreUtils.ts; applied to all 7 entity stores; habits are in-memory only so no sanitize needed there.
+- [Automatic linking service](automatic-linking.md) — automaticLinking.ts runAutomaticLinking(); EntityHint param bypasses onSnapshot timing; SourceSignals exported from linkSuggestions.ts for override.
+- [Modules store](modules-store.md) — per-user feature visibility; Firestore at users/{uid}/settings/modules; new-user detection via creationTime; onboarding + settings + sidebar + dashboard integration points.
+- [Android packaging](android-packaging.md) — Capacitor 8.5; must use OpenJDK 21 (not GraalVM, not JDK 17); SDK at /home/runner/android-sdk; rebuild via scripts/build-android.sh.

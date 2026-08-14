@@ -1,0 +1,112 @@
+We found the actual CSV semantics.
+
+Do NOT use any real user transaction data in code, tests, logs, prompts, or hardcoded values.
+
+The CSV format contains these structural columns:
+
+- "Kuupäev"
+- "Saaja/maksja nimi"
+- "Tüüp"
+- "Deebet/Kreedit (D/C)"
+- "Summa"
+- "Selgitus"
+- "Valuuta"
+
+IMPORTANT:
+The "Summa" column is unsigned/positive.
+Direction is encoded separately in "Deebet/Kreedit (D/C)":
+
+D = debit = expense
+C = credit = income
+
+The current parser is wrong because it treats the unsigned Summa value as if positive meant income.
+
+TASK:
+
+1. In parseBankCsv.ts, add deterministic support for a debit/credit indicator column.
+
+Recognize headers such as:
+- Deebet/Kreedit (D/C)
+- D/C
+- Debit/Credit
+- Debit Credit
+- DR/CR
+
+2. When such a direction column exists, it has priority over signed-amount inference.
+
+Canonical rule:
+
+const amount = Math.abs(parsedAmount)
+
+if indicator === "D":
+  debit = amount
+  credit = null
+  direction = "expense"
+
+if indicator === "C":
+  debit = null
+  credit = amount
+  direction = "income"
+
+Do NOT interpret a positive unsigned amount as income when a D/C column exists.
+
+3. Only use signed amount logic when there is NO explicit debit/credit indicator column.
+
+4. Do NOT infer transaction direction from:
+- Tüüp
+- description
+- merchant/payee name
+- payment method
+- status wording
+
+5. Description construction:
+
+Prefer meaningful text fields in this order:
+
+- Selgitus
+- Saaja/maksja nimi
+- other detected description/reference fields
+
+If both Selgitus and Saaja/maksja nimi contain useful non-duplicate text, combine them safely.
+
+Do not mark a transaction "Empty description" merely because one description-like column is empty while another contains meaningful text.
+
+6. Add SYNTHETIC tests only:
+
+Header:
+Kuupäev;Saaja/maksja nimi;Tüüp;Deebet/Kreedit (D/C);Summa;Selgitus;Valuuta
+
+Synthetic cases:
+
+D + 25.00 => expense 25
+C + 100.00 => income 100
+D + 8.90 => expense
+D + 15.00 => expense
+C + 50.00 => income
+
+Also test:
+- Summa remains positive in source
+- D/C determines direction
+- "Tüüp" containing words like "credit transfer" must NOT override D
+- empty Selgitus + populated Saaja/maksja nimi still produces a description
+- populated Selgitus + populated name combines correctly without duplication
+
+7. Ensure existing signed-amount CSV formats still work when no D/C column exists.
+
+8. Run:
+pnpm exec tsc --noEmit
+pnpm run test:parseBankCsv
+pnpm run build
+
+Do not deploy automatically.
+
+Final report:
+- exact reason all rows were becoming income
+- new D/C column detection rule
+- precedence order for direction
+- description fallback rule
+- test results
+- TypeScript result
+- build result
+
+Again: use synthetic data only.
