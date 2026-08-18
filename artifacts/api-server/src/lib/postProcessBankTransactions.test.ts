@@ -318,6 +318,96 @@ function run(): void {
     passed++;
   }
 
+  // ── 9. Regression: double-sort defect — pinned at the unit level ──────────
+  //
+  // extractStructuralPdfBuffer.ts sorts its output chronologically BEFORE
+  // handing it to postProcessBankTransactions (needed for its own internal
+  // reconciliation). If postProcessBankTransactions re-sorts that already
+  // -sorted input with its default (reverse + stable-sort) algorithm, the
+  // relative order of same-day transactions gets flipped a second time,
+  // corrupting the running-balance chain — even though the input was
+  // perfectly valid. `alreadyChronological: true` must skip that redundant
+  // sort and leave correctly-ordered input untouched.
+  //
+  // Input below is ALREADY in correct chronological order, exactly as
+  // extractStructuralPdfBuffer would hand it off — including a same-day pair.
+  {
+    const alreadySorted: NormalizedTransaction[] = [
+      tx(3, 0, "2031-03-01", 50, null, 950),   // oldest of the day
+      tx(3, 1, "2031-03-01", null, 200, 1150), // same day, later
+      tx(2, 0, "2031-03-05", 75, null, 1075),
+      tx(1, 0, "2031-03-10", null, 300, 1375),
+    ];
+    const controls = { openingBalance: 1000, closingBalance: 1375 };
+
+    // ── 9a. WITHOUT the flag: default sort corrupts already-sorted input ────
+    // This documents the exact defect mechanism this fix addresses.
+    const buggy = postProcessBankTransactions(alreadySorted, controls);
+    assert(
+      buggy.reconciliation.ok === false,
+      "Documents the double-sort defect: re-sorting already-sorted same-day " +
+        "transactions must (incorrectly) break the running-balance chain",
+    );
+
+    // ── 9b. WITH the flag: already-sorted input is preserved, chain is clean ─
+    const fixed = postProcessBankTransactions(alreadySorted, controls, {
+      alreadyChronological: true,
+    });
+    assert(
+      fixed.transactions.map((t) => t.date).join(",") ===
+        "2031-03-01,2031-03-01,2031-03-05,2031-03-10",
+      `Order must be preserved exactly; got ${fixed.transactions.map((t) => t.date).join(",")}`,
+    );
+    assert(
+      fixed.transactions[0].balance === 950 && fixed.transactions[1].balance === 1150,
+      "Same-day intra-day order must be preserved (950 before 1150)",
+    );
+    assert(
+      fixed.reconciliation.ok === true,
+      `Chain must validate when already-sorted input is left untouched; errors: ${fixed.reconciliation.errors.join("; ")}`,
+    );
+    assert(
+      fixed.reconciliation.runningBalanceFailures === 0,
+      `No failures expected; got ${fixed.reconciliation.runningBalanceFailures}`,
+    );
+    assert(
+      fixed.importAllowed === true,
+      "Import must be allowed once the redundant sort is skipped",
+    );
+    assert(
+      fixed.calculatedIncomeTotal === 500 && fixed.calculatedExpenseTotal === 125,
+      `Totals must reconcile fully: income=${fixed.calculatedIncomeTotal}, expense=${fixed.calculatedExpenseTotal}`,
+    );
+
+    passed++;
+  }
+
+  // ── 10. alreadyChronological must NOT mask genuine incompleteness ─────────
+  // A row is missing (simulating a truncated/incomplete extraction) so the
+  // running-balance chain cannot reach the printed closing balance. Even
+  // with alreadyChronological set, this must still fail closed.
+  {
+    const missingARow: NormalizedTransaction[] = [
+      tx(1, 0, "2031-03-01", 50, null, 950), // only the expense; income row is missing
+    ];
+    const controls = { openingBalance: 1000, closingBalance: 1150 };
+
+    const result = postProcessBankTransactions(missingARow, controls, {
+      alreadyChronological: true,
+    });
+
+    assert(
+      result.reconciliation.ok === false,
+      "Incomplete extraction must never be silently treated as valid",
+    );
+    assert(
+      result.importAllowed === false,
+      "Import must be blocked when extraction is incomplete",
+    );
+
+    passed++;
+  }
+
   console.log(`postProcessBankTransactions: ${passed} passed, 0 failed`);
 }
 

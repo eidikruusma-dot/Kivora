@@ -1367,6 +1367,7 @@ function rawRowToBankTransaction(
 function buildBankMeta(
   post: BankPostProcessResult<BankTransaction>,
   controls: { openingBalance: number | null; closingBalance: number | null },
+  pagesTotal: number,
   docMeta?: {
     bank?: string;
     period?: { from: string; to: string };
@@ -1382,8 +1383,11 @@ function buildBankMeta(
     }),
     openingBalance: controls.openingBalance ?? undefined,
     closingBalance: controls.closingBalance ?? undefined,
-    pagesTotal: 1,
-    pagesProcessed: 1,
+    // The structural and AI-model pipelines both read every page unconditionally
+    // (no partial-page skip logic exists anywhere in the extraction pipeline),
+    // so pagesProcessed always equals the observed page count.
+    pagesTotal,
+    pagesProcessed: pagesTotal,
     incomeCount: post.incomeCount,
     expenseCount: post.expenseCount,
     calculatedIncomeTotal: post.calculatedIncomeTotal,
@@ -1408,16 +1412,32 @@ function buildBankResultFromStructural(
   const rawTxns = structural.transactions.map((row, idx) =>
     rawRowToBankTransaction(row, idx),
   );
-  const post = postProcessBankTransactions(rawTxns, {
-    openingBalance: structural.controls.openingBalance,
-    closingBalance: structural.controls.closingBalance,
-    printedIncomeTotal: structural.controls.printedIncomeTotal,
-    printedExpenseTotal: structural.controls.printedExpenseTotal,
-  });
-  const bankMeta = buildBankMeta(post, {
-    openingBalance: structural.controls.openingBalance,
-    closingBalance: structural.controls.closingBalance,
-  });
+  // structural.transactions is already chronologically sorted by
+  // extractStructuralPdfBuffer (needed for its own internal reconciliation
+  // output). postProcessBankTransactions must NOT re-sort it: its sort
+  // algorithm reverses same-day transaction order to recover chronological
+  // order from raw newest-first input, and is not idempotent — applying it a
+  // second time to already-sorted input silently re-reverses same-day rows,
+  // which breaks the running-balance chain and cascades into false
+  // needsReview flags for every later transaction.
+  const post = postProcessBankTransactions(
+    rawTxns,
+    {
+      openingBalance: structural.controls.openingBalance,
+      closingBalance: structural.controls.closingBalance,
+      printedIncomeTotal: structural.controls.printedIncomeTotal,
+      printedExpenseTotal: structural.controls.printedExpenseTotal,
+    },
+    { alreadyChronological: true },
+  );
+  const bankMeta = buildBankMeta(
+    post,
+    {
+      openingBalance: structural.controls.openingBalance,
+      closingBalance: structural.controls.closingBalance,
+    },
+    structural.pagesTotal,
+  );
   console.log(
     `[PDF BANK] Structural: ${post.transactions.length} txns, status=${post.validationStatus}`,
   );
@@ -1446,12 +1466,20 @@ function buildBankResultFromModel(
     printedIncomeTotal: model.document.printedIncomeTotal,
     printedExpenseTotal: model.document.printedExpenseTotal,
   });
+  // The model reports which page each row came from; use the highest
+  // observed page number as the page count (same convention as the
+  // structural path — no partial-page skip logic exists in either pipeline).
+  const pagesTotal = model.transactions.reduce(
+    (max, t) => Math.max(max, t.sourcePage ?? 1),
+    model.transactions.length > 0 ? 1 : 0,
+  );
   const bankMeta = buildBankMeta(
     post,
     {
       openingBalance: model.document.openingBalance,
       closingBalance: model.document.closingBalance,
     },
+    pagesTotal,
     {
       bank: model.document.bankName ?? undefined,
       period:
@@ -1776,10 +1804,14 @@ router.post("/ai/upload", upload.single("file"), async (req, res) => {
           printedIncomeTotal: null,
           printedExpenseTotal: null,
         });
-        const bankMeta = buildBankMeta(post, {
-          openingBalance: parsed.controls.openingBalance,
-          closingBalance: parsed.controls.closingBalance,
-        });
+        const bankMeta = buildBankMeta(
+          post,
+          {
+            openingBalance: parsed.controls.openingBalance,
+            closingBalance: parsed.controls.closingBalance,
+          },
+          1, // CSV/Excel has no page concept — always 1, matching row.page above
+        );
         console.log(
           `[UPLOAD CSV] ${file.originalname}: bank detected,` +
             ` txns=${post.transactions.length}, status=${post.validationStatus}`,
@@ -1990,10 +2022,14 @@ router.post("/ai/bank-import", upload.single("file"), async (req, res) => {
       printedExpenseTotal: null,
     });
 
-    const bankMeta = buildBankMeta(post, {
-      openingBalance: parsed.controls.openingBalance,
-      closingBalance: parsed.controls.closingBalance,
-    });
+    const bankMeta = buildBankMeta(
+      post,
+      {
+        openingBalance: parsed.controls.openingBalance,
+        closingBalance: parsed.controls.closingBalance,
+      },
+      1, // CSV/Excel has no page concept — always 1, matching row.page above
+    );
     // Include parse warnings in the errors list
     bankMeta.validationErrors = [
       ...parsed.warnings,
