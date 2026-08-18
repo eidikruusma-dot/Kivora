@@ -144,9 +144,11 @@ export async function extractStructuralPdfBuffer(
 
   return {
     ...structural,
-    // Override with the chronologically sorted array (spread puts structural's
-    // transactions first; the explicit key wins because it appears last).
-    transactions: chronological,
+    // Keep the original PDF presentation order here. The shared
+    // postProcessBankTransactions() pipeline performs the canonical
+    // newest-first → oldest-first conversion exactly once. Returning the
+    // chronological array here caused structural PDFs to be reversed twice.
+    transactions: structural.transactions,
     warnings,
     controls: controlResult.controls,
     reconciliation,
