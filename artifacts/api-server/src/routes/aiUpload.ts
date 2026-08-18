@@ -1091,6 +1091,15 @@ export function normalizeBankTransaction(
 //
 // Throws:
 //   - Any OpenAI SDK error verbatim — never wraps in PDF_NO_TEXT
+//   - Error("PDF_MODEL_OUTPUT_TRUNCATED") when response.status === "incomplete"
+//     (the model was cut off — most commonly by max_output_tokens — while still
+//     generating. output_text is populated regardless of status (it is built by
+//     concatenating whatever output_text content parts exist), so an incomplete
+//     response can still contain a syntactically valid JSON object with a SHORT
+//     transactions[] array and otherwise-correct document metadata. That combination
+//     is what makes a truncated response look like "a small subset of transactions
+//     plus a totals mismatch" once postProcessBankTransactions reconciles it — so
+//     status must be checked explicitly, before trusting a successful JSON.parse.
 //   - Error("PDF_EMPTY_MODEL_OUTPUT")  when the model returns no text at all
 //   - Error("PDF_INVALID_JSON")        when the response cannot be parsed as JSON
 
@@ -1132,12 +1141,42 @@ async function extractBankStatementViaOpenAI(
       max_output_tokens: 16384,
     });
 
-    const outputText: string =
-      (response as { output_text?: string }).output_text?.trim() ?? "";
+    // The Responses API populates output_text by concatenating whatever
+    // output_text content parts exist, regardless of status — so a response
+    // cut off mid-generation (status: "incomplete") can still yield a
+    // non-empty, sometimes still-parseable output_text. status and
+    // incomplete_details must be checked explicitly; they are never implied
+    // by a successful JSON.parse.
+    const typedResponse = response as {
+      output_text?: string;
+      status?: string;
+      incomplete_details?: { reason?: string } | null;
+      usage?: {
+        input_tokens?: number;
+        output_tokens?: number;
+        total_tokens?: number;
+      };
+    };
 
+    const outputText: string = typedResponse.output_text?.trim() ?? "";
+    const status = typedResponse.status ?? "unknown";
+    const incompleteReason = typedResponse.incomplete_details?.reason ?? null;
+    const usage = typedResponse.usage;
+
+    // Safe diagnostic logging: counts and status only — never transaction
+    // contents, names, balances, or account identifiers.
     console.log(
-      `[BANK IMPORT AI] ${filename}: output_text length=${outputText.length}`,
+      `[BANK IMPORT AI] ${filename}: status=${status} incomplete_reason=${incompleteReason ?? "none"} ` +
+        `output_tokens=${usage?.output_tokens ?? "unknown"} input_tokens=${usage?.input_tokens ?? "unknown"} ` +
+        `output_text length=${outputText.length}`,
     );
+
+    if (status === "incomplete") {
+      console.error(
+        `[BANK IMPORT AI] ${filename}: MODEL OUTPUT TRUNCATED — status=incomplete reason=${incompleteReason ?? "unknown"}`,
+      );
+      throw new Error("PDF_MODEL_OUTPUT_TRUNCATED");
+    }
 
     if (!outputText) {
       throw new Error("PDF_EMPTY_MODEL_OUTPUT");
@@ -1713,7 +1752,8 @@ router.post("/ai/upload", upload.single("file"), async (req, res) => {
         if (
           msg === "PDF_NO_TEXT" ||
           msg === "PDF_EMPTY_MODEL_OUTPUT" ||
-          msg === "PDF_INVALID_JSON"
+          msg === "PDF_INVALID_JSON" ||
+          msg === "PDF_MODEL_OUTPUT_TRUNCATED"
         ) {
           res.status(422).json({ error: msg });
           return;
@@ -1912,7 +1952,8 @@ router.post("/ai/bank-import", upload.single("file"), async (req, res) => {
         if (
           msg === "PDF_EMPTY_MODEL_OUTPUT" ||
           msg === "PDF_INVALID_JSON" ||
-          msg === "BANK_IMPORT_SERVICE_ERROR"
+          msg === "BANK_IMPORT_SERVICE_ERROR" ||
+          msg === "PDF_MODEL_OUTPUT_TRUNCATED"
         ) {
           console.error(`[BANK IMPORT PDF] ${msg}: ${file.originalname}`);
           res.status(502).json({ error: msg });
