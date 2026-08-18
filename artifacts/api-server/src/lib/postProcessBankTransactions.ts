@@ -90,6 +90,75 @@ function sortChronologically<T extends NormalizedTransaction>(txs: T[]): T[] {
   });
 }
 
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * Use the printed running-balance delta as the strongest direction signal.
+ *
+ * Positional PDF extraction can occasionally place an amount in the adjacent
+ * debit/credit column. When the previous and current printed balances are
+ * available, their delta proves whether the row is income or expense. Correct
+ * only single-amount rows whose amount matches that delta to the cent; leave
+ * ambiguous rows untouched for manual review.
+ */
+function correctDirectionFromRunningBalance<
+  T extends NormalizedTransaction,
+>(
+  transactions: T[],
+  openingBalance?: number | null,
+): T[] {
+  let previousBalance =
+    typeof openingBalance === "number" ? openingBalance : null;
+
+  return transactions.map((tx): T => {
+    if (tx.pending) return tx;
+
+    let corrected = tx;
+    const hasSingleAmount =
+      (tx.debit !== null && tx.credit === null) ||
+      (tx.credit !== null && tx.debit === null);
+
+    if (
+      hasSingleAmount &&
+      previousBalance !== null &&
+      tx.balance !== null
+    ) {
+      const delta = roundMoney(tx.balance - previousBalance);
+      const amount = roundMoney(tx.amount);
+      const amountMatchesDelta =
+        roundMoney(Math.abs(Math.abs(delta) - amount)) <= 0.01;
+
+      if (amount > 0 && delta !== 0 && amountMatchesDelta) {
+        const direction: "income" | "expense" =
+          delta > 0 ? "income" : "expense";
+
+        if (direction !== tx.direction) {
+          corrected = {
+            ...tx,
+            direction,
+            debit: direction === "expense" ? amount : null,
+            credit: direction === "income" ? amount : null,
+          } as T;
+        }
+      }
+    }
+
+    if (corrected.balance !== null) {
+      previousBalance = corrected.balance;
+    } else if (previousBalance !== null) {
+      previousBalance = roundMoney(
+        previousBalance +
+          (corrected.credit ?? 0) -
+          (corrected.debit ?? 0),
+      );
+    }
+
+    return corrected;
+  });
+}
+
 // ── Main export ──────────────────────────────────────────────────────────────
 
 export function postProcessBankTransactions<T extends NormalizedTransaction>(
@@ -97,7 +166,10 @@ export function postProcessBankTransactions<T extends NormalizedTransaction>(
   controls: StructuralReconciliationControls,
 ): BankPostProcessResult<T> {
   // ── 1. Chronological sort ─────────────────────────────────────────────────
-  const sorted = sortChronologically(transactions);
+  const sorted = correctDirectionFromRunningBalance(
+    sortChronologically(transactions),
+    controls.openingBalance,
+  );
 
   // ── 2. Canonical reconciliation ───────────────────────────────────────────
   // Adapt to RawTransactionRow shape — reconciliation only uses the numeric
