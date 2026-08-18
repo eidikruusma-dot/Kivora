@@ -83,6 +83,7 @@ import {
   resolveExpenseCategory,
   findMoneyDuplicate,
 } from "@/lib/aiActions";
+import { bankTransactionToTransaction } from "@/lib/bankImportMapping";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Date & number helpers
@@ -2625,17 +2626,11 @@ function BankImportModal({
           ? resolveIncomeCategory(undefined, item.description)
           : resolveExpenseCategory(undefined, item.description);
 
-      const tx: Transaction = {
+      const tx: Transaction = bankTransactionToTransaction(item, {
         id: `tx-${now}-${Math.random().toString(36).slice(2, 8)}`,
-        type,
-        amount: item.amount,
-        currency: item.currency,
-        title: item.description.slice(0, 200),
         category,
-        date: item.date,
         createdAt: now,
-        updatedAt: now,
-      };
+      });
       try {
         await addTransaction(tx);
         if (type === "income") incomeAdded++;
