@@ -153,6 +153,82 @@ async function buildNewestFirstPdf(): Promise<Buffer> {
   return Buffer.from(bytes);
 }
 
+/**
+ * A synthetic 3-PAGE bank statement, newest-first (as real statements are
+ * printed): page 1 has the most recent transaction, page 3 has the oldest
+ * two — including a same-day pair, to prove intra-day order survives the
+ * pipeline. All dates, amounts, and descriptions are entirely invented.
+ *
+ * True chronological order (oldest → newest), starting from opening 1000.00:
+ *   Page 3 (bottom, oldest): 01.03.2031  Synthetic Expense A  −50.00  → 950.00
+ *   Page 3 (same day, later): 01.03.2031  Synthetic Income A  +200.00 → 1150.00
+ *   Page 2:                   05.03.2031  Synthetic Expense B  −75.00  → 1075.00
+ *   Page 1 (top, newest):     10.03.2031  Synthetic Income B  +300.00 → 1375.00
+ *
+ * Printed controls: opening 1000.00, closing 1375.00,
+ * total credits 500.00 (200+300), total debits 125.00 (50+75).
+ */
+async function buildMultiPageNewestFirstPdf(): Promise<Buffer> {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+
+  const drawOn = (
+    page: Awaited<ReturnType<typeof pdf.addPage>>,
+    text: string,
+    x: number,
+    y: number,
+  ): void => {
+    page.drawText(text, { x, y, size: 10, font });
+  };
+
+  // ── Page 1: controls header + newest transaction ──────────────────────────
+  const page1 = pdf.addPage([595, 842]);
+  drawOn(page1, "Opening Balance", 50, 810);
+  drawOn(page1, "1 000,00", 530, 810);
+  drawOn(page1, "Total Credits", 50, 795);
+  drawOn(page1, "500,00", 530, 795);
+  drawOn(page1, "Total Debits", 50, 780);
+  drawOn(page1, "125,00", 530, 780);
+  drawOn(page1, "Closing Balance", 50, 765);
+  drawOn(page1, "1 375,00", 530, 765);
+
+  drawOn(page1, "Date", 50, 730);
+  drawOn(page1, "Description", 150, 730);
+  drawOn(page1, "Debit", 350, 730);
+  drawOn(page1, "Credit", 450, 730);
+  drawOn(page1, "Balance", 530, 730);
+
+  drawOn(page1, "10.03.2031", 50, 710);
+  drawOn(page1, "Synthetic Income B", 150, 710);
+  drawOn(page1, "300,00", 450, 710);
+  drawOn(page1, "1 375,00", 530, 710);
+
+  // ── Page 2: one transaction ────────────────────────────────────────────────
+  const page2 = pdf.addPage([595, 842]);
+  drawOn(page2, "05.03.2031", 50, 800);
+  drawOn(page2, "Synthetic Expense B", 150, 800);
+  drawOn(page2, "75,00", 350, 800);
+  drawOn(page2, "1 075,00", 530, 800);
+
+  // ── Page 3: same-day pair, newest-first within the day ─────────────────────
+  // Income A (the LATER same-day event) is printed above Expense A (the
+  // EARLIER same-day event) — exactly how a newest-first statement presents
+  // two same-day rows.
+  const page3 = pdf.addPage([595, 842]);
+  drawOn(page3, "01.03.2031", 50, 800);
+  drawOn(page3, "Synthetic Income A", 150, 800);
+  drawOn(page3, "200,00", 450, 800);
+  drawOn(page3, "1 150,00", 530, 800);
+
+  drawOn(page3, "01.03.2031", 50, 780);
+  drawOn(page3, "Synthetic Expense A", 150, 780);
+  drawOn(page3, "50,00", 350, 780);
+  drawOn(page3, "950,00", 530, 780);
+
+  const bytes = await pdf.save();
+  return Buffer.from(bytes);
+}
+
 async function run(): Promise<void> {
   let passed = 0;
 
@@ -343,6 +419,78 @@ async function run(): Promise<void> {
     assert(
       result.success === true,
       "Fully reconciled extraction from newest-first PDF must succeed",
+    );
+
+    passed++;
+  }
+
+  // 7. Multi-page PDF: every page is read, pagesTotal reflects the real page
+  //    count, transactions span all 3 pages in correct chronological order,
+  //    and the same-day pair on page 3 reconciles correctly.
+  {
+    const buffer = await buildMultiPageNewestFirstPdf();
+    const result = await extractStructuralPdfBuffer(buffer);
+
+    assert(
+      result.pagesTotal === 3,
+      `pagesTotal must reflect the real 3-page document; got ${result.pagesTotal}`,
+    );
+
+    assert(
+      result.transactions.length === 4,
+      `Expected 4 transactions across all 3 pages; got ${result.transactions.length}`,
+    );
+
+    const pagesWithTransactions = new Set(
+      result.transactions.map((t) => t.pageNumber),
+    );
+    assert(
+      pagesWithTransactions.has(1) &&
+        pagesWithTransactions.has(2) &&
+        pagesWithTransactions.has(3),
+      `Every page must contribute transactions; got pages ${[...pagesWithTransactions].join(",")}`,
+    );
+
+    const descriptions = result.transactions.map((t) => t.description);
+    assert(
+      JSON.stringify(descriptions) ===
+        JSON.stringify([
+          "Synthetic Expense A",
+          "Synthetic Income A",
+          "Synthetic Expense B",
+          "Synthetic Income B",
+        ]),
+      `Transactions must be in strict chronological order (oldest first, same-day pair correctly sequenced); got ${JSON.stringify(descriptions)}`,
+    );
+
+    assert(
+      result.transactions[0].debit === 50 && result.transactions[0].credit === null,
+      "Synthetic Expense A must be classified as a debit (expense)",
+    );
+    assert(
+      result.transactions[1].credit === 200 && result.transactions[1].debit === null,
+      "Synthetic Income A must be classified as a credit (income)",
+    );
+
+    assert(
+      result.reconciliation.ok === true,
+      `Running-balance chain must validate across all 3 pages; errors: ${result.reconciliation.errors.join("; ")}`,
+    );
+    assert(
+      result.reconciliation.runningBalanceFailures === 0,
+      `No running-balance failures expected; got ${result.reconciliation.runningBalanceFailures}`,
+    );
+    assert(
+      result.reconciliation.calculatedIncomeTotal === 500,
+      `Calculated income total incorrect: ${result.reconciliation.calculatedIncomeTotal}`,
+    );
+    assert(
+      result.reconciliation.calculatedExpenseTotal === 125,
+      `Calculated expense total incorrect: ${result.reconciliation.calculatedExpenseTotal}`,
+    );
+    assert(
+      result.success === true,
+      "Fully reconciled multi-page extraction must succeed",
     );
 
     passed++;

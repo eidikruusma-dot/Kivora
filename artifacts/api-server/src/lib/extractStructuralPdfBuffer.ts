@@ -16,6 +16,8 @@ import type { RawTransactionRow } from "./classifyTransactionRows";
 export interface StructuralPdfBufferResult extends StructuralExtractionResult {
   controls: StructuralControls;
   reconciliation: StructuralReconciliationResult;
+  /** Highest page number seen among extracted text items; 0 when none. */
+  pagesTotal: number;
 }
 
 function emptyControls(): StructuralControls {
@@ -91,6 +93,7 @@ export async function extractStructuralPdfBuffer(
       success: false,
       controls,
       reconciliation: reconcileStructuralTransactions([], controls),
+      pagesTotal: 0,
     };
   }
 
@@ -107,8 +110,11 @@ export async function extractStructuralPdfBuffer(
       success: false,
       controls,
       reconciliation: reconcileStructuralTransactions([], controls),
+      pagesTotal: 0,
     };
   }
+
+  const pagesTotal = items.reduce((max, item) => Math.max(max, item.pageNumber), 0);
 
   const structural = extractStructuralFromItems(items);
 
@@ -150,6 +156,7 @@ export async function extractStructuralPdfBuffer(
     warnings,
     controls: controlResult.controls,
     reconciliation,
+    pagesTotal,
     success: structural.success && hasIndependentControl && reconciliation.ok,
   };
 }

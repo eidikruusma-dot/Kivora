@@ -92,12 +92,32 @@ function sortChronologically<T extends NormalizedTransaction>(txs: T[]): T[] {
 
 // ── Main export ──────────────────────────────────────────────────────────────
 
+export interface PostProcessOptions {
+  /**
+   * Set when the caller has ALREADY sorted `transactions` chronologically
+   * (oldest → newest) — e.g. extractStructuralPdfBuffer.ts, which must sort
+   * before running its own internal reconciliation.
+   *
+   * sortChronologically() works by reversing the input and stable-sorting by
+   * date, which correctly recovers oldest-first order (including same-day
+   * sub-order) from raw newest-first document order — but is NOT idempotent:
+   * applying it a second time to already-sorted input reverses the relative
+   * order of same-day transactions again, silently corrupting the sequence
+   * the running-balance chain depends on. Passing `alreadyChronological: true`
+   * skips the redundant re-sort so already-ordered input is left untouched.
+   */
+  alreadyChronological?: boolean;
+}
+
 export function postProcessBankTransactions<T extends NormalizedTransaction>(
   transactions: T[],
   controls: StructuralReconciliationControls,
+  options: PostProcessOptions = {},
 ): BankPostProcessResult<T> {
   // ── 1. Chronological sort ─────────────────────────────────────────────────
-  const sorted = sortChronologically(transactions);
+  const sorted = options.alreadyChronological
+    ? transactions
+    : sortChronologically(transactions);
 
   // ── 2. Canonical reconciliation ───────────────────────────────────────────
   // Adapt to RawTransactionRow shape — reconciliation only uses the numeric
