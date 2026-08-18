@@ -22,6 +22,7 @@
     "test:moneyMetrics": "npx esbuild --bundle --platform=node --format=cjs src/lib/computeMoneyMetrics.test.ts | node",
     "test:bankImport": "npx esbuild --bundle --platform=node --format=cjs src/lib/bankImport.test.ts | node",
     "test:pdfMultiPageImportPipeline": "npx esbuild --bundle --platform=node --format=esm --packages=external src/lib/pdfMultiPageImportPipeline.test.ts --outfile=.tmp-pdfMultiPageImportPipeline.mjs && node .tmp-pdfMultiPageImportPipeline.mjs",
+    "test:pdfModelOutputTruncation": "npx esbuild --bundle --platform=node --format=cjs src/lib/pdfModelOutputTruncation.test.ts | node",
   "test": "pnpm run test:parseEuropeanNumber && pnpm run test:groupIntoRows && pnpm run test:extraction"
   },
   "dependencies": {
