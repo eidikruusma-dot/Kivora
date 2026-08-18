@@ -277,6 +277,46 @@ function run(): void {
   }
 
   // ── 7. Existing needsReview reason preserved when balance mismatch added ──
+  // Regression: a row extracted into the wrong amount column must be corrected
+  // when the printed running-balance delta proves its real direction.
+  {
+    const wrongColumn: NormalizedTransaction[] = [
+      tx(1, 1, "2026-08-01", null, 3.46, 996.54),
+    ];
+
+    const result = postProcessBankTransactions(wrongColumn, {
+      openingBalance: 1000,
+      closingBalance: 996.54,
+      printedIncomeTotal: 0,
+    });
+
+    assert(
+      result.transactions[0].direction === "expense",
+      "Balance delta must correct the row direction to expense",
+    );
+    assert(
+      result.transactions[0].debit === 3.46 &&
+        result.transactions[0].credit === null,
+      "Corrected expense must be stored in debit only",
+    );
+    assert(
+      result.calculatedIncomeTotal === 0 &&
+        result.calculatedExpenseTotal === 3.46,
+      "Totals must use the corrected direction",
+    );
+    assert(
+      result.reconciliation.runningBalanceFailures === 0,
+      "Corrected row must pass the running-balance chain",
+    );
+    assert(
+      result.importAllowed === true,
+      "A fully reconciled corrected row must be importable",
+    );
+
+    passed++;
+  }
+
+  // ── 8. Existing needsReview reason preserved when balance mismatch added ──
   {
     const badTx: NormalizedTransaction = {
       ...tx(1, 1, "2026-08-01", null, 50, 999),
