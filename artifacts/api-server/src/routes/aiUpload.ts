@@ -72,6 +72,20 @@ function parseDDMMYYYY(raw: string): string | null {
   return null;
 }
 
+function safeJsonParse(raw: string): any {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch {}
+    }
+    return { transactions: [] };
+  }
+}
+
 export function buildBankMeta(
   post: BankPostProcessResult<BankTransaction>,
   controls: { openingBalance: number | null; closingBalance: number | null },
@@ -104,20 +118,22 @@ async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
   });
 
   try {
-    const prompt = `Loe lisatud pangaväljavõtte PDF-faili.
-Tuvasta KÕIK tehingud ja pane need rangelt KRONOLOOGILISSE järjekorda (alt üles: algsaldost kuni lõppsaldoni).
+    const prompt = `Loe seda pangaväljavõtet.
+1. Tuvasta algsaldo (openingBalance), lõppsaldo (closingBalance), panga nimi ja konto number.
+2. Tuvasta KÕIK tehingud ja pane need rangelt KRONOLOOGILISSE järjekorda (alt üles: algsaldost alates kuni lõppsaldoni).
+3. Iga tehingu kohta märgi: date (YYYY-MM-DD), description, debit (number või null), credit (number või null), balance (number või null), currency ("EUR").
 
-Vasta AINULT JSON-formaadis:
+Tagasta AINULT kehtiv JSON-objekt ilma markdownita:
 {
-  "bankName": "panga nimi või null",
-  "accountNumber": "IBAN või null",
-  "openingBalance": 0.00,
-  "closingBalance": 0.00,
+  "bankName": null,
+  "accountNumber": null,
+  "openingBalance": null,
+  "closingBalance": null,
   "transactions": [
     {
-      "date": "YYYY-MM-DD",
-      "description": "Makse selgitus või saaja/maksja nimi",
-      "debit": 12.34,
+      "date": "2026-01-15",
+      "description": "Makse selgitus",
+      "debit": 10.00,
       "credit": null,
       "balance": 100.00,
       "currency": "EUR"
@@ -145,39 +161,41 @@ Vasta AINULT JSON-formaadis:
     });
 
     const content = response.choices[0]?.message?.content || "{}";
-    const parsed = JSON.parse(content);
+    const parsed = safeJsonParse(content);
     console.log(`[DIRECT PDF AI] Leitud tehinguid: ${(parsed.transactions || []).length}`);
     return parsed;
   } catch (err) {
-    // Tagavara: Assistants API kaudu lugemine
     console.warn("[DIRECT PDF ASSISTANT FALLBACK]", err);
-    const assistant = await openai.beta.assistants.create({
-      model: "gpt-4o",
-      tools: [{ type: "file_search" }],
-      instructions: "Finantsdokumentide lugeja. Vasta ainult puhtas JSON formaadis.",
-    });
+    try {
+      const assistant = await openai.beta.assistants.create({
+        model: "gpt-4o",
+        tools: [{ type: "file_search" }],
+        instructions: "Finantsdokumentide lugeja. Vasta ainult puhtas JSON formaadis.",
+      });
 
-    const thread = await openai.beta.threads.create({
-      messages: [
-        {
-          role: "user",
-          content: "Loe lisatud pangaväljavõtet. Tuvasta algsaldo, lõppsaldo ja kõik tehingud kronoloogilises järjekorras (alt üles). Vasta JSON-ina: { bankName, accountNumber, openingBalance, closingBalance, transactions: [{ date, description, debit, credit, balance, currency }] }",
-          attachments: [{ file_id: uploaded.id, tools: [{ type: "file_search" }] }],
-        },
-      ],
-    });
+      const thread = await openai.beta.threads.create({
+        messages: [
+          {
+            role: "user",
+            content: "Loe lisatud pangaväljavõtet. Tuvasta algsaldo, lõppsaldo ja kõik tehingud kronoloogilises järjekorras (alt üles). Tagasta ainult JSON.",
+            attachments: [{ file_id: uploaded.id, tools: [{ type: "file_search" }] }],
+          },
+        ],
+      });
 
-    const run = await openai.beta.threads.runs.createAndPoll(thread.id, {
-      assistant_id: assistant.id,
-    });
+      const run = await openai.beta.threads.runs.createAndPoll(thread.id, {
+        assistant_id: assistant.id,
+      });
 
-    if (run.status === "completed") {
-      const messages = await openai.beta.threads.messages.list(thread.id);
-      const firstMsg = messages.data[0]?.content[0];
-      if (firstMsg && firstMsg.type === "text") {
-        const cleaned = firstMsg.text.value.replace(/```json|```/g, "").trim();
-        return JSON.parse(cleaned);
+      if (run.status === "completed") {
+        const messages = await openai.beta.threads.messages.list(thread.id);
+        const firstMsg = messages.data[0]?.content[0];
+        if (firstMsg && firstMsg.type === "text") {
+          return safeJsonParse(firstMsg.text.value);
+        }
       }
+    } catch (fallbackErr) {
+      console.error("[FALLBACK ERROR]", fallbackErr);
     }
     return { transactions: [] };
   } finally {
