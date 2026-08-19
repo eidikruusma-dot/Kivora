@@ -1509,22 +1509,31 @@ async function extractBankStatementViaOpenAI(
       `${AI_EXTRACTION_PAGES_PER_BATCH} page(s) each (${totalPages} page(s) total)`,
   );
 
-  // Sequential, not parallel: deterministic order, bounded concurrent OpenAI
-  // usage. Any single batch failure aborts the whole extraction immediately —
-  // a partial merged result is never assembled or returned.
-  const batchResults: ModelBankStatementBatch[] = [];
-  for (const pageBatch of pageBatches) {
-    const result = await callModelForPdfBatch(pageBatch.buffer, filename, {
+  // Parallel, not sequential: each batch is an independent OpenAI call (its
+  // own file upload + model call), so running them concurrently cuts wall-
+  // clock time from the SUM of all batch latencies down to roughly the
+  // SLOWEST single batch — confirmed necessary in production, where 2
+  // sequential batch calls alone (before even counting retries) routinely
+  // took 60-90+ seconds combined. Promise.all preserves the INPUT array
+  // order in its results regardless of which batch resolves first, so
+  // mergeModelBankStatements() below still sees batches in strict
+  // startPage order — determinism is unaffected. Any single batch failure
+  // still aborts the whole extraction immediately (Promise.all rejects as
+  // soon as one promise rejects) — a partial merged result is never
+  // assembled or returned. Concurrency is intentionally unbounded here:
+  // AI_EXTRACTION_PAGES_PER_BATCH keeps real-world batch counts small
+  // (typically 1-4 for realistic statement lengths).
+  const batchResults: ModelBankStatementBatch[] = await Promise.all(
+    pageBatches.map(async (pageBatch) => ({
+      result: await callModelForPdfBatch(pageBatch.buffer, filename, {
+        startPage: pageBatch.startPage,
+        endPage: pageBatch.endPage,
+        totalPages,
+      }),
       startPage: pageBatch.startPage,
       endPage: pageBatch.endPage,
-      totalPages,
-    });
-    batchResults.push({
-      result,
-      startPage: pageBatch.startPage,
-      endPage: pageBatch.endPage,
-    });
-  }
+    })),
+  );
 
   const merged = mergeModelBankStatements(batchResults);
   console.log(
