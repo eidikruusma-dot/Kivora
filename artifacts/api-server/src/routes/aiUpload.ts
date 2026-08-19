@@ -131,7 +131,7 @@ function sanitizePdfText(raw: string): string {
  * broken character mapping, etc.) and should trigger the OCR fallback.
  *
  * The previous approach counted "ASCII printable" characters as meaningful, which
- * silently accepted SEB Estonia PDFs whose broken font mapping produces
+ * silently accepted PDFs from banks whose broken font mapping produces
  * readable-looking ASCII symbols such as  !" #$% ABB.0? C=DEA  — these are 100%
  * ASCII printable but carry zero semantic content.
  *
@@ -143,17 +143,32 @@ function sanitizePdfText(raw: string): string {
  *   5. Bank-statement anchor check (fires only for already-suspicious encoding)
  *   6. Final safety floor on readable words and letter density
  */
-function isGarbledText(text: string): boolean {
-  if (!text) return true;
+function isGarbledText(text: string, filename: string): boolean {
+  // Safe diagnostic logging: only the numeric metrics that drove the
+  // decision (word/character counts, ratios) — never the extracted text
+  // itself. Logged on every call (garbled or not) so the actual gate
+  // between the deterministic and OCR/AI extraction paths is visible in
+  // production without ever exposing statement content.
+  const reject = (rule: string, extra: Record<string, number> = {}): boolean => {
+    const parts = Object.entries(extra)
+      .map(([k, v]) => `${k}=${typeof v === "number" ? v.toFixed(2) : v}`)
+      .join(" ");
+    console.log(
+      `[PDF BANK] ${filename}: garbled-text check — rule=${rule}${parts ? " " + parts : ""}`,
+    );
+    return true;
+  };
+
+  if (!text) return reject("emptyText");
 
   const noSpace = text.replace(/\s/g, "");
-  if (noSpace.length < 10) return true;
+  if (noSpace.length < 10) return reject("tooShort", { noSpaceLength: noSpace.length });
 
   // ── 1. Real word count ────────────────────────────────────────────────────
   // A "word" is ≥2 consecutive Latin or Estonian letters.
   // Garbled encodings produce symbol clusters, not letter sequences.
   const wordMatches = text.match(/[a-zA-ZäöõüšžÄÖÕÜŠŽ]{2,}/g) ?? [];
-  if (wordMatches.length < 10) return true;
+  if (wordMatches.length < 10) return reject("wordCount", { words: wordMatches.length });
 
   // ── 2. Character class ratios ─────────────────────────────────────────────
   const letters = (text.match(/[a-zA-ZäöõüšžÄÖÕÜŠŽ]/g) ?? []).length;
@@ -165,21 +180,22 @@ function isGarbledText(text: string): boolean {
   const punctDensity = noSpace.length > 0 ? puncts / noSpace.length : 1;
   const readableRatio =
     noSpace.length > 0 ? (letters + digits) / noSpace.length : 0;
-  const letterRatio = noSpace.length > 0 ? letters / noSpace.length : 0;
 
   // ── 3. Punctuation density > 35 % ────────────────────────────────────────
-  // SEB garbled text: ~50 % punctuation (!" #$% ABB.0? C=DEA …).
+  // Observed garbled bank-PDF text: ~50 % punctuation (!" #$% ABB.0? C=DEA …).
   // Clean bank statement: ~10–15 % (date separators, decimal commas).
-  if (punctDensity > 0.35) return true;
+  if (punctDensity > 0.35) return reject("punctDensity", { punctDensity });
 
   // ── 4. Alphanumeric ratio < 40 % ─────────────────────────────────────────
-  if (readableRatio < 0.4) return true;
+  if (readableRatio < 0.4) return reject("readableRatio", { readableRatio });
 
   // ── 5. Long symbol runs ───────────────────────────────────────────────────
   // 4+ consecutive non-alphanumeric chars appear when glyph indices are
   // mapped to punctuation blocks.
   const longSymbolRuns = text.match(/[^a-zA-Z0-9äöõüšžÄÖÕÜŠŽ\s]{4,}/g) ?? [];
-  if (longSymbolRuns.length > 3) return true;
+  if (longSymbolRuns.length > 3) {
+    return reject("longSymbolRuns", { longSymbolRuns: longSymbolRuns.length });
+  }
 
   // ── 6. Word-to-token ratio ────────────────────────────────────────────────
   // In garbled text, most whitespace-separated "tokens" are symbol clusters.
@@ -187,14 +203,21 @@ function isGarbledText(text: string): boolean {
   const tokens = text.split(/\s+/).filter(Boolean);
   if (tokens.length > 15) {
     const wordRatio = wordMatches.length / tokens.length;
-    if (wordRatio < 0.3) return true;
+    if (wordRatio < 0.3) return reject("wordRatio", { wordRatio, tokens: tokens.length });
   }
 
   // ── 7. Final safety floor ────────────────────────────────────────────────
   // After all heuristics, reject if the absolute readable word count is still
   // very low relative to the text length.
-  if (noSpace.length > 200 && wordMatches.length < 5) return true;
+  if (noSpace.length > 200 && wordMatches.length < 5) {
+    return reject("finalFloor", { words: wordMatches.length, noSpaceLength: noSpace.length });
+  }
 
+  console.log(
+    `[PDF BANK] ${filename}: garbled-text check — passed ` +
+      `words=${wordMatches.length} punctDensity=${punctDensity.toFixed(2)} ` +
+      `readableRatio=${readableRatio.toFixed(2)} longSymbolRuns=${longSymbolRuns.length}`,
+  );
   return false;
 }
 
@@ -1863,20 +1886,31 @@ function buildBankResultFromModel(
 // ── AI extraction with bounded retry ─────────────────────────────────────────
 //
 // The AI/OCR extraction path is not perfectly repeatable: the identical PDF
-// can produce a different same-day transaction sequence between separate
-// upload attempts (confirmed in production — same file, same size, two
-// uploads, two different transaction counts and two different reconciliation
-// failures). reorderSameDayGroupsByBalanceChain() in postProcessBankTransactions
-// resolves the common case (rows present but mis-ordered) deterministically
-// and for free, with no extra API cost. It cannot help when the extraction
-// itself is genuinely incomplete or wrong for that attempt — for that
-// residual case, retry the WHOLE extraction (all batches) once more before
-// giving up. Each attempt is independently subject to every existing
-// check (per-batch truncation detection, merge, dedup, reordering,
-// reconciliation); attempts are never mixed — the returned result is always
-// one complete, self-consistent attempt, never a partial combination.
+// can produce a different same-day transaction sequence, and even a
+// different transaction COUNT, between separate upload attempts (confirmed
+// in production across many real imports of the same document — model
+// sampling variance, not a bug in this pipeline). reorderSameDayGroupsByBalanceChain()
+// in postProcessBankTransactions resolves the common case (rows present but
+// mis-ordered) deterministically and for free, with no extra API cost.
+//
+// Retrying the whole extraction was tried as a mitigation for the residual
+// case (raised from 1 to 2 to 4 attempts across earlier iterations) but
+// production evidence showed it does not converge: across many real 4-attempt
+// runs of the same document, not one ever produced a fully-reconciling
+// result — every extra attempt just multiplied wait time (each attempt is
+// 1-2 sequential OpenAI calls, tens of seconds each) for no better outcome.
+// The Money-module review screen now lets the user manually correct a
+// flagged row's direction (see POST /ai/bank-import/revalidate), which
+// handles the residual case far better than blind retries — so a single
+// attempt is used: fast, and any real mismatch surfaces immediately for the
+// user to fix rather than being hidden behind minutes of retrying.
+//
+// Each attempt is independently subject to every existing check (per-batch
+// truncation detection, merge, dedup, reordering, reconciliation); attempts
+// are never mixed — the returned result is always one complete,
+// self-consistent attempt, never a partial combination.
 
-const AI_EXTRACTION_MAX_ATTEMPTS = 4;
+const AI_EXTRACTION_MAX_ATTEMPTS = 1;
 
 async function extractBankStatementWithRetry(
   buffer: Buffer,
@@ -1951,7 +1985,7 @@ async function processBankPdfBuffer(
     // fall through — isGarbledText("") = true → OCR path
   }
 
-  if (isGarbledText(text)) {
+  if (isGarbledText(text, filename)) {
     // ── Step 2a: garbled / image-only → generic OCR ───────────────────────────
     console.log(`[PDF BANK] garbled text → OCR: ${filename}`);
     const scanned = await extractScannedPdf(buffer, filename);
