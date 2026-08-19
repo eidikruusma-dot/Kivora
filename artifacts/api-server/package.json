@@ -23,6 +23,7 @@
     "test:bankImport": "npx esbuild --bundle --platform=node --format=cjs src/lib/bankImport.test.ts | node",
     "test:pdfMultiPageImportPipeline": "npx esbuild --bundle --platform=node --format=esm --packages=external src/lib/pdfMultiPageImportPipeline.test.ts --outfile=.tmp-pdfMultiPageImportPipeline.mjs && node .tmp-pdfMultiPageImportPipeline.mjs",
     "test:pdfModelOutputTruncation": "npx esbuild --bundle --platform=node --format=cjs src/lib/pdfModelOutputTruncation.test.ts | node",
+    "test:pdfBatchedExtraction": "npx esbuild --bundle --platform=node --format=esm --packages=external src/lib/pdfBatchedExtraction.test.ts --outfile=.tmp-pdfBatchedExtraction.mjs && node .tmp-pdfBatchedExtraction.mjs",
   "test": "pnpm run test:parseEuropeanNumber && pnpm run test:groupIntoRows && pnpm run test:extraction"
   },
   "dependencies": {
