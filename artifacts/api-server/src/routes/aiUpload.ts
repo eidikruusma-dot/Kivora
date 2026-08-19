@@ -114,31 +114,28 @@ export function buildBankMeta(
 async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
   const b64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
 
-  const prompt = `Analüüsi pangaväljavõtte PDF-i ja loe KÕIK tehingud.
+  const prompt = `Loe pangaväljavõtte PDF-ist KÕIK tehingud (kõik lehed).
 
-PÕHIREEGLID:
-1. SUUND:
-   - Kui summa ees on MIINUS (-) või veerus Deebet/Väljamakse -> "expense"
-   - Kui summa ees on PLUS (+) või veerus Kreedit/Sissemakse -> "income"
-   - ÄRA pane tehingut sissetulekuks (income) pelgalt seetõttu, et saajaks on konto omaniku nimi (nt oma kontode vaheline kanne, digikassa, ümardus on EXPENSE).
-2. KRONOLOOGIA:
-   - Järjesta tehingud rangelt vanimast uusimani (algsaldost lõppsaldoni).
+Juhised:
+1. Deebet/väljamakse/digikassa/ümardus = "expense"
+2. Kreedit/sissemakse/laekumine = "income"
+3. ÄRA jäta ühtegi tehingut vahele.
 
-Väljasta ülilühike JSON:
+JSON formaat:
 {
   "openingBalance": 0.00,
   "closingBalance": 0.00,
   "bankName": "SEB",
   "accountNumber": "IBAN",
   "tx": [
-    ["2026-08-01", "Selgitus / Saaja", 0.87, "expense", 502.74]
+    ["2026-08-01", "Selgitus", 12.34, "expense", 500.00]
   ]
 }`;
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response: any = await (openai as any).responses.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       input: [
         {
           role: "user",
@@ -204,7 +201,7 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
           bal = typeof item.balance === "number" ? item.balance : null;
         }
 
-        // Matemaatiline kontroll: kui eelmine saldo ja praegune saldo on teada
+        // Matemaatiline kontroll: kui eelmine ja praegune saldo on teada
         if (runningBal !== null && bal !== null) {
           const diff = Math.round((bal - runningBal) * 100) / 100;
           if (diff < 0) {
@@ -214,7 +211,6 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
           }
         }
 
-        // Märksõnade kontroll
         const lowerDesc = desc.toLowerCase();
         if (lowerDesc.includes("digikassa") || lowerDesc.includes("ümardus") || lowerDesc.includes("kogumishoius")) {
           dir = "expense";
