@@ -219,6 +219,87 @@ async function run(): Promise<void> {
     passed++;
   }
 
+  // ── 6b. Dedup: OCR-noisy re-read of the SAME boundary row (different
+  //        description tail, different balance digit) is still caught ─────────
+  // This is the exact real-world case the fuzzy key was introduced for: two
+  // separate OCR/vision reads of the identical physical row rarely come back
+  // byte-for-byte identical. The old exact-match key would have kept both,
+  // inflating the count.
+  {
+    const rows = [
+      {
+        date: "2031-07-01",
+        description: "Synthetic Vendor Co 15/07/2031 09:29 24.80 USD(21.82 EUR + TT 0.33 fee)",
+        debit: 21.82,
+        credit: null,
+        balance: 900.0,
+        currency: "EUR",
+        sourcePage: 5,
+        confidence: "high" as const,
+      },
+      {
+        // Same row, read again at the next batch's boundary: extra space,
+        // truncated tail, and a one-cent-off balance misread.
+        date: "2031-07-01",
+        description: "Synthetic Vendor Co 15/07/2031 09:29 24.80 USD (21.82 EUR + TT 0.33 fe",
+        debit: 21.82,
+        credit: null,
+        balance: 899.98,
+        currency: "EUR",
+        sourcePage: 6,
+        confidence: "high" as const,
+      },
+    ];
+
+    const result = dedupeAdjacentDuplicateTransactions(rows);
+    assert(
+      result.length === 1,
+      `A noisy re-read of the same boundary row must still be caught; got ${result.length}`,
+    );
+    assert(result[0].sourcePage === 5, "The earlier occurrence must be kept");
+
+    passed++;
+  }
+
+  // ── 6c. Dedup: same date/amount/merchant but a genuinely different embedded
+  //        time, on adjacent pages, must NOT be collapsed ───────────────────────
+  // A legitimate retried same-day, same-amount charge from the same merchant
+  // (e.g. a declined payment retried later) must survive as two transactions
+  // — the fuzzy key still distinguishes them because the differing detail
+  // (the time) falls within the compared prefix window.
+  {
+    const rows = [
+      {
+        date: "2031-07-02",
+        description: "Synthetic Vendor Co 02/07/2031 09:15 10.00 EUR",
+        debit: 10.0,
+        credit: null,
+        balance: 500,
+        currency: "EUR",
+        sourcePage: 3,
+        confidence: "high" as const,
+      },
+      {
+        date: "2031-07-02",
+        description: "Synthetic Vendor Co 02/07/2031 14:47 10.00 EUR",
+        debit: 10.0,
+        credit: null,
+        balance: 490,
+        currency: "EUR",
+        sourcePage: 4, // adjacent page, but a distinguishably different row
+        confidence: "high" as const,
+      },
+    ];
+
+    const result = dedupeAdjacentDuplicateTransactions(rows);
+    assert(
+      result.length === 2,
+      `A genuinely different same-day, same-amount, same-merchant transaction must not be collapsed; got ${result.length}`,
+    );
+
+    passed++;
+  }
+
   // ── 7. Merge: sourcePage remapped from excerpt-relative to absolute, and
   //       batch order is preserved exactly (no reordering) ──────────────────────
   {
