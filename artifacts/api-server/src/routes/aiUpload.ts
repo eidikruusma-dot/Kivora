@@ -1886,20 +1886,31 @@ function buildBankResultFromModel(
 // ── AI extraction with bounded retry ─────────────────────────────────────────
 //
 // The AI/OCR extraction path is not perfectly repeatable: the identical PDF
-// can produce a different same-day transaction sequence between separate
-// upload attempts (confirmed in production — same file, same size, two
-// uploads, two different transaction counts and two different reconciliation
-// failures). reorderSameDayGroupsByBalanceChain() in postProcessBankTransactions
-// resolves the common case (rows present but mis-ordered) deterministically
-// and for free, with no extra API cost. It cannot help when the extraction
-// itself is genuinely incomplete or wrong for that attempt — for that
-// residual case, retry the WHOLE extraction (all batches) once more before
-// giving up. Each attempt is independently subject to every existing
-// check (per-batch truncation detection, merge, dedup, reordering,
-// reconciliation); attempts are never mixed — the returned result is always
-// one complete, self-consistent attempt, never a partial combination.
+// can produce a different same-day transaction sequence, and even a
+// different transaction COUNT, between separate upload attempts (confirmed
+// in production across many real imports of the same document — model
+// sampling variance, not a bug in this pipeline). reorderSameDayGroupsByBalanceChain()
+// in postProcessBankTransactions resolves the common case (rows present but
+// mis-ordered) deterministically and for free, with no extra API cost.
+//
+// Retrying the whole extraction was tried as a mitigation for the residual
+// case (raised from 1 to 2 to 4 attempts across earlier iterations) but
+// production evidence showed it does not converge: across many real 4-attempt
+// runs of the same document, not one ever produced a fully-reconciling
+// result — every extra attempt just multiplied wait time (each attempt is
+// 1-2 sequential OpenAI calls, tens of seconds each) for no better outcome.
+// The Money-module review screen now lets the user manually correct a
+// flagged row's direction (see POST /ai/bank-import/revalidate), which
+// handles the residual case far better than blind retries — so a single
+// attempt is used: fast, and any real mismatch surfaces immediately for the
+// user to fix rather than being hidden behind minutes of retrying.
+//
+// Each attempt is independently subject to every existing check (per-batch
+// truncation detection, merge, dedup, reordering, reconciliation); attempts
+// are never mixed — the returned result is always one complete,
+// self-consistent attempt, never a partial combination.
 
-const AI_EXTRACTION_MAX_ATTEMPTS = 4;
+const AI_EXTRACTION_MAX_ATTEMPTS = 1;
 
 async function extractBankStatementWithRetry(
   buffer: Buffer,
