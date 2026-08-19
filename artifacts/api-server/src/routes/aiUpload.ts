@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import OpenAI, { toFile } from "openai";
+import OpenAI from "openai";
 import { postProcessBankTransactions } from "../lib/postProcessBankTransactions";
 import type { BankPostProcessResult } from "../lib/postProcessBankTransactions";
 import { parseBankFile } from "../lib/parseBankCsv";
@@ -76,10 +76,10 @@ function safeJsonParse(raw: string): any {
   try {
     return JSON.parse(raw);
   } catch {
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) {
       try {
-        return JSON.parse(jsonMatch[0]);
+        return JSON.parse(match[0]);
       } catch {}
     }
     return { transactions: [] };
@@ -112,18 +112,15 @@ export function buildBankMeta(
 }
 
 async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
-  const uploaded = await openai.files.create({
-    file: await toFile(buffer, filename, { type: "application/pdf" }),
-    purpose: "user_data",
-  });
+  const b64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
 
-  try {
-    const prompt = `Loe seda pangaväljavõtet.
-1. Tuvasta algsaldo (openingBalance), lõppsaldo (closingBalance), panga nimi ja konto number.
-2. Tuvasta KÕIK tehingud ja pane need rangelt KRONOLOOGILISSE järjekorda (alt üles: algsaldost alates kuni lõppsaldoni).
-3. Iga tehingu kohta märgi: date (YYYY-MM-DD), description, debit (number või null), credit (number või null), balance (number või null), currency ("EUR").
+  const prompt = `Analüüsi lisatud pangaväljavõtte PDF-i.
+Ülesanded:
+1. Tuvasta algsaldo (openingBalance) ja lõppsaldo (closingBalance).
+2. Tuvasta KÕIK tehingud ja paiguta need rangelt KRONOLOOGILISSE järjekorda (alt üles: algsaldost alates kuni lõppsaldoni).
+3. Iga tehingu kohta märgi kuupäev (YYYY-MM-DD), selgitus/saaja, deebet (kulu), kreedit (tulu) ja jooksev saldo.
 
-Tagasta AINULT kehtiv JSON-objekt ilma markdownita:
+Tagasta AINULT JSON:
 {
   "bankName": null,
   "accountNumber": null,
@@ -131,9 +128,9 @@ Tagasta AINULT kehtiv JSON-objekt ilma markdownita:
   "closingBalance": null,
   "transactions": [
     {
-      "date": "2026-01-15",
+      "date": "YYYY-MM-DD",
       "description": "Makse selgitus",
-      "debit": 10.00,
+      "debit": 12.34,
       "credit": null,
       "balance": 100.00,
       "currency": "EUR"
@@ -141,67 +138,31 @@ Tagasta AINULT kehtiv JSON-objekt ilma markdownita:
   ]
 }`;
 
+  try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response = await (openai.chat.completions.create as any)({
+    const response: any = await (openai as any).responses.create({
       model: "gpt-4o",
-      messages: [
+      input: [
         {
           role: "user",
           content: [
-            { type: "text", text: prompt },
-            {
-              type: "file",
-              file: uploaded.id,
-            },
+            { type: "input_file", filename, file_data: b64 },
+            { type: "input_text", text: prompt },
           ],
         },
       ],
-      response_format: { type: "json_object" },
+      text: { format: { type: "json_object" } },
       temperature: 0,
+      max_output_tokens: 16384,
     });
 
-    const content = response.choices[0]?.message?.content || "{}";
-    const parsed = safeJsonParse(content);
+    const raw = response.output_text?.trim() || "{}";
+    const parsed = safeJsonParse(raw);
     console.log(`[DIRECT PDF AI] Leitud tehinguid: ${(parsed.transactions || []).length}`);
     return parsed;
   } catch (err) {
-    console.warn("[DIRECT PDF ASSISTANT FALLBACK]", err);
-    try {
-      const assistant = await openai.beta.assistants.create({
-        model: "gpt-4o",
-        tools: [{ type: "file_search" }],
-        instructions: "Finantsdokumentide lugeja. Vasta ainult puhtas JSON formaadis.",
-      });
-
-      const thread = await openai.beta.threads.create({
-        messages: [
-          {
-            role: "user",
-            content: "Loe lisatud pangaväljavõtet. Tuvasta algsaldo, lõppsaldo ja kõik tehingud kronoloogilises järjekorras (alt üles). Tagasta ainult JSON.",
-            attachments: [{ file_id: uploaded.id, tools: [{ type: "file_search" }] }],
-          },
-        ],
-      });
-
-      const run = await openai.beta.threads.runs.createAndPoll(thread.id, {
-        assistant_id: assistant.id,
-      });
-
-      if (run.status === "completed") {
-        const messages = await openai.beta.threads.messages.list(thread.id);
-        const firstMsg = messages.data[0]?.content[0];
-        if (firstMsg && firstMsg.type === "text") {
-          return safeJsonParse(firstMsg.text.value);
-        }
-      }
-    } catch (fallbackErr) {
-      console.error("[FALLBACK ERROR]", fallbackErr);
-    }
+    console.error("[DIRECT PDF AI ERROR]", err);
     return { transactions: [] };
-  } finally {
-    try {
-      await openai.files.delete(uploaded.id);
-    } catch {}
   }
 }
 
