@@ -1,7 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
 import OpenAI from "openai";
-import pdfParse from "pdf-parse";
 import { postProcessBankTransactions } from "../lib/postProcessBankTransactions";
 import type { BankPostProcessResult } from "../lib/postProcessBankTransactions";
 import { parseBankFile } from "../lib/parseBankCsv";
@@ -80,9 +79,14 @@ function sanitizePdfText(raw: string): string {
 async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parserFn: any = (pdfParse as any).default || pdfParse;
-    const data = await parserFn(buffer);
-    return sanitizePdfText(data?.text || "");
+    const req = (globalThis as any).require || eval("require");
+    const pdf = req("pdf-parse");
+    const parserFn = typeof pdf === "function" ? pdf : pdf.default || pdf.PDFParse;
+    if (typeof parserFn === "function") {
+      const data = await parserFn(buffer);
+      return sanitizePdfText(data?.text || "");
+    }
+    return "";
   } catch (e) {
     console.error("[PDF PARSE ERROR]", e);
     return "";
