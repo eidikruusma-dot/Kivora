@@ -1,0 +1,74 @@
+Change the AI attachment UX and message architecture.
+
+Current incorrect behaviour:
+- When a PDF is uploaded, the extracted/OCR text is inserted into the visible user message as a huge markdown block.
+- The chat shows the file contents as if the user manually pasted them.
+- This is not acceptable.
+
+Required behaviour:
+- Attachments must behave like real AI attachments.
+- The user should see only a compact attachment card/chip with:
+  - file name
+  - file type
+  - processing status
+  - success/error state
+- The extracted text must remain hidden from the visible chat UI.
+- The extracted content may be sent to the AI only as hidden attachment context.
+- The visible user message should contain only the user’s actual typed instruction, for example:
+  “Too mu tulud ja kulud välja.”
+
+Strict scope:
+- Do not modify PDF extraction logic unless needed for context packaging.
+- Do not modify authentication.
+- Do not modify Money module writes yet.
+- Do not redesign the whole AI page.
+- Fix only attachment-to-message handling.
+
+Required architecture:
+
+1. Store attachment metadata separately from visible message text:
+   - fileName
+   - mimeType
+   - upload status
+   - extractedText or structuredData
+   - internal attachment ID
+
+2. Do not concatenate extracted text into the user-visible message.
+
+3. When sending to the AI:
+   - send the typed user message as normal visible text
+   - add attachment content as hidden/internal context
+   - clearly label it for the model, for example:
+     “Attached document content: …”
+   - never render that hidden context in the chat bubble
+
+4. For bank statement PDFs:
+   - prefer sending structured transaction JSON to the AI
+   - do not send a giant markdown dump
+   - display only the review card or AI summary to the user
+
+5. Conversation history:
+   - visible history must contain only user-visible text
+   - hidden attachment context must not be echoed back into the UI
+   - do not persist raw extracted document text inside normal chat messages
+
+6. Privacy and storage:
+   - report where extracted text is stored
+   - do not keep raw PDF text longer than necessary unless explicitly designed
+   - never expose raw attachment content in logs or UI
+
+7. Test:
+   - upload a PDF with no typed message
+   - upload a PDF with a typed question
+   - reload the conversation
+   - verify the attachment remains as a compact card
+   - verify the extracted text never appears in the chat
+   - verify the AI still answers using the PDF contents
+
+Before changing code, report:
+- which function currently concatenates attachment text into the visible message
+- where chat messages are stored
+- how attachment context will be separated from visible text
+- exact files that need to change
+
+Do not touch Money module actions yet.

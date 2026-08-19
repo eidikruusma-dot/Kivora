@@ -1,8 +1,15 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Clock, Calendar, Globe, Eye } from 'lucide-react'
+import { ArrowLeft, Clock, Calendar, Globe, Eye, Loader2 } from 'lucide-react'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
+import { useAuth } from '@/context/AuthContext'
+import {
+  getUserProfile,
+  updateUserPreferences,
+  getEffectivePreferences,
+} from '@/lib/userProfile'
+import type { StartOfWeek, TimeFormat, DateFormat } from '@/types'
 
 interface Props {
   onBack: () => void
@@ -18,40 +25,32 @@ const TIME_ZONES = [
   { value: 'UTC',              label: 'UTC' },
 ]
 
-// ── Local types ────────────────────────────────────────────────────────────
-type FirstDay  = 'monday' | 'sunday'
-type TimeFormat = '24h' | '12h'
-type DateFormat = 'dd.mm.yyyy' | 'yyyy-mm-dd' | 'dd/mm/yyyy'
-
+// ── Internal page state ────────────────────────────────────────────────────
+// `tzAuto` is UI-only; it is not stored in Firestore.
+// When true the active timezone is always DETECTED_TZ; when false the user
+// picks from the dropdown.  Either way the resolved value is written to
+// Firestore as `timezone`.
 interface DateTimeSettings {
-  tzAuto:       boolean
-  timezone:     string
-  firstDay:     FirstDay
-  timeFormat:   TimeFormat
-  dateFormat:   DateFormat
+  tzAuto:     boolean
+  timezone:   string
+  firstDay:   StartOfWeek
+  timeFormat: TimeFormat
+  dateFormat: DateFormat
 }
 
 const DETECTED_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone
 
-const DEFAULT: DateTimeSettings = {
-  tzAuto:     true,
-  timezone:   DETECTED_TZ,
-  firstDay:   'monday',
-  timeFormat: '24h',
-  dateFormat: 'dd.mm.yyyy',
-}
+/** localStorage key used by the old standalone Date & Time settings flow. */
+const LEGACY_KEY = 'kivora:datetime'
 
-function loadSettings(): DateTimeSettings {
-  try {
-    const raw = localStorage.getItem('kivora:datetime')
-    if (raw) return { ...DEFAULT, ...JSON.parse(raw) }
-  } catch { /* ignore */ }
-  return DEFAULT
+/** Map old lowercase format strings to the canonical DateFormat type. */
+function mapLegacyDateFormat(raw: string): DateFormat {
+  if (raw === 'yyyy-mm-dd') return 'YYYY-MM-DD'
+  if (raw === 'dd/mm/yyyy') return 'MM/DD/YYYY'
+  return 'DD.MM.YYYY'
 }
 
 // ── Formatting helpers ─────────────────────────────────────────────────────
-// Use 'en-GB' for part extraction – its part types ('day','month','year') are
-// stable and unambiguous across environments, unlike Estonian locale.
 function formatDate(date: Date, fmt: DateFormat, tz: string): string {
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone: tz,
@@ -61,16 +60,15 @@ function formatDate(date: Date, fmt: DateFormat, tz: string): string {
   }).formatToParts(date)
   const p: Record<string, string> = {}
   parts.forEach(({ type, value }) => { p[type] = value })
-
   // en-GB parts: day='29', month='07', year='2026'
-  if (fmt === 'dd.mm.yyyy') return `${p.day}.${p.month}.${p.year}`
-  if (fmt === 'yyyy-mm-dd') return `${p.year}-${p.month}-${p.day}`
-  return `${p.day}/${p.month}/${p.year}`
+  if (fmt === 'DD.MM.YYYY') return `${p.day}.${p.month}.${p.year}`
+  if (fmt === 'YYYY-MM-DD') return `${p.year}-${p.month}-${p.day}`
+  // MM/DD/YYYY — US format (month first)
+  return `${p.month}/${p.day}/${p.year}`
 }
 
 function formatTime(date: Date, fmt: TimeFormat, tz: string): string {
   if (fmt === '12h') {
-    // 'en-US' guarantees "4:07 PM" / "12:00 AM" output
     return new Intl.DateTimeFormat('en-US', {
       timeZone: tz,
       hour:   'numeric',
@@ -78,7 +76,6 @@ function formatTime(date: Date, fmt: TimeFormat, tz: string): string {
       hour12: true,
     }).format(date)
   }
-  // 'en-GB' guarantees "16:07" output (ISO 24-hour)
   return new Intl.DateTimeFormat('en-GB', {
     timeZone: tz,
     hour:   '2-digit',
@@ -162,9 +159,23 @@ function RadioRow({
 
 // ── Main page ──────────────────────────────────────────────────────────────
 export default function KuupaevJaAegPage({ onBack }: Props) {
+  const { user } = useAuth()
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
-  const [settings, setSettings] = useState<DateTimeSettings>(loadSettings)
+
+  const [settings, setSettings] = useState<DateTimeSettings>({
+    tzAuto:     true,
+    timezone:   DETECTED_TZ,
+    firstDay:   'monday',
+    timeFormat: '24h',
+    dateFormat: 'DD.MM.YYYY',
+  })
+  // Snapshot of the last successfully loaded / saved state for dirty detection.
+  const [savedSettings, setSavedSettings] = useState<DateTimeSettings | null>(null)
+  // Cached preferredLanguage so we can pass it through on save without changing it.
+  const [preferredLanguage, setPreferredLanguage] = useState('et')
+  const [loading, setLoading]   = useState(true)
+  const [saving, setSaving]     = useState(false)
   const [saved, setSaved]       = useState(false)
   const [now, setNow]           = useState(new Date())
 
@@ -174,18 +185,99 @@ export default function KuupaevJaAegPage({ onBack }: Props) {
     return () => clearInterval(id)
   }, [])
 
+  // Load from Firestore on mount.
+  // Migration path: if profile.preferences is absent (never explicitly saved),
+  // attempt to read the legacy 'kivora:datetime' localStorage key first.
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+
+    getUserProfile(user.uid)
+      .then((profile) => {
+        if (cancelled || !profile) { setLoading(false); return }
+
+        setPreferredLanguage(profile.preferredLanguage || 'et')
+
+        let initial: DateTimeSettings
+
+        if (!profile.preferences) {
+          // Firestore preferences never written — try legacy localStorage migration.
+          const raw = localStorage.getItem(LEGACY_KEY)
+          if (raw) {
+            try {
+              const local = JSON.parse(raw)
+              initial = {
+                tzAuto:     local.tzAuto ?? true,
+                timezone:   typeof local.timezone === 'string' ? local.timezone : DETECTED_TZ,
+                firstDay:   local.firstDay === 'sunday' ? 'sunday' : 'monday',
+                timeFormat: local.timeFormat === '12h' ? '12h' : '24h',
+                dateFormat: mapLegacyDateFormat(local.dateFormat ?? ''),
+              }
+              setSettings(initial)
+              setSavedSettings(null) // treat migrated data as unsaved (prompt user to save)
+              setLoading(false)
+              return
+            } catch { /* fall through to Firestore values */ }
+          }
+        }
+
+        // Normal path: derive settings from Firestore profile.
+        const prefs = getEffectivePreferences(profile)
+        initial = {
+          tzAuto:     prefs.timezone === DETECTED_TZ,
+          timezone:   prefs.timezone,
+          firstDay:   prefs.startOfWeek,
+          timeFormat: prefs.timeFormat,
+          dateFormat: prefs.dateFormat,
+        }
+        setSettings(initial)
+        setSavedSettings(initial)
+        setLoading(false)
+      })
+      .catch(() => { if (!cancelled) setLoading(false) })
+
+    return () => { cancelled = true }
+  }, [user])
+
   const activeTimezone = settings.tzAuto ? DETECTED_TZ : settings.timezone
 
+  const isDirty =
+    savedSettings === null ||
+    JSON.stringify(settings) !== JSON.stringify(savedSettings)
+
   function patch(partial: Partial<DateTimeSettings>) {
-    setSettings(prev => ({ ...prev, ...partial }))
+    setSettings((prev) => ({ ...prev, ...partial }))
     setSaved(false)
   }
 
-  function handleSave() {
+  async function handleSave() {
+    if (!user) return
+    setSaving(true)
     try {
-      localStorage.setItem('kivora:datetime', JSON.stringify(settings))
-    } catch { /* ignore */ }
-    setSaved(true)
+      await updateUserPreferences(user.uid, {
+        startOfWeek:       settings.firstDay,
+        timeFormat:        settings.timeFormat,
+        dateFormat:        settings.dateFormat,
+        timezone:          activeTimezone,
+        preferredLanguage,
+      })
+      // Clear legacy key after first successful Firestore save.
+      try { localStorage.removeItem(LEGACY_KEY) } catch { /* ignore */ }
+      setSavedSettings(settings)
+      setSaved(true)
+    } catch {
+      /* no-op — surface an error UI in a future iteration */
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[300px]">
+        <Loader2 size={24} className="animate-spin text-[#6F5AE8]" />
+      </div>
+    )
   }
 
   return (
@@ -239,10 +331,10 @@ export default function KuupaevJaAegPage({ onBack }: Props) {
             <select
               disabled={settings.tzAuto}
               value={settings.timezone}
-              onChange={e => patch({ timezone: e.target.value })}
+              onChange={(e) => patch({ timezone: e.target.value })}
               className="w-full h-10 rounded-xl border border-[#E2E8F0] bg-[#FAFAFA] px-3 text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed appearance-none"
             >
-              {TIME_ZONES.map(tz => (
+              {TIME_ZONES.map((tz) => (
                 <option key={tz.value} value={tz.value}>{tz.label}</option>
               ))}
             </select>
@@ -308,20 +400,20 @@ export default function KuupaevJaAegPage({ onBack }: Props) {
             <RadioRow
               label="29.07.2026"
               sublabel={t('dt.dateFormat.dmy', lang)}
-              checked={settings.dateFormat === 'dd.mm.yyyy'}
-              onChange={() => patch({ dateFormat: 'dd.mm.yyyy' })}
+              checked={settings.dateFormat === 'DD.MM.YYYY'}
+              onChange={() => patch({ dateFormat: 'DD.MM.YYYY' })}
             />
             <RadioRow
               label="2026-07-29"
               sublabel={t('dt.dateFormat.iso', lang)}
-              checked={settings.dateFormat === 'yyyy-mm-dd'}
-              onChange={() => patch({ dateFormat: 'yyyy-mm-dd' })}
+              checked={settings.dateFormat === 'YYYY-MM-DD'}
+              onChange={() => patch({ dateFormat: 'YYYY-MM-DD' })}
             />
             <RadioRow
-              label="29/07/2026"
+              label="07/29/2026"
               sublabel={t('dt.dateFormat.dmy2', lang)}
-              checked={settings.dateFormat === 'dd/mm/yyyy'}
-              onChange={() => patch({ dateFormat: 'dd/mm/yyyy' })}
+              checked={settings.dateFormat === 'MM/DD/YYYY'}
+              onChange={() => patch({ dateFormat: 'MM/DD/YYYY' })}
             />
           </div>
         </SectionCard>
@@ -371,8 +463,10 @@ export default function KuupaevJaAegPage({ onBack }: Props) {
         <div className="flex items-center gap-3 pb-2">
           <button
             onClick={handleSave}
-            className="h-10 px-6 rounded-xl bg-[#6F5AE8] text-white text-sm font-medium hover:bg-[#5B4AD5] transition-colors"
+            disabled={saving || !isDirty}
+            className="h-10 px-6 rounded-xl bg-[#6F5AE8] text-white text-sm font-medium hover:bg-[#5B4AD5] transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
           >
+            {saving && <Loader2 size={14} className="animate-spin" />}
             {saved ? `${t('settings.saved', lang)} ✓` : t('settings.save', lang)}
           </button>
           {saved && (

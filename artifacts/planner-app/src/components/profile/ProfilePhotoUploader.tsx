@@ -1,8 +1,11 @@
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import { Loader2, Upload, Trash2, X, AlertCircle } from 'lucide-react'
 import Avatar from '@/components/ui/AppAvatar'
 import { uploadProfilePhoto, deleteProfilePhoto } from '@/lib/profilePhoto'
 import { ImageValidationError } from '@/lib/processImage'
+import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
+import type { AppLang } from '@/lib/languageStore'
+import { t } from '@/lib/translations'
 
 interface ProfilePhotoUploaderProps {
   uid: string
@@ -23,6 +26,9 @@ export default function ProfilePhotoUploader({
   onPhotoChange,
   onClose,
 }: ProfilePhotoUploaderProps) {
+  const [lang, setLang] = useState<AppLang>(getLocalLanguage)
+  useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
@@ -47,10 +53,10 @@ export default function ProfilePhotoUploader({
 
     try {
       if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-        throw new ImageValidationError('Lubatud on ainult JPEG, PNG või WebP failid')
+        throw new ImageValidationError(t('profile.photo.err.type', lang))
       }
       if (file.size > 5 * 1024 * 1024) {
-        throw new ImageValidationError('Faili suurus ei tohi ületada 5 MB')
+        throw new ImageValidationError(t('profile.photo.err.size', lang))
       }
 
       if (previewUrl) URL.revokeObjectURL(previewUrl)
@@ -59,7 +65,7 @@ export default function ProfilePhotoUploader({
       setPendingFile(file)
       setUploadState('idle')
     } catch (err) {
-      const msg = err instanceof ImageValidationError ? err.message : 'Faili lugemine ebaõnnestus'
+      const msg = err instanceof ImageValidationError ? err.message : t('profile.photo.err.read', lang)
       setError(msg)
       setUploadState('error')
     }
@@ -80,7 +86,7 @@ export default function ProfilePhotoUploader({
       setPreviewUrl(null)
       setPendingFile(null)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Üleslaadimine ebaõnnestus'
+      const msg = err instanceof Error ? err.message : t('profile.photo.err.upload', lang)
       setError(msg)
       setUploadState('error')
     }
@@ -94,7 +100,7 @@ export default function ProfilePhotoUploader({
       onPhotoChange(null)
       setUploadState('done')
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Pildi eemaldamine ebaõnnestus'
+      const msg = err instanceof Error ? err.message : t('profile.photo.err.remove', lang)
       setError(msg)
       setUploadState('error')
     } finally {
@@ -112,7 +118,7 @@ export default function ProfilePhotoUploader({
   return (
     <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
       <div className="flex items-center justify-between px-6 py-4 border-b border-[#F0F0F0]">
-        <h2 className="text-base font-semibold text-[#1A1F36]">Profiilipilt</h2>
+        <h2 className="text-base font-semibold text-[#1A1F36]">{t('profile.photo.title', lang)}</h2>
         <button
           onClick={handleCancel}
           disabled={busy}
@@ -152,7 +158,7 @@ export default function ProfilePhotoUploader({
             className="h-10 px-4 rounded-xl bg-[#F8F7F4] border border-[#E8E6E0] text-sm font-medium text-[#1A1F36] flex items-center gap-2 hover:bg-[#F0F0F0] transition-colors disabled:opacity-50"
           >
             <Upload size={16} />
-            {photoURL ? 'Vali uus pilt' : 'Vali fail'}
+            {photoURL ? t('profile.photo.selectNew', lang) : t('profile.photo.selectFile', lang)}
           </button>
         </div>
 
@@ -163,30 +169,29 @@ export default function ProfilePhotoUploader({
               disabled={busy}
               className="h-10 px-4 rounded-xl text-sm font-medium text-[#64748B] hover:bg-[#F0F0F0] transition-colors disabled:opacity-50"
             >
-              Loobu eelvaatest
+              {t('profile.photo.cancelPreview', lang)}
             </button>
             <button
               onClick={handleSave}
               disabled={busy}
               className="h-10 px-5 rounded-xl bg-[#6F5AE8] text-white text-sm font-medium flex items-center gap-2 hover:bg-[#5B4AD5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {uploadState === 'uploading' && <Loader2 size={16} className="animate-spin" />}
-              {uploadState === 'processing' && <Loader2 size={16} className="animate-spin" />}
-              {busy ? 'Salvestan...' : 'Salvesta pilt'}
+              {(uploadState === 'uploading' || uploadState === 'processing') && <Loader2 size={16} className="animate-spin" />}
+              {busy ? t('profile.savingBtn', lang) : t('profile.photo.saveBtn', lang)}
             </button>
           </div>
         )}
 
         {photoURL && !pendingFile && (
           <div className="flex items-center justify-between gap-3 pt-4 border-t border-[#F0F0F0]">
-            <p className="text-sm text-[#64748B]">Praegune pilt</p>
+            <p className="text-sm text-[#64748B]">{t('profile.photo.current', lang)}</p>
             <button
               onClick={handleRemove}
               disabled={busy}
               className="h-10 px-4 rounded-xl text-sm font-medium text-red-600 flex items-center gap-2 hover:bg-red-50 transition-colors disabled:opacity-50"
             >
               {isRemoving ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-              Eemalda pilt
+              {t('profile.photo.removeBtn', lang)}
             </button>
           </div>
         )}
@@ -197,7 +202,7 @@ export default function ProfilePhotoUploader({
             disabled={busy}
             className="h-10 px-4 rounded-xl text-sm font-medium text-[#64748B] hover:bg-[#F0F0F0] transition-colors disabled:opacity-50"
           >
-            Sulge
+            {t('profile.photo.closeBtn', lang)}
           </button>
         </div>
       </div>

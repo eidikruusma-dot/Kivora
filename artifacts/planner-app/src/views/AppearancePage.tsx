@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ArrowLeft, Sun, Moon, Monitor, Check, Loader2 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
+import type { AppLang } from '@/lib/languageStore'
+import { t } from '@/lib/translations'
 import {
   DEFAULT_APPEARANCE,
   THEME_MODES,
@@ -12,8 +15,29 @@ import {
 } from '@/lib/appearanceStore'
 import type { AppearanceSettings, ThemeMode, Density } from '@/types'
 
+function getThemeModeLabel(value: ThemeMode, lang: AppLang): string {
+  if (value === 'light') return t('appearance.theme.light', lang)
+  if (value === 'dark') return t('appearance.theme.dark', lang)
+  return t('appearance.theme.system', lang)
+}
+
+function getDensityLabel(key: Density, lang: AppLang): string {
+  return key === 'comfortable'
+    ? t('appearance.density.comfortable', lang)
+    : t('appearance.density.compact', lang)
+}
+
+function getDensityDesc(key: Density, lang: AppLang): string {
+  return key === 'comfortable'
+    ? t('appearance.density.comfortable.desc', lang)
+    : t('appearance.density.compact.desc', lang)
+}
+
 export default function AppearancePage({ onBack }: { onBack: () => void }) {
   const { user } = useAuth()
+  const [lang, setLang] = useState<AppLang>(getLocalLanguage)
+  useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
+
   const [settings, setSettings] = useState<AppearanceSettings>(DEFAULT_APPEARANCE)
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -77,19 +101,19 @@ export default function AppearancePage({ onBack }: { onBack: () => void }) {
         className="flex items-center gap-2 text-sm font-medium text-[#64748B] hover:text-[#6F5AE8] transition-colors mb-6"
       >
         <ArrowLeft size={16} strokeWidth={2} />
-        Tagasi seadetesse
+        {t('settings.back', lang)}
       </button>
 
       <div className="max-w-3xl mx-auto space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-[#1A1F36]">Välimus</h1>
+          <h1 className="text-2xl font-bold text-[#1A1F36]">{t('settings.card.appearance', lang)}</h1>
           <p className="text-sm text-[#94A3B8] mt-1">
-            Kohanda Kivora kujundust oma eelistuste järgi. Kõik muudatused rakenduvad kohe.
+            {t('appearance.subtitle', lang)}
           </p>
         </div>
 
         {/* Theme mode */}
-        <Section title="Teema" description="Vali rakenduse põhitaust">
+        <Section title={t('appearance.theme.title', lang)} description={t('appearance.theme.desc', lang)}>
           <div className="grid grid-cols-3 gap-3">
             {THEME_MODES.map((opt) => {
               const active = settings.themeMode === opt.value
@@ -104,7 +128,9 @@ export default function AppearancePage({ onBack }: { onBack: () => void }) {
                   }`}
                 >
                   {themeIcon(opt.icon)}
-                  <span className="text-sm font-medium text-[#1A1F36]">{opt.label}</span>
+                  <span className="text-sm font-medium text-[#1A1F36]">
+                    {getThemeModeLabel(opt.value as ThemeMode, lang)}
+                  </span>
                   {active && (
                     <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#6F5AE8] flex items-center justify-center">
                       <Check size={12} className="text-white" strokeWidth={3} />
@@ -117,10 +143,9 @@ export default function AppearancePage({ onBack }: { onBack: () => void }) {
         </Section>
 
         {/* Density */}
-        <Section title="Vaate tihedus" description="Vali, kui kompaktselt elemente kuvatakse">
+        <Section title={t('appearance.density.title', lang)} description={t('appearance.density.desc', lang)}>
           <div className="grid grid-cols-2 gap-3">
             {(Object.keys(DENSITIES) as Density[]).map((key) => {
-              const d = DENSITIES[key]
               const active = settings.density === key
               return (
                 <button
@@ -132,8 +157,8 @@ export default function AppearancePage({ onBack }: { onBack: () => void }) {
                       : 'border-[#ECECF2] bg-white hover:border-[#CBD5E1]'
                   }`}
                 >
-                  <span className="text-sm font-semibold text-[#1A1F36]">{d.label}</span>
-                  <span className="text-xs text-[#94A3B8] leading-relaxed">{d.description}</span>
+                  <span className="text-sm font-semibold text-[#1A1F36]">{getDensityLabel(key, lang)}</span>
+                  <span className="text-xs text-[#94A3B8] leading-relaxed">{getDensityDesc(key, lang)}</span>
                 </button>
               )
             })}
@@ -141,7 +166,7 @@ export default function AppearancePage({ onBack }: { onBack: () => void }) {
         </Section>
 
         {/* Live preview */}
-        <Section title="Eelvaade" description="Nii näeb rakendus sinu valikutega välja">
+        <Section title={t('appearance.preview.title', lang)} description={t('appearance.preview.desc', lang)}>
           <div className="rounded-xl border border-[#ECECF2] bg-[#F4F3EF] p-5">
             <div
               className="bg-white border border-[#ECECF2] p-5"
@@ -159,8 +184,8 @@ export default function AppearancePage({ onBack }: { onBack: () => void }) {
                     K
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-[#1A1F36]">Kivora ülesanne</p>
-                    <p className="text-xs text-[#94A3B8]">Tähtaeg: täna</p>
+                    <p className="text-sm font-semibold text-[#1A1F36]">{t('appearance.preview.task', lang)}</p>
+                    <p className="text-xs text-[#94A3B8]">{t('appearance.preview.deadline', lang)}</p>
                   </div>
                 </div>
                 <span
@@ -170,7 +195,7 @@ export default function AppearancePage({ onBack }: { onBack: () => void }) {
                     color: 'var(--kv-primary, #6F5AE8)',
                   }}
                 >
-                  Prioriteet
+                  {t('appearance.preview.priority', lang)}
                 </span>
               </div>
               <div className="h-2 rounded-full bg-[#F1F0F8] overflow-hidden mb-4">
@@ -186,7 +211,7 @@ export default function AppearancePage({ onBack }: { onBack: () => void }) {
                   borderRadius: 'var(--kv-radius-card, 0.75rem)',
                 }}
               >
-                Salvesta
+                {t('appearance.preview.btn', lang)}
               </button>
             </div>
           </div>
@@ -197,7 +222,7 @@ export default function AppearancePage({ onBack }: { onBack: () => void }) {
           {saved && (
             <span className="flex items-center gap-1.5 text-sm text-green-600">
               <Check size={16} />
-              Salvestatud
+              {t('settings.saved', lang)}
             </span>
           )}
           <button
@@ -206,7 +231,7 @@ export default function AppearancePage({ onBack }: { onBack: () => void }) {
             className="h-10 px-5 rounded-xl bg-[#6F5AE8] text-white text-sm font-medium flex items-center gap-2 hover:bg-[#5B4AD5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving && <Loader2 size={16} className="animate-spin" />}
-            {saving ? 'Salvestan...' : 'Salvesta eelistused'}
+            {saving ? t('settings.saving', lang) : t('appearance.saveBtn', lang)}
           </button>
         </div>
       </div>
@@ -232,4 +257,3 @@ function Section({
     </div>
   )
 }
-

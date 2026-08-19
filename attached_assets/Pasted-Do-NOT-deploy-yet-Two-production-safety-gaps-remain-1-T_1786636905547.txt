@@ -1,0 +1,61 @@
+Do NOT deploy yet.
+
+Two production-safety gaps remain.
+
+1. The real bank statement previously used the AI fallback because structural extraction returned 0 transactions.
+
+Verify that the SAME chronological sorting, posted-vs-pending filtering, running-balance reconciliation, and opening→closing validation are applied to BOTH paths:
+
+A) structural extraction path
+B) OpenAI fallback path
+
+Do not leave reconciliation logic only inside extractStructuralPdfBuffer.
+
+Prefer one shared canonical post-processing/reconciliation function that both extraction paths call after they produce normalized BankTransaction[].
+
+For the AI fallback specifically verify:
+- transactions are ordered oldest → newest for reconciliation
+- same-day source order is preserved
+- pending/reserved transactions are excluded from posted totals
+- running balances are validated if present
+- opening/closing balances are validated
+- validationStatus/importAllowed are derived from the shared reconciliation result
+
+Add a regression test where structural extraction returns 0 and the AI fallback returns newest-first transactions with running balances. Prove the final result reconciles oldest-first.
+
+2. FinancePage Firestore safety
+
+Inspect BankImportModal.runImport().
+
+Pending/reserved transactions MUST NEVER be written as normal posted transactions.
+
+The server must already exclude pending rows from posted totals, but the client write loop also needs a fail-safe.
+
+Before any addTransaction(), explicitly skip pending rows:
+
+if (item.pending) {
+  skipped++;
+  continue;
+}
+
+Also make canImport fail closed if pending rows are mixed into a payload that is not intentionally supported for import, OR clearly keep them display-only and skip them.
+
+Add a frontend/unit-level test if practical proving pending=true never calls addTransaction().
+
+Do not change PDF upload, pdfjs, OpenAI API, or Firestore rules.
+
+Run:
+pnpm exec tsc --noEmit
+pnpm run test:extractStructuralPdfBuffer
+pnpm run test:reconcileStructuralTransactions
+pnpm run test:extraction
+pnpm run build
+
+Final report:
+- confirm shared reconciliation is used by structural AND AI fallback
+- show the AI-fallback regression test result
+- show the exact pending guard in FinancePage.runImport
+- all test results
+- build result
+
+Do not deploy automatically.

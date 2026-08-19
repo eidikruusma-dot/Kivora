@@ -1,0 +1,113 @@
+Fix School subject synchronization
+
+The AI file upload feature is already complete. Do not modify the AI Assistant.
+
+Only fix the School module.
+
+Required behavior
+
+The timetable must be connected to subjects.
+
+Every study block in the timetable must belong to a subject.
+
+When the user creates or edits:
+
+an assignment
+a test
+an exam
+
+the subject field must not be a free-text input.
+
+Replace it with a dropdown or searchable selector that shows the subjects currently used in the timetable.
+
+Example
+
+If the timetable contains:
+
+Mathematics
+Estonian language and literature
+English
+History
+
+then those exact subjects must appear as selectable options when creating an assignment, test or exam.
+
+The user must not need to type the same subject again.
+
+Single source of truth
+
+Do not create a second separate list of subjects.
+
+Use one shared subject data source.
+
+The same subject must be reused across:
+
+timetable study blocks
+assignments
+tests
+exams
+school overview statistics
+upcoming school events
+
+When a subject name is edited, the change must appear everywhere immediately.
+
+When a subject is deleted from the timetable, do not silently delete existing assignments, tests or exams. Show a confirmation or keep the subject as an archived subject if it is still referenced.
+
+Creating a study block
+
+In the “Add study block” dialog:
+
+replace the free-text “Subject or activity” field with a subject selector
+add a clear option: “Create new subject”
+when a new subject is created, save it to the shared subject collection
+allow the user to select a subject color
+reuse the selected subject color everywhere that subject appears
+Assignment dialog
+
+In the “Add assignment” dialog:
+
+replace the current subject text field with the shared subject selector
+show subjects from the timetable
+save the selected subjectId, not only the subject name
+display the selected subject name and color in the assignment list
+Test dialog
+
+In the “Add test” dialog:
+
+replace the free-text subject field with the same shared subject selector
+save the selected subjectId
+display the subject name and color in the test list
+Exam dialog
+
+Apply the same subject selector and subjectId logic to exams.
+
+Statistics
+
+Fix the subject count in the School overview.
+
+The “Subjects” statistic must reflect the real number of unique active subjects used in the timetable.
+
+It must not show 0 when timetable subjects already exist.
+
+Synchronization
+
+All changes must update immediately without refreshing the page.
+
+Use the existing real-time state or Firestore subscription architecture already used by the project.
+
+Do not add demo data, hardcoded subjects or duplicate collections.
+
+Scope
+
+Do not redesign the School page.
+
+Do not change unrelated modules.
+
+Do not modify working AI functionality.
+
+After finishing, report:
+
+which files were changed
+where the shared subject source is stored
+how subjectId is used
+how old existing data was migrated or handled
+TypeScript status

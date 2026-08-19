@@ -14,11 +14,8 @@ interface AuthShellProps {
 
 function Logo() {
   return (
-    <Link to="/" className="inline-flex items-center gap-2.5">
-      <div className="w-8 h-8 rounded-lg bg-[#6F5AE8] flex items-center justify-center">
-        <span className="text-white font-bold text-sm tracking-tight">K</span>
-      </div>
-      <span className="text-base font-bold text-[#1A1F36] tracking-tight">kivora</span>
+    <Link to="/" className="inline-flex items-center">
+      <img src="/kivora-logo.png" alt="Kivora" height={28} style={{ height: 28, width: 'auto', objectFit: 'contain' }} draggable={false} />
     </Link>
   )
 }

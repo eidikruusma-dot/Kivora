@@ -1,7 +1,7 @@
 import DayColumn from './DayColumn'
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
 import type { TimeFormat } from '@/types'
-import { isToday, isSameDay, WEEKDAYS_ET_FULL, WEEKDAYS_EN_FULL } from '@/lib/calendar/dateUtils'
+import { isToday, isSameDay, WEEKDAYS_ET_FULL, WEEKDAYS_EN_FULL, formatEventTime } from '@/lib/calendar/dateUtils'
 import { useState, useEffect } from 'react'
 import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
@@ -23,37 +23,16 @@ const TIME_GRID_HEIGHT = (END_HOUR - START_HOUR) * HOUR_HEIGHT
 
 const LABELED_HOURS = [0, 6, 8, 10, 12, 14, 16, 18, 20, 22]
 
-interface AllDaySpan {
-  title: string
-  color: string
-  firstCol: number
-  lastCol: number
-}
-
-function computeAllDaySpans(
-  days: Date[],
-  eventsByDay: MockCalendarEvent[][],
-): AllDaySpan[] {
-  const map: Record<string, AllDaySpan> = {}
-
-  days.forEach((_, col) => {
-    const dayAllDay = (eventsByDay[col] || []).filter((event) => event.allDay)
-
-    dayAllDay.forEach((event) => {
-      if (map[event.title]) {
-        map[event.title].lastCol = col
-      } else {
-        map[event.title] = {
-          title: event.title,
-          color: event.color,
-          firstCol: col,
-          lastCol: col,
-        }
-      }
-    })
-  })
-
-  return Object.values(map)
+/** Return "Due today" / "Overdue" etc. for an all-day event, or null if nothing urgent. */
+function allDayUrgency(dateStr: string, lang: AppLang): string | null {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(dateStr + 'T00:00:00')
+  const diff = Math.round((due.getTime() - today.getTime()) / 86_400_000)
+  if (diff < 0)  return lang === 'et' ? 'Tähtaeg möödas' : 'Overdue'
+  if (diff === 0) return lang === 'et' ? 'Täna' : 'Due today'
+  if (diff === 1) return lang === 'et' ? 'Homme' : 'Due tomorrow'
+  return null
 }
 
 export default function CalendarGrid({
@@ -68,11 +47,11 @@ export default function CalendarGrid({
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
   const totalRange = END_HOUR - START_HOUR
-  const allDaySpans = computeAllDaySpans(days, eventsByDay)
-  const hasAllDay = allDaySpans.length > 0
+  const hasAllDay = eventsByDay.some(dayEvts => dayEvts.some(e => e.allDay))
 
   return (
-    <div className="flex flex-col">
+    // min-w ensures the 7-column week grid is never crushed — the parent overflow-x-auto handles scroll
+    <div className="flex flex-col min-w-[540px]">
       {/* Day headers */}
       <div
         className="grid flex-shrink-0 border-b border-[#EBEBEB]"
@@ -117,46 +96,53 @@ export default function CalendarGrid({
         })}
       </div>
 
-      {/* All-day row */}
+      {/* All-day / date-only event row */}
       {hasAllDay && (
         <div
           className="grid flex-shrink-0 bg-white border-b border-[#EBEBEB]"
-          style={{
-            height: '44px',
-            gridTemplateColumns: '56px repeat(7, minmax(0, 1fr))',
-            gridTemplateRows: '1fr',
-          }}
+          style={{ gridTemplateColumns: '56px repeat(7, minmax(0, 1fr))' }}
         >
-          <div style={{ gridColumn: 1, gridRow: 1 }} />
+          {/* "all-day" label */}
+          <div className="flex items-start justify-end pr-2 pt-1.5">
+            <span className="text-[9px] font-medium text-[#94A3B8] uppercase tracking-wide leading-none">
+              {lang === 'et' ? 'kogu päev' : 'all‑day'}
+            </span>
+          </div>
 
-          {days.map((day, index) => (
-            <div
-              key={`all-day-column-${day.toISOString()}`}
-              className={index < 6 ? 'border-r border-[#F0F0F0]' : ''}
-              style={{
-                gridColumn: index + 2,
-                gridRow: 1,
-              }}
-            />
-          ))}
-
-          {allDaySpans.map((span) => (
-            <div
-              key={span.title}
-              className="rounded-md flex items-center px-2"
-              style={{
-                gridColumn: `${span.firstCol + 2} / ${span.lastCol + 3}`,
-                gridRow: 1,
-                height: '22px',
-                alignSelf: 'center',
-                backgroundColor: span.color,
-              }}
-            >
-              <span className="text-[11px] font-medium text-[#0F766E] truncate">
-                {span.title}
-              </span>
-            </div>
-          ))}
+          {/* Per-day columns */}
+          {days.map((day, index) => {
+            const dayAllDay = (eventsByDay[index] || []).filter(e => e.allDay)
+            return (
+              <div
+                key={`alld-${day.toISOString()}`}
+                className={`py-1 px-1 flex flex-col gap-0.5 min-h-[28px] ${index < 6 ? 'border-r border-[#F0F0F0]' : ''}`}
+              >
+                {dayAllDay.map(evt => {
+                  const urgency = allDayUrgency(evt.date, lang)
+                  return (
+                    <button
+                      key={evt.id}
+                      onClick={() => onEventClick?.(evt.id)}
+                      className="w-full text-left rounded-md px-1.5 py-0.5 flex flex-col gap-0 cursor-pointer hover:opacity-80 transition-opacity"
+                      style={{ backgroundColor: evt.color + '22', borderLeft: `3px solid ${evt.color}` }}
+                    >
+                      <span
+                        className="text-[11px] font-semibold leading-tight truncate"
+                        style={{ color: evt.color }}
+                      >
+                        {evt.title}
+                      </span>
+                      {urgency && (
+                        <span className="text-[10px] leading-tight" style={{ color: evt.color + 'BB' }}>
+                          {urgency}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -185,7 +171,7 @@ export default function CalendarGrid({
                   top: `${((hour - START_HOUR) / totalRange) * 100}%`,
                 }}
               >
-                {`${String(hour).padStart(2, '0')}:00`}
+                {formatEventTime(`${String(hour).padStart(2, '0')}:00`, timeFormat)}
               </div>
             ))}
           </div>

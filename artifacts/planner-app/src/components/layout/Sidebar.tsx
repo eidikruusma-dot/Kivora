@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   CheckSquare,
@@ -11,6 +11,7 @@ import {
   GraduationCap,
   HelpCircle,
   Settings,
+  Wallet,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import {
@@ -28,24 +29,43 @@ import { t } from '@/lib/translations'
 import type { AppLang } from '@/lib/languageStore'
 import { useAuth } from '@/context/AuthContext'
 import type { ThemeMode } from '@/types'
+import { useModules, type ModuleId } from '@/lib/modulesStore'
 
-// Route + icon definitions — labels are derived from translations at render time
-const NAV_ROUTES = [
+// ── Route definitions ────────────────────────────────────────────────────────
+
+const NAV_ROUTES: {
+  to: string
+  tKey: Parameters<typeof t>[0]
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>
+  moduleId?: ModuleId   // undefined = always visible
+}[] = [
   { to: '/app',           tKey: 'nav.myDay'     as const, icon: LayoutDashboard },
-  { to: '/app/tasks',     tKey: 'nav.tasks'     as const, icon: CheckSquare     },
-  { to: '/app/calendar',  tKey: 'nav.calendar'  as const, icon: Calendar        },
-  { to: '/app/notes',     tKey: 'nav.notes'     as const, icon: StickyNote      },
-  { to: '/app/habits',    tKey: 'nav.habits'    as const, icon: Activity        },
-  { to: '/app/goals',     tKey: 'nav.goals'     as const, icon: Flag            },
-  { to: '/app/assistant', tKey: 'nav.assistant' as const, icon: Sparkles        },
-  { to: '/app/school',    tKey: 'nav.school'    as const, icon: GraduationCap   },
-  { to: '/app/help',      tKey: 'nav.help'      as const, icon: HelpCircle      },
-  { to: '/app/settings',  tKey: 'nav.settings'  as const, icon: Settings        },
+  { to: '/app/tasks',     tKey: 'nav.tasks'     as const, icon: CheckSquare,   moduleId: 'tasks'     },
+  { to: '/app/calendar',  tKey: 'nav.calendar'  as const, icon: Calendar,      moduleId: 'calendar'  },
+  { to: '/app/notes',     tKey: 'nav.notes'     as const, icon: StickyNote,    moduleId: 'notes'     },
+  { to: '/app/habits',    tKey: 'nav.habits'    as const, icon: Activity,      moduleId: 'habits'    },
+  { to: '/app/finance',   tKey: 'nav.finance'   as const, icon: Wallet,        moduleId: 'finance'   },
+  { to: '/app/goals',     tKey: 'nav.goals'     as const, icon: Flag,          moduleId: 'goals'     },
+  { to: '/app/assistant', tKey: 'nav.assistant' as const, icon: Sparkles,      moduleId: 'assistant' },
+  { to: '/app/school',    tKey: 'nav.school'    as const, icon: GraduationCap, moduleId: 'school'    },
+  { to: '/app/help',      tKey: 'nav.help'      as const, icon: HelpCircle                           },
+  { to: '/app/settings',  tKey: 'nav.settings'  as const, icon: Settings                             },
 ]
 
-export default function Sidebar() {
+// ── Props ─────────────────────────────────────────────────────────────────────
+
+interface SidebarProps {
+  isOpen: boolean
+  onClose: () => void
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
+
+export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const { settings: modules } = useModules()
 
   const [effectiveTheme, setEffectiveTheme] = useState<'light' | 'dark'>(() =>
     resolveEffectiveTheme(getLocalAppearance().themeMode)
@@ -65,6 +85,15 @@ export default function Sidebar() {
     })
   }, [])
 
+  // If the user is currently on a module page and that module gets disabled,
+  // redirect them to Home so they don't see a blank/broken page.
+  useEffect(() => {
+    const route = NAV_ROUTES.find(r => r.to === location.pathname)
+    if (route?.moduleId && !modules[route.moduleId]) {
+      navigate('/app', { replace: true })
+    }
+  }, [modules, location.pathname, navigate])
+
   const isDark = effectiveTheme === 'dark'
 
   const handleToggle = () => {
@@ -75,29 +104,51 @@ export default function Sidebar() {
     if (user) saveAppearanceSettings(user.uid, newSettings)
   }
 
+  // Filter nav items — hide module-gated items whose module is off
+  const visibleRoutes = NAV_ROUTES.filter(({ moduleId }) => {
+    if (!moduleId) return true         // always visible (Home, Help, Settings)
+    return modules[moduleId] === true  // show only if module is enabled
+  })
+
+  const handleNavClick = (to: string) => {
+    navigate(to)
+    onClose()   // close the drawer on mobile/tablet after navigation
+  }
+
   return (
-    <aside className="w-52 flex-shrink-0 bg-white border-r border-[#EBEBEB] flex flex-col h-[100dvh]">
+    <aside
+      className={[
+        // Base: fixed overlay for mobile/tablet
+        'flex-shrink-0 bg-white border-r border-[#EBEBEB] flex flex-col h-[100dvh]',
+        'fixed inset-y-0 left-0 z-40 w-64',
+        'transition-transform duration-300 ease-in-out',
+        // Show/hide on mobile/tablet
+        isOpen ? 'translate-x-0' : '-translate-x-full',
+        // Desktop: back in normal flow, always visible, narrower
+        'lg:static lg:translate-x-0 lg:w-52 lg:z-auto',
+      ].join(' ')}
+    >
       {/* Logo */}
       <button
-        onClick={() => navigate('/app')}
-        className="px-5 py-5 flex items-center gap-2.5 w-full hover:opacity-80 transition-opacity"
+        onClick={() => { navigate('/app'); onClose() }}
+        className="px-5 py-3 flex items-center w-full hover:opacity-80 transition-opacity"
       >
-        <div className="w-8 h-8 rounded-lg bg-[#6F5AE8] flex items-center justify-center">
-          <span className="text-white font-bold text-sm tracking-tight">K</span>
-        </div>
-        <span className="text-base font-bold text-[#1A1F36] tracking-tight">kivora</span>
+        <span className="inline-flex items-center" style={{ gap: 8, height: 40 }}>
+          <img src="/kivora-symbol.png" alt="" aria-hidden style={{ height: 40, width: 'auto', flexShrink: 0 }} draggable={false} />
+          <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.015em', lineHeight: 1, color: '#1A1F36' }}>Kivora</span>
+        </span>
       </button>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-2 space-y-0.5">
-        {NAV_ROUTES.map(({ to, tKey, icon: Icon }) => (
+      <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto scrollbar-thin">
+        {visibleRoutes.map(({ to, tKey, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
             end={to === '/app'}
             onClick={(e) => {
               e.preventDefault()
-              navigate(to)
+              handleNavClick(to)
             }}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${

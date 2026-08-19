@@ -97,19 +97,26 @@ export default function NewEventModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="event-modal-title"
+        className="kv-modal-enter bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col max-h-[90dvh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#EBEBEB]">
-          <h2 className="text-lg font-semibold text-[#1A1F36]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#EBEBEB] flex-shrink-0">
+          <h2 id="event-modal-title" className="text-lg font-semibold text-[#1A1F36]">
             {isEdit ? t('cal.event.editTitle', lang) : t('cal.event.addTitle', lang)}
           </h2>
-          <button onClick={onClose} className="text-[#94A3B8] hover:text-[#1A1F36] transition-colors">
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
+          >
             <X size={20} />
           </button>
         </div>
 
-        <div className="px-6 py-5 space-y-4">
+        <div className="px-6 py-5 space-y-4 flex-1 overflow-y-auto">
           <div>
             <label className="block text-xs font-medium text-[#64748B] mb-1.5">{t('cal.event.title', lang)} <span className="text-[#EF4444]">*</span></label>
             <input
@@ -215,16 +222,16 @@ export default function NewEventModal({
           {error && <p className="text-sm text-[#EF4444]">{error}</p>}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-[#EBEBEB]">
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-[#EBEBEB] flex-shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
           >
             {t('cal.action.cancel', lang)}
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B4AD5] transition-colors"
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B4AD5] transition-colors"
           >
             {t('cal.event.save', lang)}
           </button>

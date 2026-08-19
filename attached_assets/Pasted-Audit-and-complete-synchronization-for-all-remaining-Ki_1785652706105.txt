@@ -1,0 +1,70 @@
+Audit and complete synchronization for all remaining Kivora user data.
+
+Current modules already using Firestore real-time sync:
+- Tasks
+- Calendar events
+- Notes
+- Habits
+- Goals
+- School
+- AI conversations
+- User profile
+- User preferences
+- Appearance settings
+- Notification settings
+
+Do not rewrite these working systems unless a real bug is found.
+
+First, inspect the entire active application and identify every remaining user-facing feature that still uses:
+- localStorage
+- mock data
+- module-level in-memory arrays
+- React-only state
+- simulated delays
+- fake “sync” buttons
+- data that resets after reload
+- data that does not appear on another device
+
+Then implement Firestore persistence and real-time synchronization only for the remaining unsynced user data.
+
+Likely areas to inspect:
+- Notification items / notification history
+- Synchronization settings and last sync status
+- Backup history and backup metadata
+- Export history
+- Dashboard / My Day user-created state
+- Quick notes or recently opened items
+- Any remaining school sub-data
+- Any AI session metadata not yet persisted
+- Any other user-created content found in the codebase
+
+Requirements:
+- Use users/{uid}/... ownership-based Firestore paths.
+- Use one shared store/service per data domain.
+- Use onSnapshot where real-time cross-device updates are appropriate.
+- Preserve existing working UI, localization, types, dialogs, and layouts.
+- Do not upload demo or mock data into Firestore.
+- If Firestore is empty, show the proper empty state.
+- Remove fake synchronization behavior and simulated success states.
+- Do not create duplicate data systems.
+- Do not weaken existing Firestore security.
+- Do not modify unrelated visual design.
+- Prevent duplicate listeners and clean them up on logout/unmount.
+
+Before coding, produce a precise audit list:
+1. feature or module,
+2. current storage method,
+3. whether it persists after reload,
+4. whether it syncs across devices,
+5. proposed Firestore path.
+
+Then implement the remaining synchronization work.
+
+After finishing:
+1. Run typecheck.
+2. List every modified file.
+3. List every new Firestore path.
+4. Show the exact Firestore rules additions.
+5. Explain which localStorage/mock/in-memory systems were removed.
+6. Explain how the Synchronization page now reflects real data.
+7. Stop for manual testing.

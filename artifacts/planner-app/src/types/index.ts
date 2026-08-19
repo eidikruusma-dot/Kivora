@@ -10,6 +10,8 @@ export interface Task {
   time?: string
   completed: boolean
   category?: TaskCategory
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface CalendarEvent {
@@ -63,6 +65,7 @@ export interface UserPreferences {
   startOfWeek: StartOfWeek
   timeFormat: TimeFormat
   dateFormat: DateFormat
+  timezone: string
 }
 
 export interface UserProfile {

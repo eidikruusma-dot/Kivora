@@ -1,5 +1,9 @@
+import { useState, useEffect } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
+import type { AppLang } from '@/lib/languageStore'
+import { t } from '@/lib/translations'
 
 interface ProfileHeaderProps {
   editing: boolean
@@ -7,6 +11,8 @@ interface ProfileHeaderProps {
 
 export default function ProfileHeader({ editing }: ProfileHeaderProps) {
   const navigate = useNavigate()
+  const [lang, setLang] = useState<AppLang>(getLocalLanguage)
+  useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
 
   return (
     <div className="flex items-center justify-between mb-6">
@@ -18,7 +24,7 @@ export default function ProfileHeader({ editing }: ProfileHeaderProps) {
           <ArrowLeft size={18} />
         </button>
         <h1 className="text-xl font-bold text-[#1A1F36]">
-          {editing ? 'Muuda profiili' : 'Minu profiil'}
+          {editing ? t('profile.header.editing', lang) : t('profile.header.view', lang)}
         </h1>
       </div>
     </div>

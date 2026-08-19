@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
 import type { UserPreferences } from '@/types'
-import {
-  getMonthMatrix,
+import { formatEventTime, getMonthMatrix,
   isToday,
   isSameMonth,
   WEEKDAYS_ET,
@@ -50,7 +49,7 @@ export default function MonthView({
   return (
     <div className="flex flex-col">
       {/* Weekday header */}
-      <div className="grid grid-cols-7 border-b border-[#EBEBEB]" style={{ height: '40px' }}>
+      <div className="grid grid-cols-7 border-b border-[#EBEBEB] h-10">
         {(lang === 'en' ? WEEKDAYS_EN_FULL : WEEKDAYS_ET_FULL).map((wd, i) => (
           <div
             key={wd}
@@ -64,7 +63,7 @@ export default function MonthView({
       </div>
 
       {/* Day cells */}
-      <div className="grid grid-rows-6" style={{ minHeight: '420px' }}>
+      <div className="grid grid-rows-6 min-h-[40vh]">
         {weeks.map((week, weekIdx) => (
           <div key={weekIdx} className="grid grid-cols-7" style={{ minHeight: '70px' }}>
             {week.map((day, dayIdx) => {
@@ -107,7 +106,7 @@ export default function MonthView({
                         className="rounded px-1 py-0.5 text-[10px] font-medium text-[#1A1F36] truncate"
                         style={{ backgroundColor: evt.color }}
                       >
-                        {evt.allDay ? evt.title : `${evt.startTime} ${evt.title}`}
+                        {evt.allDay ? evt.title : `${formatEventTime(evt.startTime, preferences.timeFormat)} ${evt.title}`}
                       </div>
                     ))}
                   </div>

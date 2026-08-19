@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { getEffectivePreferences } from '@/lib/userProfile'
 import {
   START_OF_WEEK_LABELS,
@@ -6,6 +7,9 @@ import {
   LANGUAGE_LABELS,
 } from '@/lib/profileConstants'
 import type { UserProfile } from '@/types'
+import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
+import type { AppLang } from '@/lib/languageStore'
+import { t } from '@/lib/translations'
 
 interface PreferencesSectionProps {
   profile: UserProfile
@@ -13,25 +17,28 @@ interface PreferencesSectionProps {
 }
 
 export default function PreferencesSection({ profile, onEdit }: PreferencesSectionProps) {
+  const [lang, setLang] = useState<AppLang>(getLocalLanguage)
+  useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
+
   const prefs = getEffectivePreferences(profile)
 
   const fields = [
-    { label: 'Rakenduse keel', value: LANGUAGE_LABELS[profile.preferredLanguage] || profile.preferredLanguage },
-    { label: 'Ajavöönd', value: profile.timezone || '—', hint: 'Tuvastatud automaatselt' },
-    { label: 'Nädala algus', value: START_OF_WEEK_LABELS[prefs.startOfWeek] || prefs.startOfWeek },
-    { label: 'Kellaaja vorming', value: TIME_FORMAT_LABELS[prefs.timeFormat] || prefs.timeFormat },
-    { label: 'Kuupäeva vorming', value: DATE_FORMAT_LABELS[prefs.dateFormat] || prefs.dateFormat },
+    { label: t('profile.pref.language', lang), value: LANGUAGE_LABELS[profile.preferredLanguage] || profile.preferredLanguage },
+    { label: t('profile.pref.timezone.label', lang), value: profile.timezone || '—', hint: t('profile.pref.timezone.auto', lang) },
+    { label: t('profile.pref.weekStart', lang), value: START_OF_WEEK_LABELS[prefs.startOfWeek] || prefs.startOfWeek },
+    { label: t('profile.pref.timeFormat', lang), value: TIME_FORMAT_LABELS[prefs.timeFormat] || prefs.timeFormat },
+    { label: t('profile.pref.dateFormat', lang), value: DATE_FORMAT_LABELS[prefs.dateFormat] || prefs.dateFormat },
   ]
 
   return (
     <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
       <div className="flex items-center justify-between px-6 py-5 border-b border-[#F0F0F0]">
-        <h2 className="text-base font-semibold text-[#1A1F36]">Eelistused</h2>
+        <h2 className="text-base font-semibold text-[#1A1F36]">{t('profile.pref.title', lang)}</h2>
         <button
           onClick={onEdit}
           className="h-9 px-4 rounded-xl bg-[#6F5AE8] text-white text-sm font-medium flex items-center gap-1.5 hover:bg-[#5B4AD5] transition-colors"
         >
-          Muuda
+          {t('profile.editBtn', lang)}
         </button>
       </div>
       <div className="divide-y divide-[#F0F0F0]">

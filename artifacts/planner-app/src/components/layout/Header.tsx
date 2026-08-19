@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Search, ChevronDown, LogOut, User } from 'lucide-react'
+import { Search, ChevronDown, LogOut, User, Menu } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import Avatar from '@/components/ui/AppAvatar'
 import SearchModal from '@/components/search/SearchModal'
@@ -23,7 +23,11 @@ const PAGE_TITLE_KEYS: Record<string, TranslationKey> = {
   '/app/settings':   'nav.settings',
 }
 
-export default function Header() {
+interface HeaderProps {
+  onMenuToggle: () => void
+}
+
+export default function Header({ onMenuToggle }: HeaderProps) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -59,12 +63,22 @@ export default function Header() {
 
   return (
     <header
-      className="flex-shrink-0 flex items-center justify-between bg-white"
-      style={{ height: '61px', paddingLeft: '30px', paddingRight: '22px' }}
+      className="flex-shrink-0 flex items-center justify-between bg-white h-[61px] pl-4 pr-[22px] lg:pl-[30px]"
     >
-      <h1 className="text-xl font-bold text-[#1A1F36]">{pageTitle}</h1>
+      {/* Left: hamburger (mobile/tablet only) + page title */}
+      <div className="flex items-center gap-2 min-w-0">
+        <button
+          onClick={onMenuToggle}
+          aria-label="Open navigation"
+          className="lg:hidden flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg text-[#94A3B8] hover:text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
+        >
+          <Menu size={20} />
+        </button>
+        <h1 className="text-xl font-bold text-[#1A1F36] truncate">{pageTitle}</h1>
+      </div>
 
-      <div className="flex items-center gap-3">
+      {/* Right: search, notifications, user menu */}
+      <div className="flex items-center gap-3 flex-shrink-0">
         <button
           onClick={() => setSearchOpen(true)}
           className="flex items-center justify-center text-[#94A3B8] hover:text-[#1A1F36] transition-colors"

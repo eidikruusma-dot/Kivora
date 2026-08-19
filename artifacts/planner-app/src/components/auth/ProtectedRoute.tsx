@@ -1,13 +1,31 @@
 import { type ReactNode } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+import { useModules } from '@/lib/modulesStore'
 
-export function ProtectedRoute({ children }: { children: ReactNode }) {
+export function ProtectedRoute({
+  children,
+  skipOnboarding = false,
+}: {
+  children: ReactNode
+  skipOnboarding?: boolean
+}) {
   const { user, loading } = useAuth()
+  const { settings: modules, loading: modulesLoading } = useModules()
+  const location = useLocation()
 
-  if (loading) return <AuthLoading />
+  if (loading || (user?.emailVerified && modulesLoading)) return <AuthLoading />
   if (!user) return <Navigate to="/login" replace />
   if (!user.emailVerified) return <Navigate to="/verify-email" replace />
+
+  // Redirect new users to onboarding (only once, never from /onboarding itself)
+  if (
+    !skipOnboarding &&
+    !modules.onboardingComplete &&
+    location.pathname !== '/onboarding'
+  ) {
+    return <Navigate to="/onboarding" replace />
+  }
 
   return <>{children}</>
 }

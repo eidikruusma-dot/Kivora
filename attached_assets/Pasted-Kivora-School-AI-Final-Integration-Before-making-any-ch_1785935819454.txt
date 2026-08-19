@@ -1,0 +1,243 @@
+Kivora – School & AI Final Integration
+
+Before making any changes, inspect the current architecture and reuse the existing systems. Do not create duplicate implementations or temporary/demo solutions.
+
+This task is to finish the School module and the AI Assistant so they work together as a complete production-ready system.
+
+1. School module synchronization
+
+The School module currently contains duplicated data instead of one synchronized system.
+
+Everything below must use the same underlying data source.
+
+Subjects
+
+Subjects created in the Subjects section must automatically become available everywhere else.
+
+They must populate:
+
+Study Blocks
+Assignments
+Tests
+Exams
+Dashboard statistics
+School overview
+
+The top statistics card showing the number of subjects must always reflect the real number of created subjects.
+
+Currently the dashboard shows 0 subjects while study blocks already contain Mathematics and Estonian.
+
+This is incorrect.
+
+Study Blocks
+
+Study Blocks currently allow typing any subject manually.
+
+Replace this with a searchable dropdown.
+
+The dropdown must list all existing subjects.
+
+Users should still be able to create a new subject if it does not exist.
+
+Do not maintain two separate subject lists.
+
+Assignments
+
+Assignments must no longer use a free-text subject field.
+
+Replace it with the same searchable subject selector.
+
+When creating an assignment the user selects one of the existing subjects.
+
+The assignment automatically belongs to that subject.
+
+Tests
+
+The Test dialog must also use the same subject selector.
+
+Do not require users to manually type the subject again.
+
+Exams
+
+The Exam dialog must use exactly the same subject selector.
+
+2. Calendar improvements inside School
+
+Every dialog that contains a date should use the same calendar picker used elsewhere in Kivora.
+
+Currently some dialogs still use simple date inputs.
+
+Replace them with the existing calendar component.
+
+Do not build another calendar implementation.
+
+3. Study time synchronization
+
+Currently Study Time and Progress are disconnected.
+
+Create a single logical system.
+
+Study Time should automatically calculate from:
+
+scheduled study blocks
+completed study blocks
+optional manual study sessions
+
+Progress should be calculated from actual completed work rather than random percentages.
+
+Assignments, study blocks and completed study sessions should all contribute to learning progress.
+
+The weekly study chart must display real synchronized values.
+
+4. Dashboard synchronization
+
+All School dashboard widgets must update automatically.
+
+These include:
+
+Subjects
+Assignments
+Upcoming tests
+Exams
+Weekly study time
+Learning statistics
+
+No page refresh should ever be required.
+
+5. AI Assistant file support
+
+The AI Assistant currently only accepts text.
+
+It must support real files.
+
+Supported uploads:
+
+PDF
+DOCX
+TXT
+CSV
+XLSX
+JPG
+JPEG
+PNG
+WEBP
+
+Desktop:
+
+drag & drop
+file picker
+
+Tablet:
+
+file picker
+
+Mobile:
+
+files
+gallery
+camera
+AI processing
+
+Uploaded files must become part of the conversation context.
+
+The AI should answer using the uploaded files.
+
+Never generate fake summaries.
+
+If parsing fails, clearly explain that the file could not be processed.
+
+6. Finance AI
+
+Allow uploading:
+
+invoices
+receipts
+bank statements
+budget PDFs
+spreadsheets
+
+The AI may:
+
+analyse spending
+suggest categories
+create a budget draft
+detect recurring payments
+
+The AI must NEVER automatically create transactions.
+
+Always show a confirmation preview before importing anything.
+
+7. School AI
+
+Allow uploading:
+
+study PDFs
+worksheets
+presentations
+screenshots
+DOCX files
+
+The AI should be able to:
+
+summarize
+explain
+create study notes
+generate questions
+build a study plan
+detect assignments
+detect exams
+detect deadlines
+
+If the AI detects a task, test or exam, it should ask:
+
+"I found an assignment/exam in this document. Would you like to add it to Kivora?"
+
+Nothing should ever be created automatically.
+
+8. AI recommendation system
+
+The AI must not generate recommendations immediately for new users.
+
+When the user has insufficient data, show a neutral learning state.
+
+Example:
+
+AI is learning about you
+
+"Kivora is learning your habits, goals, finances, school work and routines. Personalized AI recommendations will become available automatically after enough real usage."
+
+No fake numbers.
+
+No demo suggestions.
+
+No hardcoded recommendations.
+
+No rule-based placeholder tips pretending to be AI.
+
+Once enough real user data exists, the recommendation system may activate automatically.
+
+9. Architecture requirements
+
+Reuse the existing architecture.
+
+Do not duplicate systems.
+
+Do not create demo data.
+
+Do not create hardcoded recommendations.
+
+Keep everything modular.
+
+Desktop, tablet and mobile must all behave consistently.
+
+No unrelated UI should be modified.
+
+Before changing anything, inspect the existing implementation and integrate into the current architecture rather than replacing working systems.
+
+After implementation, provide a complete list of:
+
+modified files
+synchronization improvements
+AI improvements
+remaining issues (if any)
+TypeScript status (must remain error-free).

@@ -100,6 +100,13 @@ async function buildAll() {
       "puppeteer",
       "puppeteer-core",
       "electron",
+      // File-parsing packages used by the AI upload route
+      "pdf-parse",
+      "mammoth",
+      "xlsx",
+      // pdfjs-dist: ESM-only; @napi-rs/canvas: native addon (provides DOMMatrix)
+      "pdfjs-dist",
+      "@napi-rs/canvas",
     ],
     sourcemap: "linked",
     plugins: [

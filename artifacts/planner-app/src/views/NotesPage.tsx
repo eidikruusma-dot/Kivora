@@ -34,6 +34,11 @@ import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
 import type { TranslationKey } from '@/lib/translations'
+import LinkedItemsPanel from '@/components/links/LinkedItemsPanel'
+import { removeLinksForEntity } from '@/lib/entityLinksStore'
+import PostSaveLinkSuggestionsDialog from '@/components/links/PostSaveLinkSuggestionsDialog'
+import AutoLinkToast from '@/components/links/AutoLinkToast'
+import { runAutomaticLinking, type AutoLinkResult } from '@/lib/automaticLinking'
 
 const ICON_MAP = {
   document:    FileText,
@@ -91,6 +96,8 @@ export default function NotesPage() {
   // Create/Edit modal
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [postSave, setPostSave] = useState<{ type: 'note'; id: string } | null>(null)
+  const [autoLink, setAutoLink] = useState<AutoLinkResult | null>(null)
   const [form, setForm] = useState<NoteFormState>(EMPTY_FORM)
   const [formError, setFormError] = useState('')
 
@@ -118,6 +125,15 @@ export default function NotesPage() {
     setMoveMenuId(null)
     setDeleteId(null)
   }, [location.key])
+
+  // Deep-link: open specific note navigated from a linked items panel
+  useEffect(() => {
+    const openId = (location.state as { openId?: string } | null)?.openId
+    if (!openId) return
+    window.history.replaceState({ ...(window.history.state ?? {}), usr: null }, '')
+    const note = notes.find(n => n.id === openId)
+    if (note) setDetailNote(note)
+  }, [location.key]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close menus on outside click / Escape
   useEffect(() => {
@@ -194,7 +210,7 @@ export default function NotesPage() {
     setModalOpen(true)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.title.trim()) {
       setFormError(t('notes.error.title', lang))
       return
@@ -211,7 +227,13 @@ export default function NotesPage() {
         starred: form.starred,
       })
     } else {
-      addNote(form.title, form.content, form.folder, form.starred)
+      const note = await addNote(form.title, form.content, form.folder, form.starred)
+      setPostSave({ type: 'note', id: note.id })
+      runAutomaticLinking('note', note.id, lang, {
+        title: form.title,
+        description: form.content,
+        category: form.folder,
+      }).then((r) => { if (r.linkIds.length > 0) setAutoLink(r) })
     }
     setModalOpen(false)
     setForm(EMPTY_FORM)
@@ -237,13 +259,14 @@ export default function NotesPage() {
   }
 
   const handleDelete = (id: string) => {
+    removeLinksForEntity('note', id)
     deleteNote(id)
     setDeleteId(null)
     setMenuOpenId(null)
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 p-6 max-w-[1400px] mx-auto w-full">
+    <div className="flex flex-col md:flex-row gap-6 p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto w-full">
       {/* Main content */}
       <div className="flex-1 min-w-0 flex flex-col gap-5">
         {/* Page header */}
@@ -284,7 +307,7 @@ export default function NotesPage() {
             className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               activeFolder === 'Kõik'
                 ? 'bg-[#EDE9FB] text-[#6F5AE8]'
-                : 'bg-white text-[#64748B] border border-[#ECECF2] hover:bg-[#F8F7F4] hover:text-[#1A1F36]'
+                : 'notes-category-btn bg-white text-[#64748B] border border-[#ECECF2] hover:bg-[#F8F7F4] hover:text-[#1A1F36]'
             }`}
           >
             {t('notes.all', lang)} ({notes.length})
@@ -296,7 +319,7 @@ export default function NotesPage() {
               className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 activeFolder === f.name
                   ? 'bg-[#EDE9FB] text-[#6F5AE8]'
-                  : 'bg-white text-[#64748B] border border-[#ECECF2] hover:bg-[#F8F7F4] hover:text-[#1A1F36]'
+                  : 'notes-category-btn bg-white text-[#64748B] border border-[#ECECF2] hover:bg-[#F8F7F4] hover:text-[#1A1F36]'
               }`}
             >
               <span className="w-2 h-2 rounded-full" style={{ background: f.iconColor }} />
@@ -308,8 +331,11 @@ export default function NotesPage() {
         {/* Notes grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredNotes.map((note) => {
-            const Icon = ICON_MAP[note.icon]
-            const folder = FOLDER_CONFIG[note.folder]
+            // Guard against Firestore documents that have an unrecognised icon or
+            // folder value (e.g. notes created under an old schema). Fall back to
+            // the default 'Isiklik' / FileText style instead of crashing.
+            const Icon = ICON_MAP[note.icon] ?? FileText
+            const folder = FOLDER_CONFIG[note.folder] ?? FOLDER_CONFIG['Isiklik']
             return (
               <div
                 key={note.id}
@@ -469,7 +495,7 @@ export default function NotesPage() {
       </div>
 
       {/* Right info panel */}
-      <aside className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-4">
+      <aside className="w-full md:w-80 flex-shrink-0 flex flex-col gap-4">
         {/* Distribution card */}
         <div className="bg-white rounded-2xl border border-[#ECECF2] p-5">
           <h3 className="text-sm font-semibold text-[#1A1F36] mb-4">{t('notes.overview.title', lang)}</h3>
@@ -549,14 +575,18 @@ export default function NotesPage() {
           </div>
         </div>
 
-        {/* AI suggestion card */}
-        <div className="bg-gradient-to-br from-[#6F5AE8] to-[#7C6BF0] rounded-2xl p-5 text-white">
-          <div className="flex items-center gap-2 mb-3">
-            <Sparkles size={15} strokeWidth={2} />
-            <h3 className="text-sm font-semibold">{t('notes.ai.title', lang)}</h3>
+        {/* AI learning state — shown until genuine AI-generated recommendations exist */}
+        <div className="bg-white rounded-2xl border border-[#ECECF2] p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles size={14} strokeWidth={1.8} className="text-[#6F5AE8] flex-shrink-0" />
+            <h3 className="text-sm font-semibold text-[#1A1F36]">
+              {lang === 'et' ? 'AI õpib sinu tööharjumusi' : 'AI is learning your workflow'}
+            </h3>
           </div>
-          <p className="text-sm leading-relaxed text-white/90">
-            {t('notes.ai.body', lang)}
+          <p className="text-xs text-[#64748B] leading-relaxed">
+            {lang === 'et'
+              ? 'Kivora AI õpib tundma sinu ülesandeid, harjumusi, eesmärke, kalendrit ja rahakasutust. Kui oled rakendust mõnda aega kasutanud, hakkavad siia ilmuma isikupärastatud soovitused.'
+              : 'Kivora AI is learning your tasks, habits, goals, calendar and finances. Personalized recommendations will appear automatically after enough real activity has been collected.'}
           </p>
         </div>
       </aside>
@@ -569,11 +599,11 @@ export default function NotesPage() {
           onClick={handleCancelForm}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col"
+            className="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#F4F4F0]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#F4F4F0] flex-shrink-0">
               <h2 className="text-base font-semibold text-[#1A1F36]">
                 {editingId ? t('notes.modal.editTitle', lang) : t('notes.modal.addTitle', lang)}
               </h2>
@@ -586,7 +616,7 @@ export default function NotesPage() {
             </div>
 
             {/* Modal body */}
-            <div className="px-5 py-4 flex flex-col gap-4">
+            <div className="px-5 py-4 flex flex-col gap-4 flex-1 overflow-y-auto">
               <div>
                 <label className="block text-xs font-medium text-[#64748B] mb-1.5">
                   {t('notes.modal.titleLabel', lang)} <span className="text-[#E11D48]">*</span>
@@ -662,16 +692,16 @@ export default function NotesPage() {
             </div>
 
             {/* Modal footer */}
-            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#F4F4F0]">
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#F4F4F0] flex-shrink-0">
               <button
                 onClick={handleCancelForm}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
+                className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
               >
                 {t('notes.modal.cancel', lang)}
               </button>
               <button
                 onClick={handleSave}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B48D8] transition-colors shadow-sm"
+                className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B48D8] transition-colors shadow-sm"
               >
                 {t('notes.modal.save', lang)}
               </button>
@@ -688,10 +718,10 @@ export default function NotesPage() {
           onClick={() => setDetailNote(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col"
+            className="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#F4F4F0]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#F4F4F0] flex-shrink-0">
               <h2 className="text-base font-semibold text-[#1A1F36]">{t('notes.modal.viewTitle', lang)}</h2>
               <button
                 onClick={() => setDetailNote(null)}
@@ -700,7 +730,7 @@ export default function NotesPage() {
                 <X size={18} />
               </button>
             </div>
-            <div className="px-5 py-5 flex flex-col gap-4">
+            <div className="px-5 py-5 flex flex-col gap-4 flex-1 overflow-y-auto">
               <div className="flex items-center gap-3">
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center"
@@ -715,9 +745,9 @@ export default function NotesPage() {
                   <h3 className="text-sm font-semibold text-[#1A1F36]">{detailNote.title}</h3>
                   <span
                     className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full mt-1"
-                    style={{ background: FOLDER_CONFIG[detailNote.folder].bg, color: FOLDER_CONFIG[detailNote.folder].color }}
+                    style={{ background: (FOLDER_CONFIG[detailNote.folder] ?? FOLDER_CONFIG['Isiklik']).bg, color: (FOLDER_CONFIG[detailNote.folder] ?? FOLDER_CONFIG['Isiklik']).color }}
                   >
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: FOLDER_CONFIG[detailNote.folder].color }} />
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: (FOLDER_CONFIG[detailNote.folder] ?? FOLDER_CONFIG['Isiklik']).color }} />
                     {getFolderLabel(detailNote.folder, lang)}
                   </span>
                 </div>
@@ -729,20 +759,21 @@ export default function NotesPage() {
                 {detailNote.preview}
               </p>
               <span className="text-xs text-[#94A3B8]">{detailNote.timestamp}</span>
+              <LinkedItemsPanel type="note" entityId={detailNote.id} lang={lang} />
             </div>
-            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#F4F4F0]">
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#F4F4F0] flex-shrink-0">
               <button
                 onClick={() => {
                   openEditModal(detailNote)
                   setDetailNote(null)
                 }}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-[#6F5AE8] bg-[#EDE9FB] hover:bg-[#E0D9F9] transition-colors"
+                className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#6F5AE8] bg-[#EDE9FB] hover:bg-[#E0D9F9] transition-colors"
               >
                 {t('notes.modal.edit', lang)}
               </button>
               <button
                 onClick={() => setDetailNote(null)}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B48D8] transition-colors shadow-sm"
+                className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B48D8] transition-colors shadow-sm"
               >
                 {t('notes.modal.close', lang)}
               </button>
@@ -759,7 +790,7 @@ export default function NotesPage() {
           onClick={() => setDeleteId(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-sm flex flex-col"
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm flex flex-col max-h-[90vh]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-5 py-5 flex flex-col items-center text-center">
@@ -769,16 +800,16 @@ export default function NotesPage() {
               <h3 className="text-base font-semibold text-[#1A1F36] mb-1">{t('notes.deleteConfirm.title', lang)}?</h3>
               <p className="text-sm text-[#64748B]">{t('notes.deleteConfirm.body', lang)}</p>
             </div>
-            <div className="flex items-center justify-center gap-2 px-5 py-4 border-t border-[#F4F4F0]">
+            <div className="flex items-center justify-center gap-2 px-5 py-4 border-t border-[#F4F4F0] flex-shrink-0">
               <button
                 onClick={() => setDeleteId(null)}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
+                className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
               >
                 {t('notes.deleteConfirm.cancel', lang)}
               </button>
               <button
                 onClick={() => handleDelete(deleteId)}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#E11D48] hover:bg-[#BE123C] transition-colors shadow-sm"
+                className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-white bg-[#E11D48] hover:bg-[#BE123C] transition-colors shadow-sm"
               >
                 {t('notes.deleteConfirm.confirm', lang)}
               </button>
@@ -786,6 +817,22 @@ export default function NotesPage() {
           </div>
         </div>
       )}
+    {postSave && (
+      <PostSaveLinkSuggestionsDialog
+        type={postSave.type}
+        entityId={postSave.id}
+        lang={lang}
+        onClose={() => setPostSave(null)}
+      />
+    )}
+    {autoLink && (
+      <AutoLinkToast
+        linkIds={autoLink.linkIds}
+        calendarEventId={autoLink.calendarEventId}
+        lang={lang}
+        onClose={() => setAutoLink(null)}
+      />
+    )}
     </div>
   )
 }

@@ -1,0 +1,166 @@
+Fix ONLY the Money dashboard balance/available-money calculation.
+
+Do NOT change:
+- CSV/XLSX bank import parsing
+- transaction direction logic
+- PDF logic
+- OpenAI
+- Firestore rules
+- imported transaction data
+- pending transaction logic
+
+IMPORTANT PRODUCT MODEL:
+
+The current dashboard incorrectly treats:
+
+monthly income - monthly expenses
+
+as "available money".
+
+That value is MONTHLY NET CASH FLOW, not the user's current available money.
+
+We need to separate these concepts.
+
+1. CURRENT ACCOUNT BALANCE
+
+If imported CSV/XLSX contains a reliable running balance column, derive the current account balance from the newest POSTED transaction's balance.
+
+Do not use pending/reserved transactions for the current booked balance.
+
+Do not sum income/expenses from zero to invent a current balance.
+
+If no reliable balance exists, currentAccountBalance must be unavailable/null rather than fabricated.
+
+2. MONTHLY CASH FLOW
+
+Calculate separately:
+
+monthlyNetCashFlow =
+monthlyIncome - monthlyExpenses
+
+This can be positive or negative.
+
+Display it as a separate metric such as:
+
+ET: "Kuu rahavoog"
+EN: "Monthly cash flow"
+
+Do NOT label this "Saadaval raha".
+
+3. AVAILABLE MONEY
+
+Available money should represent what the user can realistically still use.
+
+Base formula:
+
+availableMoney =
+currentAccountBalance
+- unpaid/upcoming obligations
+- explicitly reserved/planned savings
+
+Only subtract values that are actually represented by existing Kivora data.
+
+Do NOT subtract already-posted expenses again.
+
+Do NOT double-count imported transactions.
+
+If currentAccountBalance is unavailable, do not fabricate availableMoney from monthly income/expenses.
+
+4. SAVINGS / INTERNAL TRANSFERS
+
+Do not change transaction classification in this task.
+
+Keep savings handling separate from normal monthly expenses where the existing model supports it.
+
+5. DASHBOARD UI
+
+Review the Money dashboard cards and monthly plan section.
+
+The UI should clearly distinguish:
+
+- Current account balance
+- This month's income
+- This month's expenses
+- Monthly cash flow
+- Savings
+- Available to use
+
+Do not show the same income-expense calculation under multiple misleading labels.
+
+If the existing layout cannot show all six without becoming cluttered, preserve the current layout but prioritize:
+- Current balance
+- Monthly income
+- Monthly expenses
+- Available to use
+
+and show monthly cash flow in the monthly-plan/details area.
+
+6. CSV BALANCE SUPPORT
+
+Inspect the existing CSV parser.
+
+If a balance column is already detected, ensure the canonical imported transaction preserves that balance so the dashboard can derive the newest posted balance.
+
+If the parser currently detects balance but discards it during normalization, fix ONLY that data propagation.
+
+Do not use any real user bank data in code, tests, prompts, logs, or hardcoded values.
+
+7. SYNTHETIC TESTS
+
+Add tests using synthetic values only proving:
+
+A)
+opening balance = 500
+income = 100
+expenses = 200
+newest balance = 400
+
+currentAccountBalance must be 400
+monthlyNetCashFlow must be -100
+
+It must NOT claim available money = -100.
+
+B)
+current balance = 400
+upcoming unpaid obligations = 50
+planned savings = 100
+
+availableMoney = 250
+
+C)
+no balance information:
+currentAccountBalance = null
+availableMoney must not be fabricated from income - expenses
+
+D)
+already-posted expenses are not subtracted twice.
+
+E)
+newest posted transaction determines current balance, not the first CSV row.
+
+F)
+pending transaction does not replace the newest posted account balance.
+
+8. RUN
+
+pnpm exec tsc --noEmit
+pnpm run test:parseBankCsv
+pnpm run build
+
+Run any new Money calculation test suite you add.
+
+Do not deploy automatically.
+
+FINAL REPORT:
+- old available-money formula
+- new current-balance source
+- monthly cash-flow formula
+- available-money formula
+- how upcoming obligations are handled
+- how savings are handled
+- how missing balance is handled
+- test results
+- TypeScript result
+- build result
+
+Use synthetic data only.

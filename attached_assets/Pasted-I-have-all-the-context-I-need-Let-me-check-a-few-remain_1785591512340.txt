@@ -1,0 +1,43 @@
+I have all the context I need. Let me check a few remaining details before coding.
+
+
+4 actions
+Now I have everything I need. Let me implement all changes in parallel — types/index.ts, userProfile.ts, translations.ts (the two dt.dateFormat.dmy2 values), and then the two page rewrites.
+
+
+5 actions
+Now rewrite both page files in parallel.
+
+
+6 actions
+Typecheck clean. Here's what was changed and how the system now works.
+
+Modified files (5)
+File	Change
+src/types/index.ts	Added timezone: string to UserPreferences
+src/lib/userProfile.ts	Added timezone to DEFAULT_PREFERENCES; getEffectivePreferences() now returns timezone from profile.timezone
+src/lib/translations.ts	Updated dt.dateFormat.dmy2 — ET: "Kuu/Päev/Aasta (USA)", EN: "Month/Day/Year (US)"
+src/views/settings/KuupaevJaAegPage.tsx	Full data-layer rewrite — loads from Firestore, saves via updateUserPreferences, localStorage migration on first load, dirty-state Save button, Loader spinner
+src/views/CalendarPage.tsx	Removed hardcoded DEFAULT_PREFERENCES; loads user profile from Firestore on mount; passes live preferences to all calendar views
+Which pages now consume the shared Firestore preferences
+CalendarPage → all child calendar views:
+
+WeekView — receives preferences.startOfWeek (week column layout) and preferences.timeFormat (event time labels)
+MonthView — receives preferences.startOfWeek (which day starts the grid columns)
+DayView — receives preferences.timeFormat
+AgendaView — receives preferences (has it available for future date formatting)
+MiniCalendar — receives preferences.startOfWeek directly
+KuupaevJaAegPage (Date & Time Settings): reads from and writes to the same Firestore document. The live preview widget reflects exactly what will be applied app-wide.
+
+ProfilePage → PreferencesEditForm: unchanged — already wrote to the same Firestore path. Both settings entry points now write to the same document; whichever one the user saves last wins.
+
+Notes
+Timezone in new Date() calls: JavaScript Date objects are always UTC-based and rendered in the browser's OS timezone. The saved timezone preference is now available in preferences.timezone throughout the calendar, but making event times timezone-aware (e.g. displaying a 14:00 event as 16:00 in a different zone) would require refactoring the calendar event time model — that's a separate task.
+Legacy migration: if a user has kivora:datetime in localStorage and has never explicitly saved Profile preferences, the old values are pre-filled in the form on first open. Saving once writes to Firestore and removes the localStorage key.
+Ready for manual testing.
+
+
+Worked for 6 minutes
+
+Checkpoint made
+3 minutes ago

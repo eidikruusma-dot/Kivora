@@ -1,7 +1,13 @@
-import { useState, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
-import AllExamsModal, { type ExamItem } from '@/components/school/AllExamsModal'
-import ScheduleTab, { type ScheduleMode, type ScheduleLesson } from '@/components/school/ScheduleTab'
+import { useState, useEffect, useMemo } from "react";
+import { useIsDark, darkBg, darkText } from "@/lib/themeColors";
+import { useNavigate, useLocation } from "react-router-dom";
+import AllExamsModal, {
+  type ExamItem,
+} from "@/components/school/AllExamsModal";
+import ScheduleTab, {
+  type ScheduleMode,
+  type ScheduleLesson,
+} from "@/components/school/ScheduleTab";
 import {
   BookOpen,
   CheckCircle,
@@ -23,408 +29,667 @@ import {
   Pencil,
   Trash2,
   Check,
+  CheckSquare,
   X,
   Plus,
   User as UserIcon,
   MapPin,
-} from 'lucide-react'
-import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
-import type { AppLang } from '@/lib/languageStore'
-import { t as tr } from '@/lib/translations'
+} from "lucide-react";
+import { subscribeToLanguage, getLocalLanguage } from "@/lib/languageStore";
+import type { AppLang } from "@/lib/languageStore";
+import { t as tr } from "@/lib/translations";
+import { useAuth } from "@/context/AuthContext";
+import { subscribeSettings, saveSettings } from "@/lib/settingsStore";
+import {
+  useSchoolTasks,
+  useSchoolExams,
+  useSchoolSubjectsFromLessons,
+  useSchoolLessons,
+  addSchoolTask,
+  updateSchoolTask as storeUpdateSchoolTask,
+  deleteSchoolTask as storeDeleteSchoolTask,
+  markSchoolTaskDone as storeMarkSchoolTaskDone,
+  markSchoolTaskUndone as storeMarkSchoolTaskUndone,
+  toggleSchoolTaskPart as storeToggleSchoolTaskPart,
+  addSchoolExam,
+  updateSchoolExam as storeUpdateSchoolExam,
+  deleteSchoolExam as storeDeleteSchoolExam,
+  addSchoolSubject,
+  deleteSchoolSubject as storeDeleteSchoolSubject,
+  addSchoolLesson,
+  updateSchoolLesson as storeUpdateSchoolLesson,
+  deleteSchoolLesson as storeDeleteSchoolLesson,
+} from "@/lib/schoolStore";
+import {
+  addTask as tasksStoreAddTask,
+  updateTask as tasksStoreUpdateTask,
+  deleteTask as tasksStoreDeleteTask,
+  getAllTasks,
+} from "@/lib/tasksStore";
+import type { Task as GlobalTask } from "@/types";
+import LinkedItemsPanel from "@/components/links/LinkedItemsPanel";
+import { encodeSchoolId, decodeSchoolId } from "@/types/entityLinks";
+import { removeLinksForEntity } from "@/lib/entityLinksStore";
+import PostSaveLinkSuggestionsDialog from "@/components/links/PostSaveLinkSuggestionsDialog";
+import AutoLinkToast from "@/components/links/AutoLinkToast";
+import { runAutomaticLinking, type AutoLinkResult } from "@/lib/automaticLinking";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type TabId = 'tunniplaan' | 'uesanded' | 'kontrolltood' | 'eksamid' | 'ained' | 'ulevaade'
+type TabId =
+  | "tunniplaan"
+  | "uesanded"
+  | "kontrolltood"
+  | "eksamid"
+  | "ained"
+  | "ulevaade";
 
 interface TaskPart {
-  id: string
-  label: string
-  done: boolean
+  id: string;
+  label: string;
+  done: boolean;
 }
 
 interface Task {
-  id: number
-  subject: string
-  subjectColor: string
-  subjectBg: string
-  subjectIcon: React.ReactNode
-  title: string
-  type: string
-  deadlineLabel: string
-  deadline: string
-  progress: number
-  moodleUrl: string
-  prevProgress?: number
-  parts?: TaskPart[]
+  id: number;
+  subject: string;
+  subjectId?: string;
+  subjectColor: string;
+  subjectBg: string;
+  subjectIcon: React.ReactNode;
+  title: string;
+  type: string;
+  deadlineLabel: string;
+  deadline: string;
+  progress: number;
+  moodleUrl: string;
+  prevProgress?: number;
+  parts?: TaskPart[];
+  linkedTaskId?: string;
 }
 
-type TaskStatus = 'tegemata' | 'pooleli' | 'tehtud'
+type TaskStatus = "tegemata" | "pooleli" | "tehtud";
+
+const TASK_TYPE_VALUES = [
+  "homework",
+  "essay",
+  "lab_report",
+  "presentation",
+  "reading",
+  "project",
+  "worksheet",
+  "research",
+  "other",
+] as const;
+
+type TaskTypeValue = (typeof TASK_TYPE_VALUES)[number];
+
+function getTaskTypeLabel(type: string, lang: AppLang): string {
+  const key = `school.taskType.${type}` as Parameters<typeof tr>[0];
+  // Only translate known internal values; fall back to the raw string for legacy data
+  if ((TASK_TYPE_VALUES as readonly string[]).includes(type)) {
+    return tr(key, lang);
+  }
+  return type;
+}
 
 function computePartsProgress(parts: TaskPart[]): number {
-  if (!parts || parts.length === 0) return -1
-  const done = parts.filter((p) => p.done).length
-  return Math.round((done / parts.length) * 100)
+  if (!parts || parts.length === 0) return -1;
+  const done = parts.filter((p) => p.done).length;
+  return Math.round((done / parts.length) * 100);
 }
 
 function statusFromProgress(p: number): TaskStatus {
-  if (p >= 100) return 'tehtud'
-  if (p > 0) return 'pooleli'
-  return 'tegemata'
+  if (p >= 100) return "tehtud";
+  if (p > 0) return "pooleli";
+  return "tegemata";
 }
 
 function getStatusLabels(lang: AppLang): Record<TaskStatus, string> {
   return {
-    tegemata: tr('school.task.status.tegemata', lang),
-    pooleli:  tr('school.task.status.pooleli',  lang),
-    tehtud:   tr('school.task.status.tehtud',   lang),
-  }
+    tegemata: tr("school.task.status.tegemata", lang),
+    pooleli: tr("school.task.status.pooleli", lang),
+    tehtud: tr("school.task.status.tehtud", lang),
+  };
 }
 
 const STATUS_STYLES: Record<TaskStatus, { bg: string; color: string }> = {
-  tegemata: { bg: '#F1F5F9', color: '#64748B' },
-  pooleli: { bg: '#FEF9C3', color: '#854D0E' },
-  tehtud: { bg: '#DCFCE7', color: '#15803D' },
-}
+  tegemata: { bg: "#F1F5F9", color: "#64748B" },
+  pooleli: { bg: "#FEF9C3", color: "#854D0E" },
+  tehtud: { bg: "#DCFCE7", color: "#15803D" },
+};
 
 const MONTHS_EST: Record<string, number> = {
-  jaanuar: 0, veebruar: 1, märts: 2, aprill: 3, mai: 4, juuni: 5,
-  juuli: 6, august: 7, september: 8, oktoober: 9, november: 10, detsember: 11,
-}
+  jaanuar: 0,
+  veebruar: 1,
+  märts: 2,
+  aprill: 3,
+  mai: 4,
+  juuni: 5,
+  juuli: 6,
+  august: 7,
+  september: 8,
+  oktoober: 9,
+  november: 10,
+  detsember: 11,
+};
 
 function parseDeadline(s: string): number {
-  const m = s.match(/(\d+)\.\s+(\w+)\s+(\d+)/)
-  if (!m) return 0
-  return new Date(parseInt(m[3]), MONTHS_EST[m[2].toLowerCase()] ?? 0, parseInt(m[1])).getTime()
+  // ISO YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const d = new Date(s + "T00:00:00");
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  }
+  const m = s.match(/(\d+)\.\s+(\w+)\s+(\d+)/);
+  if (!m) return 0;
+  return new Date(
+    parseInt(m[3]),
+    MONTHS_EST[m[2].toLowerCase()] ?? 0,
+    parseInt(m[1]),
+  ).getTime();
+}
+
+function isoToDisplay(iso: string): string {
+  try {
+    const d = new Date(iso + "T00:00:00");
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString("et-EE", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
 }
 
 function deadlineToLabel(deadline: string, lang: AppLang): string {
-  const m = deadline.match(/(\d+\.\s+\w+)/)
-  return m ? tr('school.deadline.prefix', lang) + m[1] : tr('school.deadline.prefix', lang) + deadline
+  if (/^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
+    return tr("school.deadline.prefix", lang) + isoToDisplay(deadline);
+  }
+  const m = deadline.match(/(\d+\.\s+\w+)/);
+  return m
+    ? tr("school.deadline.prefix", lang) + m[1]
+    : tr("school.deadline.prefix", lang) + deadline;
 }
 
 function computeDaysLeft(dateStr: string): number {
-  const ts = parseDeadline(dateStr)
-  if (!ts) return 0
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return Math.ceil((ts - today.getTime()) / (1000 * 60 * 60 * 24))
+  const ts = parseDeadline(dateStr);
+  if (!ts) return 0;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.ceil((ts - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 interface Subject {
-  id: string
-  name: string
-  teacher?: string
-  room?: string
-  color: string
-  bg: string
-  icon: React.ReactNode
+  id: string;
+  name: string;
+  teacher?: string;
+  room?: string;
+  color: string;
+  bg: string;
+  icon: React.ReactNode;
 }
 
 interface Exam {
-  id: number
-  subject: string
-  title: string
-  date: string
-  daysLeft: number
-  type: 'kontrolltöö' | 'eksam'
-  status: 'ootel' | 'tehtud'
-  iconBg: string
-  iconColor: string
-  notes?: string
-  moodleUrl?: string
-  time?: string
-  location?: string
+  id: number;
+  subject: string;
+  subjectId?: string;
+  title: string;
+  date: string;
+  daysLeft: number;
+  type: "kontrolltöö" | "eksam";
+  status: "ootel" | "tehtud";
+  iconBg: string;
+  iconColor: string;
+  notes?: string;
+  moodleUrl?: string;
+  time?: string;
+  location?: string;
 }
-
-
 
 // ── Mock data ──────────────────────────────────────────────────────────────
 
 const TASKS: Task[] = [
   {
     id: 1,
-    subject: 'Matemaatika',
-    subjectColor: '#6F5AE8',
-    subjectBg: '#EDE9FB',
+    subject: "Mathematics",
+    subjectColor: "#6F5AE8",
+    subjectBg: "#EDE9FB",
     subjectIcon: <BookOpen size={16} strokeWidth={1.8} />,
-    title: 'Võrrandid lk 45–48',
-    type: 'Kodutöö',
-    deadlineLabel: 'Tähtaeg: 28. juuli',
-    deadline: '28. juuli 2026',
+    title: "Equations pp. 45-48",
+    type: "Homework",
+    deadlineLabel: deadlineToLabel("28. july 2026", getLocalLanguage()),
+    deadline: "28. juuly 2026",
     progress: 60,
-    moodleUrl: '#',
+    moodleUrl: "#",
     parts: [
-      { id: 'p1-1', label: 'Loe peatükk läbi', done: true },
-      { id: 'p1-2', label: 'Lahenda ülesanded 1–5', done: true },
-      { id: 'p1-3', label: 'Kontrolli vastuseid', done: false },
-      { id: 'p1-4', label: 'Esita Moodles', done: false },
+      { id: "p1-1", label: "Loe peatükk läbi", done: true },
+      { id: "p1-2", label: "Lahenda ülesanded 1–5", done: true },
+      { id: "p1-3", label: "Kontrolli vastuseid", done: false },
+      { id: "p1-4", label: "Esita Moodles", done: false },
     ],
   },
   {
     id: 2,
-    subject: 'Keemia',
-    subjectColor: '#16A34A',
-    subjectBg: '#DCFCE7',
+    subject: "Chemistry",
+    subjectColor: "#16A34A",
+    subjectBg: "#DCFCE7",
     subjectIcon: <FlaskConical size={16} strokeWidth={1.8} />,
-    title: 'Laboriaruanne: Happed ja alused',
-    type: 'Laboriaruanne',
-    deadlineLabel: 'Tähtaeg: 30. juuli',
-    deadline: '30. juuli 2026',
+    title: "Laboratory report: acids and bases",
+    type: "Laboratory report",
+    deadlineLabel: deadlineToLabel("30. july 2026", getLocalLanguage()),
+    deadline: "30. juul 2026",
     progress: 30,
-    moodleUrl: '#',
+    moodleUrl: "#",
   },
   {
     id: 3,
-    subject: 'Eesti keel',
-    subjectColor: '#CA8A04',
-    subjectBg: '#FEF9C3',
+    subject: "Estonian language",
+    subjectColor: "#CA8A04",
+    subjectBg: "#FEF9C3",
     subjectIcon: <MessageSquare size={16} strokeWidth={1.8} />,
-    title: 'Arutlus: tehnoloogia mõju',
-    type: 'Kirjalik töö',
-    deadlineLabel: 'Tähtaeg: 1. august',
-    deadline: '1. august 2026',
+    title: "Discussion: the impact of technology",
+    type: "Written work",
+    deadlineLabel: deadlineToLabel("1. august 2026", getLocalLanguage()),
+    deadline: "1. august 2026",
     progress: 0,
-    moodleUrl: '#',
+    moodleUrl: "#",
   },
   {
     id: 4,
-    subject: 'Ajalugu',
-    subjectColor: '#DC2626',
-    subjectBg: '#FEE2E2',
+    subject: "History",
+    subjectColor: "#DC2626",
+    subjectBg: "#FEE2E2",
     subjectIcon: <Globe size={16} strokeWidth={1.8} />,
-    title: 'Eesti Vabariik 1918–1940 kokkuvõte',
-    type: 'Kodutöö',
-    deadlineLabel: 'Tähtaeg: 5. august',
-    deadline: '5. august 2026',
+    title: "Republic of Estonia 1918-1940 summary",
+    type: "Homework",
+    deadlineLabel: deadlineToLabel("5. august 2026", getLocalLanguage()),
+    deadline: "5. august 2026",
     progress: 15,
-    moodleUrl: '#',
+    moodleUrl: "#",
   },
-]
+];
 
 const INITIAL_SUBJECTS: Subject[] = [
-  { id: 'sub-1', name: 'Matemaatika', teacher: 'M. Tamm', room: 'Ruum 201', color: '#6F5AE8', bg: '#EDE9FB', icon: <BookOpen size={16} strokeWidth={1.8} /> },
-  { id: 'sub-2', name: 'Keemia',      teacher: 'A. Mets', room: 'Labor 2',  color: '#16A34A', bg: '#DCFCE7', icon: <FlaskConical size={16} strokeWidth={1.8} /> },
-  { id: 'sub-3', name: 'Eesti keel',  teacher: 'K. Kask', room: 'Ruum 203', color: '#CA8A04', bg: '#FEF9C3', icon: <MessageSquare size={16} strokeWidth={1.8} /> },
-  { id: 'sub-4', name: 'Ajalugu',     teacher: 'R. Vain', room: 'Ruum 204', color: '#DC2626', bg: '#FEE2E2', icon: <Globe size={16} strokeWidth={1.8} /> },
-  { id: 'sub-5', name: 'Füüsika',     teacher: 'P. Oja',  room: 'Ruum 105', color: '#2563EB', bg: '#EFF6FF', icon: <HardDrive size={16} strokeWidth={1.8} /> },
-]
+  {
+    id: "sub-1",
+    name: "Matemaatika",
+    teacher: "M. Tamm",
+    room: "Ruum 201",
+    color: "#6F5AE8",
+    bg: "#EDE9FB",
+    icon: <BookOpen size={16} strokeWidth={1.8} />,
+  },
+  {
+    id: "sub-2",
+    name: "Keemia",
+    teacher: "A. Mets",
+    room: "Labor 2",
+    color: "#16A34A",
+    bg: "#DCFCE7",
+    icon: <FlaskConical size={16} strokeWidth={1.8} />,
+  },
+  {
+    id: "sub-3",
+    name: "Eesti keel",
+    teacher: "K. Kask",
+    room: "Ruum 203",
+    color: "#CA8A04",
+    bg: "#FEF9C3",
+    icon: <MessageSquare size={16} strokeWidth={1.8} />,
+  },
+  {
+    id: "sub-4",
+    name: "Ajalugu",
+    teacher: "R. Vain",
+    room: "Ruum 204",
+    color: "#DC2626",
+    bg: "#FEE2E2",
+    icon: <Globe size={16} strokeWidth={1.8} />,
+  },
+  {
+    id: "sub-5",
+    name: "Füüsika",
+    teacher: "P. Oja",
+    room: "Ruum 105",
+    color: "#2563EB",
+    bg: "#EFF6FF",
+    icon: <HardDrive size={16} strokeWidth={1.8} />,
+  },
+];
 
 const INITIAL_EXAMS: Exam[] = [
-  { id: 1, subject: 'Matemaatika', title: 'Matemaatika kontrolltöö', date: '4. august 2026',  daysLeft: 8,  type: 'kontrolltöö', status: 'ootel', iconBg: '#FEF9C3', iconColor: '#CA8A04' },
-  { id: 2, subject: 'Keemia',      title: 'Keemia kontrolltöö',      date: '11. august 2026', daysLeft: 15, type: 'kontrolltöö', status: 'ootel', iconBg: '#DCFCE7', iconColor: '#16A34A' },
-  { id: 3, subject: 'Ajalugu',     title: 'Ajalugu eksam',            date: '22. august 2026', daysLeft: 26, type: 'eksam',       status: 'ootel', iconBg: '#FEE2E2', iconColor: '#DC2626' },
-]
+  {
+    id: 1,
+    subject: "Matemaatika",
+    title: "Matemaatika kontrolltöö",
+    date: "4. august 2026",
+    daysLeft: 8,
+    type: "kontrolltöö",
+    status: "ootel",
+    iconBg: "#FEF9C3",
+    iconColor: "#CA8A04",
+  },
+  {
+    id: 2,
+    subject: "Keemia",
+    title: "Keemia kontrolltöö",
+    date: "11. august 2026",
+    daysLeft: 15,
+    type: "kontrolltöö",
+    status: "ootel",
+    iconBg: "#DCFCE7",
+    iconColor: "#16A34A",
+  },
+  {
+    id: 3,
+    subject: "Ajalugu",
+    title: "Ajalugu eksam",
+    date: "22. august 2026",
+    daysLeft: 26,
+    type: "eksam",
+    status: "ootel",
+    iconBg: "#FEE2E2",
+    iconColor: "#DC2626",
+  },
+];
 
+// All hours are 0 — study time is tracked by real user activity, not seeded with demo data.
 const STUDY_HOURS: { day: string; hours: number; label: string }[] = [
-  { day: 'E', hours: 3.0,  label: '3h' },
-  { day: 'T', hours: 2.5,  label: '2h 30m' },
-  { day: 'K', hours: 4.0,  label: '4h' },
-  { day: 'N', hours: 3.0,  label: '3h' },
-  { day: 'R', hours: 2.0,  label: '2h' },
-  { day: 'L', hours: 2.0,  label: '2h' },
-  { day: 'P', hours: 2.0,  label: '2h' },
-]
+  { day: "E", hours: 0, label: "0h" },
+  { day: "T", hours: 0, label: "0h" },
+  { day: "K", hours: 0, label: "0h" },
+  { day: "N", hours: 0, label: "0h" },
+  { day: "R", hours: 0, label: "0h" },
+  { day: "L", hours: 0, label: "0h" },
+  { day: "P", hours: 0, label: "0h" },
+];
 
-const MAX_HOURS = 4
+const MAX_HOURS = 4;
+
+// ── Study hours computation from scheduled lessons ─────────────────────────
+// Maps the ET weekday names stored in ScheduleLesson.day to the short day
+// labels used by the chart, then sums hours from startTime/endTime pairs.
+function computeStudyHoursFromLessons(
+  lessons: ScheduleLesson[],
+): { day: string; hours: number; label: string }[] {
+  const DAY_MAP = [
+    { et: "Esmaspäev", short: "E" },
+    { et: "Teisipäev", short: "T" },
+    { et: "Kolmapäev", short: "K" },
+    { et: "Neljapäev", short: "N" },
+    { et: "Reede",     short: "R" },
+    { et: "Laupäev",   short: "L" },
+    { et: "Pühapäev",  short: "P" },
+  ];
+  const acc: Record<string, number> = {};
+  DAY_MAP.forEach((d) => { acc[d.short] = 0; });
+  for (const l of lessons) {
+    if (!l.day || !l.startTime || !l.endTime) continue;
+    const dayInfo = DAY_MAP.find((d) => d.et === l.day);
+    if (!dayInfo) continue;
+    const [sh, sm] = l.startTime.split(":").map(Number);
+    const [eh, em] = l.endTime.split(":").map(Number);
+    if ([sh, sm, eh, em].some(isNaN)) continue;
+    const hrs = ((eh * 60 + em) - (sh * 60 + sm)) / 60;
+    if (hrs > 0) acc[dayInfo.short] += hrs;
+  }
+  return DAY_MAP.map((d) => {
+    const h = Math.round(acc[d.short] * 10) / 10;
+    return { day: d.short, hours: h, label: h > 0 ? `${h}h` : "0h" };
+  });
+}
 
 // ── Progress ring ──────────────────────────────────────────────────────────
 
 function ProgressRing({ pct, color }: { pct: number; color: string }) {
-  const r = 18
-  const circ = 2 * Math.PI * r
-  const dash = (pct / 100) * circ
+  const r = 18;
+  const circ = 2 * Math.PI * r;
+  const dash = (pct / 100) * circ;
   return (
     <svg width="44" height="44" viewBox="0 0 44 44" className="-rotate-90">
-      <circle cx="22" cy="22" r={r} fill="none" stroke="#E9E9F0" strokeWidth="3.5" />
       <circle
-        cx="22" cy="22" r={r}
+        cx="22"
+        cy="22"
+        r={r}
         fill="none"
-        stroke={pct === 0 ? '#E9E9F0' : color}
+        stroke="#E9E9F0"
+        strokeWidth="3.5"
+        className="kv-chart-track"
+      />
+      <circle
+        cx="22"
+        cy="22"
+        r={r}
+        fill="none"
+        stroke={pct === 0 ? "#E9E9F0" : color}
         strokeWidth="3.5"
         strokeLinecap="round"
         strokeDasharray={`${dash} ${circ}`}
       />
     </svg>
-  )
+  );
 }
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
 
-
 // ── Main component ─────────────────────────────────────────────────────────
 
 export default function SchoolPage() {
-  const [lang, setLang] = useState<AppLang>(getLocalLanguage)
-  useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
+  const [lang, setLang] = useState<AppLang>(getLocalLanguage);
+  useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), []);
 
   const TABS: { id: TabId; label: string }[] = [
-    { id: 'tunniplaan',   label: tr('school.tab.tunniplaan',   lang) },
-    { id: 'uesanded',     label: tr('school.tab.uesanded',     lang) },
-    { id: 'kontrolltood', label: tr('school.tab.kontrolltood', lang) },
-    { id: 'eksamid',      label: tr('school.tab.eksamid',      lang) },
-    { id: 'ained',        label: tr('school.tab.ained',        lang) },
-    { id: 'ulevaade',     label: tr('school.tab.ulevaade',     lang) },
-  ]
+    { id: "tunniplaan", label: tr("school.tab.tunniplaan", lang) },
+    { id: "uesanded", label: tr("school.tab.uesanded", lang) },
+    { id: "kontrolltood", label: tr("school.tab.kontrolltood", lang) },
+    { id: "eksamid", label: tr("school.tab.eksamid", lang) },
+    { id: "ained", label: tr("school.tab.ained", lang) },
+    { id: "ulevaade", label: tr("school.tab.ulevaade", lang) },
+  ];
 
-  const location = useLocation()
-  const [activeTab, setActiveTab] = useState<TabId>('uesanded')
-  const [tasks, setTasks] = useState<Task[]>(TASKS)
-  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null)
-  const selectedTask = tasks.find((t) => t.id === selectedTaskId) ?? null
-  const [editingTask, setEditingTask] = useState<Task | null>(null)
-  const [addingTask, setAddingTask] = useState(false)
-  const [exams, setExams] = useState<Exam[]>(INITIAL_EXAMS)
-  const [showAllExams, setShowAllExams] = useState(false)
-  const [addingExam, setAddingExam] = useState(false)
-  const [selectedExam, setSelectedExam] = useState<Exam | null>(null)
-  const [editingExam, setEditingExam] = useState<Exam | null>(null)
-  const [addingEksam, setAddingEksam] = useState(false)
-  const [selectedEksam, setSelectedEksam] = useState<Exam | null>(null)
-  const [editingEksam, setEditingEksam] = useState<Exam | null>(null)
-  const [subjects, setSubjects] = useState<Subject[]>(INITIAL_SUBJECTS)
-  const [addingSubject, setAddingSubject] = useState(false)
-  const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null)
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<TabId>("uesanded");
+  const tasks = useSchoolTasks();
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const selectedTask = tasks.find((t) => t.id === selectedTaskId) ?? null;
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [addingTask, setAddingTask] = useState(false);
+  const exams = useSchoolExams();
+  const [showAllExams, setShowAllExams] = useState(false);
+  const [addingExam, setAddingExam] = useState(false);
+  const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
+  const [editingExam, setEditingExam] = useState<Exam | null>(null);
+  const [addingEksam, setAddingEksam] = useState(false);
+  const [selectedEksam, setSelectedEksam] = useState<Exam | null>(null);
+  const [editingEksam, setEditingEksam] = useState<Exam | null>(null);
+  const subjects = useSchoolSubjectsFromLessons();
+  const [addingSubject, setAddingSubject] = useState(false);
+  const [postSave, setPostSave] = useState<{ type: 'school'; id: string } | null>(null);
+  const [autoLink, setAutoLink] = useState<AutoLinkResult | null>(null);
+  const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
+  const [quickAddSubject, setQuickAddSubject] = useState<string>("");
+  const [confirmDeleteSubjectId, setConfirmDeleteSubjectId] = useState<string | null>(null);
   const [scheduleMode, setScheduleModeState] = useState<ScheduleMode>(() => {
     try {
-      const saved = localStorage.getItem('kivora_schedule_mode')
-      if (saved === 'traditional' || saved === 'elearning' || saved === 'none') return saved
+      const saved = localStorage.getItem("kivora_schedule_mode");
+      if (saved === "traditional" || saved === "elearning" || saved === "none")
+        return saved;
     } catch {}
-    return 'traditional'
-  })
+    return "traditional";
+  });
   const setScheduleMode = (mode: ScheduleMode) => {
-    setScheduleModeState(mode)
-    try { localStorage.setItem('kivora_schedule_mode', mode) } catch {}
-  }
-  const [scheduleLessons, setScheduleLessons] = useState<ScheduleLesson[]>([
-    { id: 's1', subject: 'Matemaatika', day: 'Esmaspäev', startTime: '08:00', endTime: '08:45', room: 'Ruum 201', teacher: 'M. Tamm', dotColor: '#6F5AE8', cardBg: '#EDE9FB' },
-    { id: 's2', subject: 'Eesti keel',  day: 'Esmaspäev', startTime: '09:00', endTime: '09:45', room: 'Ruum 203', teacher: 'K. Kask', dotColor: '#16A34A', cardBg: '#F0FDF4' },
-    { id: 's3', subject: 'Füüsika',     day: 'Esmaspäev', startTime: '10:00', endTime: '10:45', room: 'Ruum 105', teacher: 'P. Oja',  dotColor: '#CA8A04', cardBg: '#FEFCE8' },
-    { id: 's4', subject: 'Keemia',      day: 'Esmaspäev', startTime: '11:00', endTime: '11:45', room: 'Labor 2',  teacher: 'A. Mets', dotColor: '#DC2626', cardBg: '#FFF1F2' },
-    { id: 's5', subject: 'Ajalugu',     day: 'Esmaspäev', startTime: '12:00', endTime: '12:45', room: 'Ruum 204', teacher: 'R. Vain', dotColor: '#2563EB', cardBg: '#EFF6FF' },
-  ])
+    setScheduleModeState(mode);
+    try {
+      localStorage.setItem("kivora_schedule_mode", mode);
+    } catch {}
+  };
+  const scheduleLessons = useSchoolLessons();
+
+  // Compute real study hours from scheduled lessons (startTime/endTime pairs)
+  const liveStudyHours = useMemo(
+    () => computeStudyHoursFromLessons(scheduleLessons),
+    [scheduleLessons],
+  );
 
   // Reset to default tab and close all panels whenever the user navigates to School.
   // scheduleMode is intentionally preserved — it's a persisted configuration.
   useEffect(() => {
-    setActiveTab('uesanded')
-    setSelectedTaskId(null)
-    setEditingTask(null)
-    setAddingTask(false)
-    setAddingExam(false)
-    setSelectedExam(null)
-    setEditingExam(null)
-    setAddingEksam(false)
-    setSelectedEksam(null)
-    setEditingEksam(null)
-    setAddingSubject(false)
-    setSelectedSubject(null)
-    setShowAllExams(false)
-  }, [location.key])
+    setActiveTab("uesanded");
+    setSelectedTaskId(null);
+    setEditingTask(null);
+    setAddingTask(false);
+    setAddingExam(false);
+    setSelectedExam(null);
+    setEditingExam(null);
+    setAddingEksam(false);
+    setSelectedEksam(null);
+    setEditingEksam(null);
+    setAddingSubject(false);
+    setSelectedSubject(null);
+    setShowAllExams(false);
+  }, [location.key]);
 
-  const pendingCount = tasks.filter((t) => statusFromProgress(t.progress) !== 'tehtud').length
-  const avgProgress = tasks.length > 0
-    ? Math.round(tasks.reduce((sum, t) => sum + t.progress, 0) / tasks.length)
-    : 0
+  // Deep-link: open specific school item navigated from a linked items panel
+  useEffect(() => {
+    const openId = (location.state as { openId?: string } | null)?.openId;
+    if (!openId) return;
+    window.history.replaceState({ ...(window.history.state ?? {}), usr: null }, "");
+    const decoded = decodeSchoolId(openId);
+    if (!decoded) return;
+    const { kind, rawId } = decoded;
+    if (kind === "task") {
+      const task = tasks.find((t) => String(t.id) === rawId);
+      if (task) {
+        setActiveTab("uesanded");
+        setSelectedTaskId(task.id);
+      }
+    } else if (kind === "exam") {
+      const exam = exams.find((e) => String(e.id) === rawId);
+      if (exam) {
+        setActiveTab("kontrolltood");
+        setSelectedExam(exam);
+      }
+    }
+  }, [location.key]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pendingCount = tasks.filter(
+    (t) => statusFromProgress(t.progress) !== "tehtud",
+  ).length;
+  const avgProgress =
+    tasks.length > 0
+      ? Math.round(tasks.reduce((sum, t) => sum + t.progress, 0) / tasks.length)
+      : 0;
 
   const upcomingExamsCount = exams.filter(
-    (e) => e.type === 'kontrolltöö' && e.status !== 'tehtud' && e.daysLeft >= 0 && e.daysLeft <= 30
-  ).length
+    (e) =>
+      e.type === "kontrolltöö" &&
+      e.status !== "tehtud" &&
+      e.daysLeft >= 0 &&
+      e.daysLeft <= 30,
+  ).length;
 
-  const updateTask = (id: number, patch: Partial<Task>) =>
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
-  const deleteTask = (id: number) =>
-    setTasks((prev) => prev.filter((t) => t.id !== id))
-  const markTaskDone = (id: number) =>
-    setTasks((prev) => prev.map((t) => {
-      if (t.id !== id) return t
-      const parts = t.parts?.map((p) => ({ ...p, done: true }))
-      return { ...t, prevProgress: t.progress, progress: 100, parts }
-    }))
-  const markTaskUndone = (id: number) =>
-    setTasks((prev) => prev.map((t) => {
-      if (t.id !== id) return t
-      const parts = t.parts?.map((p) => ({ ...p, done: false }))
-      const progress = t.prevProgress ?? (parts && parts.length > 0 ? 0 : 0)
-      return { ...t, progress, prevProgress: undefined, parts }
-    }))
-  const togglePart = (taskId: number, partId: string) =>
-    setTasks((prev) => prev.map((t) => {
-      if (t.id !== taskId || !t.parts) return t
-      const parts = t.parts.map((p) => (p.id === partId ? { ...p, done: !p.done } : p))
-      const pct = computePartsProgress(parts)
-      const progress = pct < 0 ? t.progress : pct
-      return { ...t, parts, progress }
-    }))
-  const addTask = (task: Task) =>
-    setTasks((prev) => [...prev, task])
+  const updateTask  = (id: number, patch: Partial<Task>) => storeUpdateSchoolTask(id, patch);
+  const deleteTask  = (id: number) => {
+    const task = tasks.find((t) => t.id === id);
+    if (task?.linkedTaskId) { tasksStoreDeleteTask(task.linkedTaskId); }
+    removeLinksForEntity('school', encodeSchoolId('task', id));
+    storeDeleteSchoolTask(id);
+  };
+  const markTaskDone   = (id: number) => storeMarkSchoolTaskDone(id);
+  const markTaskUndone = (id: number) => storeMarkSchoolTaskUndone(id);
+  const togglePart  = (taskId: number, partId: string) => storeToggleSchoolTaskPart(taskId, partId);
+  const addTask     = (task: Task) => addSchoolTask(task);
 
-  useEffect(() => {
-    setExams((prev) => prev.map((e) => ({ ...e, daysLeft: computeDaysLeft(e.date) })))
-  }, [])
+  const deleteSubject = (id: string) => {
+    const linked = scheduleLessons.filter(
+      (l) => l.subject === (subjects.find((s) => s.id === id)?.name ?? "")
+    );
+    if (linked.length > 0) {
+      setConfirmDeleteSubjectId(id);
+    } else {
+      storeDeleteSchoolSubject(id);
+      setSelectedSubject(null);
+    }
+  };
+  const confirmDeleteSubject = (id: string) => {
+    storeDeleteSchoolSubject(id);
+    setConfirmDeleteSubjectId(null);
+    setSelectedSubject(null);
+  };
 
-  const updateExam = (id: number, patch: Partial<ExamItem>) =>
-    setExams((prev) => prev.map((e) => {
-      if (e.id !== id) return e
-      const updated = { ...e, ...patch }
-      if (patch.date !== undefined) updated.daysLeft = computeDaysLeft(patch.date)
-      return updated
-    }))
-  const deleteExam = (id: number) =>
-    setExams((prev) => prev.filter((e) => e.id !== id))
-  const addExam = (exam: Exam) =>
-    setExams((prev) => [...prev, exam])
+  const updateExam = (id: number, patch: Partial<ExamItem>) => storeUpdateSchoolExam(id, patch);
+  const deleteExam = (id: number) => { removeLinksForEntity('school', encodeSchoolId('exam', id)); storeDeleteSchoolExam(id); };
+  const addExam    = (exam: Exam) => addSchoolExam(exam);
 
-  const addLesson = (lesson: ScheduleLesson) =>
-    setScheduleLessons((prev) => [...prev, lesson])
-  const updateLesson = (id: string, patch: Partial<ScheduleLesson>) =>
-    setScheduleLessons((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)))
-  const deleteLesson = (id: string) =>
-    setScheduleLessons((prev) => prev.filter((l) => l.id !== id))
+  const addLesson    = (lesson: ScheduleLesson) => addSchoolLesson(lesson);
+  const updateLesson = (id: string, patch: Partial<ScheduleLesson>) => storeUpdateSchoolLesson(id, patch);
+  const deleteLesson = (id: string) => storeDeleteSchoolLesson(id);
 
-  const addSubject = (subject: Subject) =>
-    setSubjects((prev) => [...prev, subject])
+  const addSubject = (subject: Subject) => addSchoolSubject(subject);
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 p-6 max-w-[1400px] mx-auto w-full">
-
+    <div className="school-page flex flex-col md:flex-row gap-6 p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto w-full">
       {/* ── Left/main column ──────────────────────────────────────────── */}
       <div className="flex-1 min-w-0 flex flex-col gap-6">
-
         {/* Overview cards */}
         <section>
-          <h2 className="text-base font-semibold text-[#1A1F36] mb-4">{tr('school.tab.ulevaade', lang)}</h2>
+          <h2 className="text-base font-semibold text-[#1A1F36] mb-4">
+            {tr("school.tab.ulevaade", lang)}
+          </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
             <StatCard
               icon={<BookOpen size={18} strokeWidth={1.8} />}
-              iconBg="#EDE9FB" iconColor="#6F5AE8"
-              value="7" label={tr('school.stat.subjects', lang)} sub={tr('school.stat.subjectsSub', lang)}
+              iconBg="#EDE9FB"
+              iconColor="#6F5AE8"
+              value={String(subjects.length)}
+              label={tr("school.stat.subjects", lang)}
+              sub={tr("school.stat.subjectsSub", lang)}
             />
             <StatCard
               icon={<CheckCircle size={18} strokeWidth={1.8} />}
-              iconBg="#DCFCE7" iconColor="#16A34A"
-              value={String(pendingCount)} label={tr('school.stat.tasks', lang)} sub={tr('school.stat.tasksSub', lang)}
+              iconBg="#DCFCE7"
+              iconColor="#16A34A"
+              value={String(pendingCount)}
+              label={tr("school.stat.tasks", lang)}
+              sub={tr("school.stat.tasksSub", lang)}
             />
             <StatCard
               icon={<Calendar size={18} strokeWidth={1.8} />}
-              iconBg="#FEF9C3" iconColor="#CA8A04"
-              value={String(upcomingExamsCount)} label={tr('school.stat.exams', lang)} sub={tr('school.stat.examsSub', lang)}
+              iconBg="#FEF9C3"
+              iconColor="#CA8A04"
+              value={String(upcomingExamsCount)}
+              label={tr("school.stat.exams", lang)}
+              sub={tr("school.stat.examsSub", lang)}
             />
             <StatCard
               icon={<Clock size={18} strokeWidth={1.8} />}
-              iconBg="#EFF6FF" iconColor="#2563EB"
-              value="18h 30m" label={tr('school.stat.studyTime', lang)} sub={tr('school.stat.studyTimeSub', lang)}
+              iconBg="#EFF6FF"
+              iconColor="#2563EB"
+              value={(() => {
+                const total = liveStudyHours.reduce((s, d) => s + d.hours, 0);
+                if (total === 0) return '0h';
+                const h = Math.floor(total);
+                const m = Math.round((total % 1) * 60);
+                return m > 0 ? `${h}h ${m}m` : `${h}h`;
+              })()}
+              label={tr("school.stat.studyTime", lang)}
+              sub={tr("school.stat.studyTimeSub", lang)}
             />
             <StatCard
               icon={<Star size={18} strokeWidth={1.8} />}
-              iconBg="#FFF1F2" iconColor="#DC2626"
-              value={`${avgProgress}%`} label={tr('school.stat.progress', lang)} sub={tr('school.stat.progressSub', lang)}
+              iconBg="#FFF1F2"
+              iconColor="#DC2626"
+              value={`${avgProgress}%`}
+              label={tr("school.stat.progress", lang)}
+              sub={tr("school.stat.progressSub", lang)}
             />
           </div>
         </section>
 
         {/* Tabs + content */}
         <div className="bg-white rounded-2xl border border-[#ECECF2]">
-
           {/* Tab bar */}
           <div className="flex border-b border-[#ECECF2] px-5 overflow-x-auto">
             {TABS.map((tab) => (
@@ -433,8 +698,8 @@ export default function SchoolPage() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`relative whitespace-nowrap px-3 py-4 text-sm font-medium transition-colors mr-2 ${
                   activeTab === tab.id
-                    ? 'text-[#6F5AE8]'
-                    : 'text-[#94A3B8] hover:text-[#1A1F36]'
+                    ? "text-[#6F5AE8]"
+                    : "text-[#94A3B8] hover:text-[#1A1F36]"
                 }`}
               >
                 {tab.label}
@@ -447,7 +712,7 @@ export default function SchoolPage() {
 
           {/* Tab content */}
           <div className="p-5">
-            {activeTab === 'uesanded' && (
+            {activeTab === "uesanded" && (
               <TasksTab
                 tasks={tasks}
                 onTaskClick={(task) => setSelectedTaskId(task.id)}
@@ -458,7 +723,7 @@ export default function SchoolPage() {
                 onDelete={deleteTask}
               />
             )}
-            {activeTab === 'tunniplaan' && (
+            {activeTab === "tunniplaan" && (
               <ScheduleTab
                 mode={scheduleMode}
                 lessons={scheduleLessons}
@@ -466,40 +731,48 @@ export default function SchoolPage() {
                 onAdd={addLesson}
                 onUpdate={updateLesson}
                 onDelete={deleteLesson}
+                onQuickAddAssignment={(subjectName) => {
+                  setQuickAddSubject(subjectName);
+                  setAddingTask(true);
+                  setActiveTab("uesanded");
+                }}
               />
             )}
-            {activeTab === 'kontrolltood' && (
+            {activeTab === "kontrolltood" && (
               <ExamsTab
-                exams={exams.filter((e) => e.type === 'kontrolltöö')}
+                exams={exams.filter((e) => e.type === "kontrolltöö")}
                 onAdd={() => setAddingExam(true)}
                 onExamClick={(exam) => setSelectedExam(exam)}
+                onEdit={(exam) => setEditingExam(exam)}
+                onDelete={(id) => deleteExam(id)}
               />
             )}
-            {activeTab === 'eksamid' && (
+            {activeTab === "eksamid" && (
               <EksamidTab
-                exams={exams.filter((e) => e.type === 'eksam')}
+                exams={exams.filter((e) => e.type === "eksam")}
                 onAdd={() => setAddingEksam(true)}
                 onExamClick={(exam) => setSelectedEksam(exam)}
                 onEdit={(exam) => setEditingEksam(exam)}
-                onMarkDone={(id) => updateExam(id, { status: 'tehtud' })}
-                onMarkUndone={(id) => updateExam(id, { status: 'ootel' })}
+                onMarkDone={(id) => updateExam(id, { status: "tehtud" })}
+                onMarkUndone={(id) => updateExam(id, { status: "ootel" })}
                 onDelete={deleteExam}
               />
             )}
-            {activeTab === 'ained' && (
+            {activeTab === "ained" && (
               <AinedTab
                 subjects={subjects}
                 onAdd={() => setAddingSubject(true)}
                 onSubjectClick={(s) => setSelectedSubject(s)}
               />
             )}
-            {activeTab === 'ulevaade' && (
+            {activeTab === "ulevaade" && (
               <UlevaadeTab
                 tasks={tasks}
                 exams={exams}
                 subjects={subjects}
                 scheduleLessons={scheduleLessons}
                 scheduleMode={scheduleMode}
+                studyHours={liveStudyHours}
                 onNavigate={setActiveTab}
               />
             )}
@@ -507,13 +780,17 @@ export default function SchoolPage() {
         </div>
 
         {/* Today's timetable */}
-        <TodaySchedule lessons={scheduleLessons} mode={scheduleMode} onNavigate={setActiveTab} />
+        <TodaySchedule
+          lessons={scheduleLessons}
+          mode={scheduleMode}
+          onNavigate={setActiveTab}
+        />
       </div>
 
       {/* ── Right sidebar ─────────────────────────────────────────────── */}
-      <aside className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-4">
+      <aside className="w-full md:w-80 flex-shrink-0 flex flex-col gap-4">
         <UpcomingExams exams={exams} onShowAll={() => setShowAllExams(true)} />
-        <StudyTimeChart data={STUDY_HOURS} />
+        <StudyTimeChart data={liveStudyHours} />
         <MaterialsLinks />
         <AIStudyHelper
           subjects={subjects}
@@ -536,40 +813,77 @@ export default function SchoolPage() {
         <TaskDetailModal
           task={selectedTask}
           onClose={() => setSelectedTaskId(null)}
-          onEdit={(task) => { setEditingTask(task); setSelectedTaskId(null) }}
+          onEdit={(task) => {
+            setEditingTask(task);
+            setSelectedTaskId(null);
+          }}
           onMarkDone={markTaskDone}
           onMarkUndone={markTaskUndone}
           onTogglePart={togglePart}
-          onDelete={(id) => { deleteTask(id); setSelectedTaskId(null) }}
+          onDelete={(id) => {
+            deleteTask(id);
+            setSelectedTaskId(null);
+          }}
         />
       )}
       {editingTask && (
         <TaskEditModal
           task={editingTask}
           onClose={() => setEditingTask(null)}
-          onSave={(id, patch) => { updateTask(id, patch); setEditingTask(null) }}
+          onSave={(id, patch) => {
+            updateTask(id, patch);
+            setEditingTask(null);
+          }}
         />
       )}
       {addingTask && (
         <TaskAddModal
           nextId={Math.max(0, ...tasks.map((t) => t.id)) + 1}
-          onClose={() => setAddingTask(false)}
-          onSave={(task) => { addTask(task); setAddingTask(false) }}
+          prefillSubject={quickAddSubject || undefined}
+          onClose={() => { setAddingTask(false); setQuickAddSubject(""); }}
+          onSave={(task) => {
+            addTask(task);
+            setAddingTask(false);
+            setQuickAddSubject("");
+            const schoolTaskId = encodeSchoolId('task', task.id);
+            setPostSave({ type: 'school', id: schoolTaskId });
+            runAutomaticLinking('school', schoolTaskId, lang, {
+              title: task.title,
+              date: task.deadline,
+              category: task.subject,
+            }).then((r) => { if (r.linkIds.length > 0) setAutoLink(r) });
+          }}
         />
       )}
       {selectedExam && (
         <ExamDetailModal
           exam={selectedExam}
           onClose={() => setSelectedExam(null)}
-          onEdit={(exam) => { setEditingExam(exam); setSelectedExam(null) }}
-          onDelete={(id) => { deleteExam(id); setSelectedExam(null) }}
+          onEdit={(exam) => {
+            setEditingExam(exam);
+            setSelectedExam(null);
+          }}
+          onDelete={(id) => {
+            deleteExam(id);
+            setSelectedExam(null);
+          }}
         />
       )}
       {addingExam && (
         <ExamFormModal
           nextId={Math.max(0, ...exams.map((e) => e.id)) + 1}
           onClose={() => setAddingExam(false)}
-          onSave={(exam) => { addExam(exam); setAddingExam(false) }}
+          onSave={(exam) => {
+            addExam(exam);
+            setAddingExam(false);
+            const schoolExamId = encodeSchoolId('exam', exam.id);
+            setPostSave({ type: 'school', id: schoolExamId });
+            runAutomaticLinking('school', schoolExamId, lang, {
+              title: exam.title,
+              date: exam.date,
+              category: exam.subject,
+            }).then((r) => { if (r.linkIds.length > 0) setAutoLink(r) });
+          }}
         />
       )}
       {editingExam && (
@@ -577,24 +891,49 @@ export default function SchoolPage() {
           exam={editingExam}
           nextId={editingExam.id}
           onClose={() => setEditingExam(null)}
-          onSave={(exam) => { updateExam(exam.id, exam); setEditingExam(null) }}
+          onSave={(exam) => {
+            updateExam(exam.id, exam);
+            setEditingExam(null);
+          }}
         />
       )}
       {selectedEksam && (
         <EksamDetailModal
           exam={selectedEksam}
           onClose={() => setSelectedEksam(null)}
-          onEdit={(exam) => { setEditingEksam(exam); setSelectedEksam(null) }}
-          onDelete={(id) => { deleteExam(id); setSelectedEksam(null) }}
-          onMarkDone={(id) => { updateExam(id, { status: 'tehtud' }); setSelectedEksam(null) }}
-          onMarkUndone={(id) => { updateExam(id, { status: 'ootel' }); setSelectedEksam(null) }}
+          onEdit={(exam) => {
+            setEditingEksam(exam);
+            setSelectedEksam(null);
+          }}
+          onDelete={(id) => {
+            deleteExam(id);
+            setSelectedEksam(null);
+          }}
+          onMarkDone={(id) => {
+            updateExam(id, { status: "tehtud" });
+            setSelectedEksam(null);
+          }}
+          onMarkUndone={(id) => {
+            updateExam(id, { status: "ootel" });
+            setSelectedEksam(null);
+          }}
         />
       )}
       {addingEksam && (
         <EksamFormModal
           nextId={Math.max(0, ...exams.map((e) => e.id)) + 1}
           onClose={() => setAddingEksam(false)}
-          onSave={(exam) => { addExam(exam); setAddingEksam(false) }}
+          onSave={(exam) => {
+            addExam(exam);
+            setAddingEksam(false);
+            const schoolEksamId = encodeSchoolId('exam', exam.id);
+            setPostSave({ type: 'school', id: schoolEksamId });
+            runAutomaticLinking('school', schoolEksamId, lang, {
+              title: exam.title,
+              date: exam.date,
+              category: exam.subject,
+            }).then((r) => { if (r.linkIds.length > 0) setAutoLink(r) });
+          }}
         />
       )}
       {editingEksam && (
@@ -602,24 +941,78 @@ export default function SchoolPage() {
           exam={editingEksam}
           nextId={editingEksam.id}
           onClose={() => setEditingEksam(null)}
-          onSave={(exam) => { updateExam(exam.id, exam); setEditingEksam(null) }}
+          onSave={(exam) => {
+            updateExam(exam.id, exam);
+            setEditingEksam(null);
+          }}
         />
       )}
       {addingSubject && (
         <SubjectFormModal
           subjects={subjects}
           onClose={() => setAddingSubject(false)}
-          onSave={(subject) => { addSubject(subject); setAddingSubject(false) }}
+          onSave={(subject) => {
+            addSubject(subject);
+            setAddingSubject(false);
+          }}
         />
       )}
+      {confirmDeleteSubjectId && (() => {
+        const subjectToDelete = subjects.find((s) => s.id === confirmDeleteSubjectId);
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
+            <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-6 flex flex-col gap-4">
+              <p className="text-sm font-semibold text-[#1A1F36]">
+                {lang === 'et' ? 'Kustuta aine?' : 'Delete subject?'}
+              </p>
+              <p className="text-sm text-[#64748B]">
+                {lang === 'et'
+                  ? `Aine „${subjectToDelete?.name}" on seotud tunniplaaniga. Kas kustutad aine?`
+                  : `Subject "${subjectToDelete?.name}" is used in your timetable. Delete anyway?`}
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setConfirmDeleteSubjectId(null)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+                >
+                  {lang === 'et' ? 'Tühista' : 'Cancel'}
+                </button>
+                <button
+                  onClick={() => confirmDeleteSubject(confirmDeleteSubjectId)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
+                >
+                  {lang === 'et' ? 'Kustuta' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {selectedSubject && (
         <SubjectDetailModal
           subject={selectedSubject}
           onClose={() => setSelectedSubject(null)}
+          onDelete={deleteSubject}
+        />
+      )}
+      {postSave && (
+        <PostSaveLinkSuggestionsDialog
+          type={postSave.type}
+          entityId={postSave.id}
+          lang={lang}
+          onClose={() => setPostSave(null)}
+        />
+      )}
+      {autoLink && (
+        <AutoLinkToast
+          linkIds={autoLink.linkIds}
+          calendarEventId={autoLink.calendarEventId}
+          lang={lang}
+          onClose={() => setAutoLink(null)}
         />
       )}
     </div>
-  )
+  );
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
@@ -631,23 +1024,27 @@ function AinedTab({
   onAdd,
   onSubjectClick,
 }: {
-  subjects: Subject[]
-  onAdd: () => void
-  onSubjectClick: (s: Subject) => void
+  subjects: Subject[];
+  onAdd: () => void;
+  onSubjectClick: (s: Subject) => void;
 }) {
-  const lang = getLocalLanguage()
-  const sorted = [...subjects].sort((a, b) => a.name.localeCompare(b.name, 'et'))
+  const lang = getLocalLanguage();
+  const sorted = [...subjects].sort((a, b) =>
+    a.name.localeCompare(b.name, "et"),
+  );
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[#1A1F36]">{tr('school.modal.mySubjects', lang)}</h3>
+        <h3 className="text-sm font-semibold text-[#1A1F36]">
+          {tr("school.modal.mySubjects", lang)}
+        </h3>
         <button
           onClick={onAdd}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
         >
           <Plus size={14} strokeWidth={2.5} />
-          {tr('school.action.addSubject', lang)}
+          {tr("school.action.addSubject", lang)}
         </button>
       </div>
 
@@ -656,8 +1053,12 @@ function AinedTab({
           <div className="w-12 h-12 rounded-2xl bg-[#EDE9FB] flex items-center justify-center mb-3">
             <BookOpen size={22} strokeWidth={1.8} className="text-[#6F5AE8]" />
           </div>
-          <p className="text-sm font-semibold text-[#1A1F36]">{tr('school.empty.subjectsTitle', lang)}</p>
-          <p className="text-xs text-[#94A3B8] mt-1">{tr('school.empty.subjects', lang)}</p>
+          <p className="text-sm font-semibold text-[#1A1F36]">
+            {tr("school.empty.subjectsTitle", lang)}
+          </p>
+          <p className="text-xs text-[#94A3B8] mt-1">
+            {tr("school.empty.subjects", lang)}
+          </p>
         </div>
       ) : (
         <div className="flex flex-col divide-y divide-[#F3F3F8]">
@@ -696,7 +1097,7 @@ function AinedTab({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 // ── Subject detail modal (view only) ───────────────────────────────────────
@@ -704,22 +1105,26 @@ function AinedTab({
 function SubjectDetailModal({
   subject,
   onClose,
+  onDelete,
 }: {
-  subject: Subject
-  onClose: () => void
+  subject: Subject;
+  onClose: () => void;
+  onDelete?: (id: string) => void;
 }) {
-  const lang = getLocalLanguage()
+  const lang = getLocalLanguage();
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-white rounded-2xl shadow-xl"
+        className="w-full max-w-md bg-white rounded-2xl shadow-xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2]">
-          <h2 className="text-base font-semibold text-[#1A1F36]">{tr('school.modal.subjectData', lang)}</h2>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2] flex-shrink-0">
+          <h2 className="text-base font-semibold text-[#1A1F36]">
+            {tr("school.modal.subjectData", lang)}
+          </h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
@@ -728,7 +1133,7 @@ function SubjectDetailModal({
           </button>
         </div>
 
-        <div className="px-5 py-4 flex flex-col gap-4">
+        <div className="px-5 py-4 flex flex-col gap-4 flex-1 overflow-y-auto">
           <div className="flex items-center gap-3">
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -736,74 +1141,119 @@ function SubjectDetailModal({
             >
               {subject.icon}
             </div>
-            <p className="text-sm font-semibold text-[#1A1F36]">{subject.name}</p>
+            <p className="text-sm font-semibold text-[#1A1F36]">
+              {subject.name}
+            </p>
           </div>
 
           {subject.teacher && (
             <div>
-              <p className="text-xs font-medium text-[#64748B] mb-1">{tr('school.field.teacher', lang)}</p>
+              <p className="text-xs font-medium text-[#64748B] mb-1">
+                {tr("school.field.teacher", lang)}
+              </p>
               <p className="text-sm text-[#1A1F36]">{subject.teacher}</p>
             </div>
           )}
 
           {subject.room && (
             <div>
-              <p className="text-xs font-medium text-[#64748B] mb-1">{tr('school.field.room', lang)}</p>
+              <p className="text-xs font-medium text-[#64748B] mb-1">
+                {tr("school.field.room", lang)}
+              </p>
               <p className="text-sm text-[#1A1F36]">{subject.room}</p>
             </div>
           )}
         </div>
 
-        <div className="flex items-center justify-end px-5 py-4 border-t border-[#ECECF2]">
+        <LinkedItemsPanel
+          type="school"
+          entityId={encodeSchoolId("subject", String(subject.id))}
+          lang={lang}
+          className="px-5 pb-2"
+        />
+
+        <div className="flex items-center justify-between px-5 py-4 border-t border-[#ECECF2] flex-shrink-0">
+          {onDelete && (
+            <button
+              onClick={() => onDelete(subject.id)}
+              className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 transition-colors"
+            >
+              {lang === 'et' ? 'Kustuta' : 'Delete'}
+            </button>
+          )}
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors ml-auto"
           >
-            {tr('school.action.close', lang)}
+            {tr("school.action.close", lang)}
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // ── Subject form modal (add only) ──────────────────────────────────────────
 
 const SUBJECT_PALETTE = [
-  { color: '#6F5AE8', bg: '#EDE9FB', icon: <BookOpen size={16} strokeWidth={1.8} /> },
-  { color: '#16A34A', bg: '#DCFCE7', icon: <FlaskConical size={16} strokeWidth={1.8} /> },
-  { color: '#CA8A04', bg: '#FEF9C3', icon: <MessageSquare size={16} strokeWidth={1.8} /> },
-  { color: '#DC2626', bg: '#FEE2E2', icon: <Globe size={16} strokeWidth={1.8} /> },
-  { color: '#2563EB', bg: '#EFF6FF', icon: <HardDrive size={16} strokeWidth={1.8} /> },
-]
+  {
+    color: "#6F5AE8",
+    bg: "#EDE9FB",
+    icon: <BookOpen size={16} strokeWidth={1.8} />,
+  },
+  {
+    color: "#16A34A",
+    bg: "#DCFCE7",
+    icon: <FlaskConical size={16} strokeWidth={1.8} />,
+  },
+  {
+    color: "#CA8A04",
+    bg: "#FEF9C3",
+    icon: <MessageSquare size={16} strokeWidth={1.8} />,
+  },
+  {
+    color: "#DC2626",
+    bg: "#FEE2E2",
+    icon: <Globe size={16} strokeWidth={1.8} />,
+  },
+  {
+    color: "#2563EB",
+    bg: "#EFF6FF",
+    icon: <HardDrive size={16} strokeWidth={1.8} />,
+  },
+];
 
 function SubjectFormModal({
   subjects,
   onClose,
   onSave,
 }: {
-  subjects: Subject[]
-  onClose: () => void
-  onSave: (s: Subject) => void
+  subjects: Subject[];
+  onClose: () => void;
+  onSave: (s: Subject) => void;
 }) {
-  const lang = getLocalLanguage()
-  const [name, setName] = useState('')
-  const [teacher, setTeacher] = useState('')
-  const [room, setRoom] = useState('')
-  const [colorIdx, setColorIdx] = useState(subjects.length % SUBJECT_PALETTE.length)
-  const [error, setError] = useState('')
+  const lang = getLocalLanguage();
+  const [name, setName] = useState("");
+  const [teacher, setTeacher] = useState("");
+  const [room, setRoom] = useState("");
+  const [colorIdx, setColorIdx] = useState(
+    subjects.length % SUBJECT_PALETTE.length,
+  );
+  const [error, setError] = useState("");
 
   const handleSave = () => {
     if (!name.trim()) {
-      setError(tr('school.field.subjectName', lang) + ' on kohustuslik.')
-      return
+      setError(tr("school.field.subjectName", lang) + " on kohustuslik.");
+      return;
     }
-    const exists = subjects.some((s) => s.name.toLowerCase() === name.trim().toLowerCase())
+    const exists = subjects.some(
+      (s) => s.name.toLowerCase() === name.trim().toLowerCase(),
+    );
     if (exists) {
-      setError('Sellise nimega aine on juba olemas.')
-      return
+      setError("Sellise nimega aine on juba olemas.");
+      return;
     }
-    const palette = SUBJECT_PALETTE[colorIdx]
+    const palette = SUBJECT_PALETTE[colorIdx];
     onSave({
       id: `sub-${Date.now()}`,
       name: name.trim(),
@@ -812,8 +1262,8 @@ function SubjectFormModal({
       color: palette.color,
       bg: palette.bg,
       icon: palette.icon,
-    })
-  }
+    });
+  };
 
   return (
     <div
@@ -821,11 +1271,13 @@ function SubjectFormModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-white rounded-2xl shadow-xl"
+        className="w-full max-w-md bg-white rounded-2xl shadow-xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2]">
-          <h2 className="text-base font-semibold text-[#1A1F36]">{tr('school.action.addSubject', lang)}</h2>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2] flex-shrink-0">
+          <h2 className="text-base font-semibold text-[#1A1F36]">
+            {tr("school.action.addSubject", lang)}
+          </h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
@@ -834,49 +1286,67 @@ function SubjectFormModal({
           </button>
         </div>
 
-        <div className="px-5 py-4 flex flex-col gap-4 max-h-[70vh] overflow-y-auto">
+        <div className="px-5 py-4 flex flex-col gap-4 flex-1 overflow-y-auto">
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.subjectName', lang)} <span className="text-red-500">*</span></label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.subjectName", lang)}{" "}
+              <span className="text-red-500">*</span>
+            </label>
             <input
               type="text"
               value={name}
-              onChange={(e) => { setName(e.target.value); setError('') }}
-              placeholder={tr('school.subject.placeholder', lang)}
+              onChange={(e) => {
+                setName(e.target.value);
+                setError("");
+              }}
+              placeholder={tr("school.subject.placeholder", lang)}
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             />
             {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.teacher', lang)} <span className="text-[#CBD5E1] font-normal">{tr('school.field.optional', lang)}</span></label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.teacher", lang)}{" "}
+              <span className="text-[#CBD5E1] font-normal">
+                {tr("school.field.optional", lang)}
+              </span>
+            </label>
             <input
               type="text"
               value={teacher}
               onChange={(e) => setTeacher(e.target.value)}
-              placeholder={tr('school.teacher.placeholder', lang)}
+              placeholder={tr("school.teacher.placeholder", lang)}
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.room', lang)} <span className="text-[#CBD5E1] font-normal">{tr('school.field.optional', lang)}</span></label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.room", lang)}{" "}
+              <span className="text-[#CBD5E1] font-normal">
+                {tr("school.field.optional", lang)}
+              </span>
+            </label>
             <input
               type="text"
               value={room}
               onChange={(e) => setRoom(e.target.value)}
-              placeholder={tr('school.room.placeholder', lang)}
+              placeholder={tr("school.room.placeholder", lang)}
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-2">{tr('school.field.color', lang)}</label>
+            <label className="block text-xs font-medium text-[#64748B] mb-2">
+              {tr("school.field.color", lang)}
+            </label>
             <div className="flex gap-2">
               {SUBJECT_PALETTE.map((p, i) => (
                 <button
                   key={i}
                   onClick={() => setColorIdx(i)}
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${colorIdx === i ? 'ring-2 ring-offset-2 ring-[#1A1F36]' : ''}`}
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${colorIdx === i ? "ring-2 ring-offset-2 ring-[#1A1F36]" : ""}`}
                   style={{ background: p.bg, color: p.color }}
                 >
                   {p.icon}
@@ -886,48 +1356,54 @@ function SubjectFormModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2]">
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2] flex-shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
           >
-            {tr('school.action.cancel', lang)}
+            {tr("school.action.cancel", lang)}
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
           >
-            {tr('school.action.save', lang)}
+            {tr("school.action.save", lang)}
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function StatCard({
-  icon, iconBg, iconColor, value, label, sub,
+  icon,
+  iconBg,
+  iconColor,
+  value,
+  label,
+  sub,
 }: {
-  icon: React.ReactNode
-  iconBg: string
-  iconColor: string
-  value: string
-  label: string
-  sub: string
+  icon: React.ReactNode;
+  iconBg: string;
+  iconColor: string;
+  value: string;
+  label: string;
+  sub: string;
 }) {
+  const isDark = useIsDark();
   return (
     <div className="bg-white rounded-2xl border border-[#ECECF2] p-4">
       <div
         className="w-9 h-9 rounded-xl flex items-center justify-center mb-3"
-        style={{ background: iconBg, color: iconColor }}
+        style={{ background: isDark ? darkBg(iconBg) : iconBg, color: isDark ? darkText(iconColor) : iconColor }}
       >
         {icon}
       </div>
       <p className="text-xl font-bold text-[#1A1F36] leading-none">{value}</p>
       <p className="text-xs font-medium text-[#1A1F36] mt-1">{label}</p>
-      <p className="text-[11px] text-[#94A3B8] mt-0.5 leading-snug">{sub}</p>
+      <p className="school-stat-sub text-[11px] text-[#94A3B8] mt-0.5 leading-snug">{sub}</p>
     </div>
-  )
+  );
 }
 
 function TasksTab({
@@ -939,48 +1415,50 @@ function TasksTab({
   onMarkUndone,
   onDelete,
 }: {
-  tasks: Task[]
-  onTaskClick: (task: Task) => void
-  onAdd: () => void
-  onEdit: (task: Task) => void
-  onMarkDone: (id: number) => void
-  onMarkUndone: (id: number) => void
-  onDelete: (id: number) => void
+  tasks: Task[];
+  onTaskClick: (task: Task) => void;
+  onAdd: () => void;
+  onEdit: (task: Task) => void;
+  onMarkDone: (id: number) => void;
+  onMarkUndone: (id: number) => void;
+  onDelete: (id: number) => void;
 }) {
-  const lang = getLocalLanguage()
-  const [showAll, setShowAll] = useState(false)
-  const [subjectFilter, setSubjectFilter] = useState<string>('')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
-  const [filterOpen, setFilterOpen] = useState(false)
-  const [openMenuId, setOpenMenuId] = useState<number | null>(null)
-  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+  const lang = getLocalLanguage();
+  const [showAll, setShowAll] = useState(false);
+  const [subjectFilter, setSubjectFilter] = useState<string>("");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
-  const subjects = Array.from(new Set(tasks.map((t) => t.subject)))
+  const subjects = Array.from(new Set(tasks.map((t) => t.subject)));
 
   const filtered = subjectFilter
     ? tasks.filter((t) => t.subject === subjectFilter)
-    : tasks
+    : tasks;
 
   const sorted = [...filtered].sort((a, b) => {
-    const diff = parseDeadline(a.deadline) - parseDeadline(b.deadline)
-    return sortDir === 'asc' ? diff : -diff
-  })
+    const diff = parseDeadline(a.deadline) - parseDeadline(b.deadline);
+    return sortDir === "asc" ? diff : -diff;
+  });
 
-  const visible = showAll ? sorted : sorted.slice(0, 4)
-  const hasMore = sorted.length > 4
+  const visible = showAll ? sorted : sorted.slice(0, 4);
+  const hasMore = sorted.length > 4;
 
   return (
     <div>
       {/* Filter row */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[#1A1F36]">{tr('school.section.upcoming', lang)}</h3>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-4">
+        <h3 className="text-sm font-semibold text-[#1A1F36]">
+          {tr("school.section.upcoming", lang)}
+        </h3>
+        <div className="flex items-center gap-2 sm:ml-auto flex-wrap">
           <button
             onClick={onAdd}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
           >
             <Plus size={14} strokeWidth={2.5} />
-            {tr('school.action.addTask', lang)}
+            {tr("school.action.addTask", lang)}
           </button>
           {/* Subject filter */}
           <div className="relative">
@@ -989,27 +1467,43 @@ function TasksTab({
               className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F8F7FC] rounded-lg border border-[#ECECF2] text-xs font-medium text-[#1A1F36] hover:border-[#6F5AE8]/30 transition-colors"
             >
               <Filter size={12} strokeWidth={2} className="text-[#94A3B8]" />
-              {subjectFilter || tr('school.filter.allSubjects', lang)}
-              <ChevronDown size={12} className={`text-[#94A3B8] transition-transform ${filterOpen ? 'rotate-180' : ''}`} />
+              {subjectFilter || tr("school.filter.allSubjects", lang)}
+              <ChevronDown
+                size={12}
+                className={`text-[#94A3B8] transition-transform ${filterOpen ? "rotate-180" : ""}`}
+              />
             </button>
             {filterOpen && (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setFilterOpen(false)} />
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setFilterOpen(false)}
+                />
                 <div className="absolute right-0 z-20 mt-1 w-44 bg-white rounded-lg border border-[#ECECF2] shadow-lg overflow-hidden">
                   <button
-                    onClick={() => { setSubjectFilter(''); setFilterOpen(false) }}
+                    onClick={() => {
+                      setSubjectFilter("");
+                      setFilterOpen(false);
+                    }}
                     className={`w-full text-left px-3 py-2 text-xs transition-colors ${
-                      !subjectFilter ? 'bg-[#EDE9FB] text-[#6F5AE8] font-medium' : 'text-[#1A1F36] hover:bg-[#F8F7F4]'
+                      !subjectFilter
+                        ? "bg-[#EDE9FB] text-[#6F5AE8] font-medium"
+                        : "text-[#1A1F36] hover:bg-[#F8F7F4]"
                     }`}
                   >
-                    {tr('school.filter.allSubjects', lang)}
+                    {tr("school.filter.allSubjects", lang)}
                   </button>
                   {subjects.map((s) => (
                     <button
                       key={s}
-                      onClick={() => { setSubjectFilter(s); setFilterOpen(false) }}
+                      onClick={() => {
+                        setSubjectFilter(s);
+                        setFilterOpen(false);
+                      }}
                       className={`w-full text-left px-3 py-2 text-xs transition-colors ${
-                        subjectFilter === s ? 'bg-[#EDE9FB] text-[#6F5AE8] font-medium' : 'text-[#1A1F36] hover:bg-[#F8F7F4]'
+                        subjectFilter === s
+                          ? "bg-[#EDE9FB] text-[#6F5AE8] font-medium"
+                          : "text-[#1A1F36] hover:bg-[#F8F7F4]"
                       }`}
                     >
                       {s}
@@ -1021,12 +1515,14 @@ function TasksTab({
           </div>
           {/* Sort button */}
           <button
-            onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+            onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F8F7FC] rounded-lg border border-[#ECECF2] text-xs font-medium text-[#1A1F36] hover:border-[#6F5AE8]/30 transition-colors"
           >
             <ArrowUpDown size={12} strokeWidth={2} className="text-[#94A3B8]" />
-            {tr('school.sort.deadline', lang)}
-            <span className="text-[10px] text-[#94A3B8]">{sortDir === 'asc' ? '↑' : '↓'}</span>
+            {tr("school.sort.deadline", lang)}
+            <span className="text-[10px] text-[#94A3B8]">
+              {sortDir === "asc" ? "↑" : "↓"}
+            </span>
           </button>
         </div>
       </div>
@@ -1052,81 +1548,132 @@ function TasksTab({
                 {task.title}
               </button>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-xs font-medium" style={{ color: task.subjectColor }}>
+                <span
+                  className="text-xs font-medium"
+                  style={{ color: task.subjectColor }}
+                >
                   {task.subject}
                 </span>
-                <span className="text-xs text-[#94A3B8]">{task.type}</span>
+                <span className="text-xs text-[#94A3B8]">
+                  {getTaskTypeLabel(task.type, lang)}
+                </span>
               </div>
             </div>
 
             {/* Deadline */}
             <div className="hidden sm:flex flex-col items-end flex-shrink-0 w-32">
-              <span className="text-[11px] font-medium text-[#6F5AE8]">{task.deadlineLabel}</span>
-              <span className="text-[11px] text-[#94A3B8]">{task.deadline}</span>
+              <span className="text-[11px] font-medium text-[#6F5AE8]">
+                {task.deadlineLabel}
+              </span>
+              <span className="text-[11px] text-[#94A3B8]">
+                {task.deadline}
+              </span>
             </div>
 
             {/* Progress ring */}
             <div className="flex-shrink-0 flex items-center gap-1.5">
               <ProgressRing pct={task.progress} color={task.subjectColor} />
-              <span className="text-xs font-semibold text-[#1A1F36] w-8">{task.progress}%</span>
+              <span className="text-xs font-semibold text-[#1A1F36] w-8">
+                {task.progress}%
+              </span>
             </div>
 
             {/* Moodle button */}
-            {task.moodleUrl && task.moodleUrl.trim() !== '' && task.moodleUrl !== '#' && (
-              <a
-                href={task.moodleUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#ECECF2] text-xs font-medium text-[#1A1F36] hover:border-[#6F5AE8]/40 hover:bg-[#F8F7FC] transition-colors flex-shrink-0"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {tr('school.action.openMoodle', lang)}
-                <ExternalLink size={11} strokeWidth={2} className="text-[#94A3B8]" />
-              </a>
-            )}
+            {task.moodleUrl &&
+              task.moodleUrl.trim() !== "" &&
+              task.moodleUrl !== "#" && (
+                <a
+                  href={task.moodleUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#ECECF2] text-xs font-medium text-[#1A1F36] hover:border-[#6F5AE8]/40 hover:bg-[#F8F7FC] transition-colors flex-shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {tr("school.action.openMoodle", lang)}
+                  <ExternalLink
+                    size={11}
+                    strokeWidth={2}
+                    className="text-[#94A3B8]"
+                  />
+                </a>
+              )}
 
             {/* Row three-dot menu */}
             <div className="relative flex-shrink-0">
               <button
-                onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === task.id ? null : task.id) }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenMenuId(openMenuId === task.id ? null : task.id);
+                }}
                 className="text-[#94A3B8] hover:text-[#1A1F36] transition-colors"
               >
                 <MoreHorizontal size={16} />
               </button>
               {openMenuId === task.id && (
                 <>
-                  <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setOpenMenuId(null)}
+                  />
                   <div className="absolute right-0 z-20 mt-1 w-44 bg-white rounded-lg border border-[#ECECF2] shadow-lg overflow-hidden">
                     <button
-                      onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); onEdit(task) }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuId(null);
+                        onEdit(task);
+                      }}
                       className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
                     >
-                      <Pencil size={14} strokeWidth={2} className="text-[#64748B]" />
-                      {tr('school.action.edit', lang)}
+                      <Pencil
+                        size={14}
+                        strokeWidth={2}
+                        className="text-[#64748B]"
+                      />
+                      {tr("school.action.edit", lang)}
                     </button>
-                    {statusFromProgress(task.progress) === 'tehtud' ? (
+                    {statusFromProgress(task.progress) === "tehtud" ? (
                       <button
-                        onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); onMarkUndone(task.id) }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuId(null);
+                          onMarkUndone(task.id);
+                        }}
                         className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
                       >
-                        <Check size={14} strokeWidth={2} className="text-[#64748B]" />
-                        {tr('school.action.markUndone', lang)}
+                        <Check
+                          size={14}
+                          strokeWidth={2}
+                          className="text-[#64748B]"
+                        />
+                        {tr("school.action.markUndone", lang)}
                       </button>
                     ) : (
                       <button
-                        onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); onMarkDone(task.id) }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuId(null);
+                          onMarkDone(task.id);
+                        }}
                         className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
                       >
-                        <Check size={14} strokeWidth={2} className="text-[#64748B]" />
-                        {tr('school.action.markDone', lang)}
+                        <Check
+                          size={14}
+                          strokeWidth={2}
+                          className="text-[#64748B]"
+                        />
+                        {tr("school.action.markDone", lang)}
                       </button>
                     )}
                     <button
-                      onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); setConfirmDeleteId(task.id) }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuId(null);
+                        setConfirmDeleteId(task.id);
+                      }}
                       className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#DC2626] hover:bg-[#FEF2F2] transition-colors"
                     >
                       <Trash2 size={14} strokeWidth={2} />
-                      {tr('school.action.delete', lang)}
+                      {tr("school.action.delete", lang)}
                     </button>
                   </div>
                 </>
@@ -1146,19 +1693,24 @@ function TasksTab({
                     <p className="text-sm text-[#1A1F36] mb-1">
                       Kas soovid ülesande „{task.title}“ kindlasti kustutada?
                     </p>
-                    <p className="text-xs text-[#94A3B8] mb-5">{tr('school.confirm.irreversible', lang)}</p>
+                    <p className="text-xs text-[#94A3B8] mb-5">
+                      {tr("school.confirm.irreversible", lang)}
+                    </p>
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={() => setConfirmDeleteId(null)}
-                        className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+                        className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
                       >
-                        {tr('school.action.discard', lang)}
+                        {tr("school.action.discard", lang)}
                       </button>
                       <button
-                        onClick={() => { onDelete(task.id); setConfirmDeleteId(null) }}
-                        className="px-4 py-2 rounded-lg text-sm font-medium bg-[#DC2626] text-white hover:bg-[#B91C1C] transition-colors"
+                        onClick={() => {
+                          onDelete(task.id);
+                          setConfirmDeleteId(null);
+                        }}
+                        className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium bg-[#DC2626] text-white hover:bg-[#B91C1C] transition-colors"
                       >
-                        {tr('school.action.delete', lang)}
+                        {tr("school.action.delete", lang)}
                       </button>
                     </div>
                   </div>
@@ -1175,33 +1727,42 @@ function TasksTab({
           onClick={() => setShowAll((v) => !v)}
           className="w-full mt-2 flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-[#6F5AE8] hover:text-[#5B48D8] transition-colors"
         >
-          {showAll ? tr('school.action.viewLess', lang) : tr('school.action.viewAll', lang)}
+          {showAll
+            ? tr("school.action.viewLess", lang)
+            : tr("school.action.viewAll", lang)}
           <ChevronDown
             size={15}
             strokeWidth={2}
-            className={`transition-transform ${showAll ? 'rotate-180' : ''}`}
+            className={`transition-transform ${showAll ? "rotate-180" : ""}`}
           />
         </button>
       )}
     </div>
-  )
+  );
 }
 
 // ── Ülevaade tab ───────────────────────────────────────────────────────────
 
 function daysLeftBadge(daysLeft: number, lang: AppLang) {
-  let bg = '#DCFCE7'
-  let color = '#15803D'
-  if (daysLeft <= 3) { bg = '#FEE2E2'; color = '#B91C1C' }
-  else if (daysLeft <= 7) { bg = '#FEF9C3'; color = '#854D0E' }
+  let bg = "#DCFCE7";
+  let color = "#15803D";
+  if (daysLeft <= 3) {
+    bg = "#FEE2E2";
+    color = "#B91C1C";
+  } else if (daysLeft <= 7) {
+    bg = "#FEF9C3";
+    color = "#854D0E";
+  }
   return (
     <span
       className="flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full"
       style={{ background: bg, color }}
     >
-      {daysLeft <= 0 ? tr('school.task.today', lang) : tr('school.task.daysLeft', lang).replace('{n}', String(daysLeft))}
+      {daysLeft <= 0
+        ? tr("school.task.today", lang)
+        : tr("school.task.daysLeft", lang).replace("{n}", String(daysLeft))}
     </span>
-  )
+  );
 }
 
 function UlevaadeCard({
@@ -1212,29 +1773,34 @@ function UlevaadeCard({
   onOpen,
   openLabel,
   children,
-  className = '',
+  className = "",
 }: {
-  title: string
-  icon: React.ReactNode
-  iconBg: string
-  iconColor: string
-  onOpen: () => void
-  openLabel: string
-  children: React.ReactNode
-  className?: string
+  title: string;
+  icon: React.ReactNode;
+  iconBg: string;
+  iconColor: string;
+  onOpen: () => void;
+  openLabel: string;
+  children: React.ReactNode;
+  className?: string;
 }) {
-  const lang = getLocalLanguage()
+  const lang = getLocalLanguage();
+  const isDark = useIsDark();
   return (
-    <div className={`bg-white rounded-2xl border border-[#ECECF2] p-5 flex flex-col ${className}`}>
+    <div
+      className={`bg-white rounded-2xl border border-[#ECECF2] p-5 flex flex-col ${className}`}
+    >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3 min-w-0">
           <div
             className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: iconBg, color: iconColor }}
+            style={{ background: isDark ? darkBg(iconBg) : iconBg, color: isDark ? darkText(iconColor) : iconColor }}
           >
             {icon}
           </div>
-          <h3 className="text-sm font-semibold text-[#1A1F36] truncate">{title}</h3>
+          <h3 className="text-sm font-semibold text-[#1A1F36] truncate">
+            {title}
+          </h3>
         </div>
       </div>
       <div className="flex-1">{children}</div>
@@ -1246,7 +1812,7 @@ function UlevaadeCard({
         <ChevronRight size={13} strokeWidth={2} />
       </button>
     </div>
-  )
+  );
 }
 
 function UlevaadeTab({
@@ -1255,58 +1821,85 @@ function UlevaadeTab({
   subjects,
   scheduleLessons,
   scheduleMode,
+  studyHours,
   onNavigate,
 }: {
-  tasks: Task[]
-  exams: Exam[]
-  subjects: Subject[]
-  scheduleLessons: ScheduleLesson[]
-  scheduleMode: ScheduleMode
-  onNavigate: (tab: TabId) => void
+  tasks: Task[];
+  exams: Exam[];
+  subjects: Subject[];
+  scheduleLessons: ScheduleLesson[];
+  scheduleMode: ScheduleMode;
+  studyHours: { day: string; hours: number; label: string }[];
+  onNavigate: (tab: TabId) => void;
 }) {
-  const lang = getLocalLanguage()
-  const today = new Date()
-  const todayStr = today.toLocaleDateString('et-EE', { weekday: 'long', day: 'numeric', month: 'long' })
+  const lang = getLocalLanguage();
+  const isDark = useIsDark();
+  const today = new Date();
+  const todayStr = today.toLocaleDateString("et-EE", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
 
   // 1. Tänased ülesanded: lähimad tähtajad + edenemine
   const sortedTasks = [...tasks]
-    .filter((t) => statusFromProgress(t.progress) !== 'tehtud')
-    .sort((a, b) => parseDeadline(a.deadline) - parseDeadline(b.deadline))
-  const todayTasks = sortedTasks.slice(0, 4)
-  const completedTasksCount = tasks.filter((t) => statusFromProgress(t.progress) === 'tehtud').length
-  const avgTaskProgress = tasks.length > 0
-    ? Math.round(tasks.reduce((sum, t) => sum + t.progress, 0) / tasks.length)
-    : 0
+    .filter((t) => statusFromProgress(t.progress) !== "tehtud")
+    .sort((a, b) => parseDeadline(a.deadline) - parseDeadline(b.deadline));
+  const todayTasks = sortedTasks.slice(0, 4);
+  const completedTasksCount = tasks.filter(
+    (t) => statusFromProgress(t.progress) === "tehtud",
+  ).length;
+  const avgTaskProgress =
+    tasks.length > 0
+      ? Math.round(tasks.reduce((sum, t) => sum + t.progress, 0) / tasks.length)
+      : 0;
 
   // 2. Lähenevad kontrolltööd
   const upcomingTests = exams
-    .filter((e) => e.type === 'kontrolltöö' && e.status !== 'tehtud' && e.daysLeft >= 0)
+    .filter(
+      (e) =>
+        e.type === "kontrolltöö" && e.status !== "tehtud" && e.daysLeft >= 0,
+    )
     .sort((a, b) => a.daysLeft - b.daysLeft)
-    .slice(0, 3)
+    .slice(0, 3);
 
   // 3. Lähenevad eksamid
   const upcomingExams = exams
-    .filter((e) => e.type === 'eksam' && e.status !== 'tehtud' && e.daysLeft >= 0)
+    .filter(
+      (e) => e.type === "eksam" && e.status !== "tehtud" && e.daysLeft >= 0,
+    )
     .sort((a, b) => a.daysLeft - b.daysLeft)
-    .slice(0, 3)
+    .slice(0, 3);
 
   // 4. Tänane tunniplaan — match canonical ET day string against real weekday
-  const SCHED_DAYS_ET = ['Esmaspäev', 'Teisipäev', 'Kolmapäev', 'Neljapäev', 'Reede', 'Laupäev', 'Pühapäev']
-  const todayDayStr = SCHED_DAYS_ET[(new Date().getDay() + 6) % 7] // 0=Mon..6=Sun
-  const todayLessons = scheduleLessons.filter((l) => l.day === todayDayStr)
+  const SCHED_DAYS_ET = [
+    "Esmaspäev",
+    "Teisipäev",
+    "Kolmapäev",
+    "Neljapäev",
+    "Reede",
+    "Laupäev",
+    "Pühapäev",
+  ];
+  const todayDayStr = SCHED_DAYS_ET[(new Date().getDay() + 6) % 7]; // 0=Mon..6=Sun
+  const todayLessons = scheduleLessons.filter((l) => l.day === todayDayStr);
 
   // 5. Õpitavad ained
-  const activeSubjectsCount = subjects.length
+  const activeSubjectsCount = subjects.length;
 
-  // 6. Õppimise statistika
-  const totalStudyHours = STUDY_HOURS.reduce((sum, d) => sum + d.hours, 0)
-  const completedTestsCount = exams.filter((e) => e.type === 'kontrolltöö' && e.status === 'tehtud').length
+  // 6. Õppimise statistika (real hours from scheduled lessons via prop)
+  const totalStudyHours = studyHours.reduce((sum, d) => sum + d.hours, 0);
+  const completedTestsCount = exams.filter(
+    (e) => e.type === "kontrolltöö" && e.status === "tehtud",
+  ).length;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-[#1A1F36]">{tr('school.uv.title', lang)}</h3>
+          <h3 className="text-sm font-semibold text-[#1A1F36]">
+            {tr("school.uv.title", lang)}
+          </h3>
           <p className="text-xs text-[#94A3B8] mt-0.5 capitalize">{todayStr}</p>
         </div>
       </div>
@@ -1314,19 +1907,21 @@ function UlevaadeTab({
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {/* 1. Tänased ülesanded */}
         <UlevaadeCard
-          title={tr('school.uv.todayTasks', lang)}
+          title={tr("school.uv.todayTasks", lang)}
           icon={<CheckCircle size={17} strokeWidth={1.8} />}
           iconBg="#DCFCE7"
           iconColor="#16A34A"
-          onOpen={() => onNavigate('uesanded')}
-          openLabel={tr('school.uv.openTasks', lang)}
+          onOpen={() => onNavigate("uesanded")}
+          openLabel={tr("school.uv.openTasks", lang)}
         >
           {todayTasks.length === 0 ? (
-            <p className="text-xs text-[#94A3B8] text-center py-6">{tr('school.empty.tasksWidget', lang)}</p>
+            <p className="text-xs text-[#94A3B8] text-center py-6">
+              {tr("school.empty.tasksWidget", lang)}
+            </p>
           ) : (
             <div className="flex flex-col gap-3">
               {todayTasks.map((t) => {
-                const days = computeDaysLeft(t.deadline)
+                const days = computeDaysLeft(t.deadline);
                 return (
                   <div key={t.id} className="flex items-center gap-3">
                     <div
@@ -1336,18 +1931,26 @@ function UlevaadeTab({
                       {t.subjectIcon}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-[#1A1F36] truncate">{t.title}</p>
-                      <p className="text-[11px] text-[#94A3B8] mt-0.5">{t.deadlineLabel}</p>
+                      <p className="text-xs font-semibold text-[#1A1F36] truncate">
+                        {t.title}
+                      </p>
+                      <p className="text-[11px] text-[#94A3B8] mt-0.5">
+                        {t.deadlineLabel}
+                      </p>
                     </div>
                     {daysLeftBadge(days, lang)}
                   </div>
-                )
+                );
               })}
               <div className="flex items-center gap-2 mt-1 pt-3 border-t border-[#F3F3F8]">
                 <ProgressRing pct={avgTaskProgress} color="#16A34A" />
                 <div>
-                  <p className="text-xs font-semibold text-[#1A1F36]">{avgTaskProgress}%</p>
-                  <p className="text-[11px] text-[#94A3B8]">{tr('school.uv.avgProgress', lang)}</p>
+                  <p className="text-xs font-semibold text-[#1A1F36]">
+                    {avgTaskProgress}%
+                  </p>
+                  <p className="text-[11px] text-[#94A3B8]">
+                    {tr("school.uv.avgProgress", lang)}
+                  </p>
                 </div>
               </div>
             </div>
@@ -1356,28 +1959,34 @@ function UlevaadeTab({
 
         {/* 2. Lähenevad kontrolltööd */}
         <UlevaadeCard
-          title={tr('school.uv.upcomingTests', lang)}
+          title={tr("school.uv.upcomingTests", lang)}
           icon={<Calendar size={17} strokeWidth={1.8} />}
           iconBg="#FEF9C3"
           iconColor="#CA8A04"
-          onOpen={() => onNavigate('kontrolltood')}
-          openLabel={tr('school.uv.openTests', lang)}
+          onOpen={() => onNavigate("kontrolltood")}
+          openLabel={tr("school.uv.openTests", lang)}
         >
           {upcomingTests.length === 0 ? (
-            <p className="text-xs text-[#94A3B8] text-center py-6">{tr('school.empty.testsWidget', lang)}</p>
+            <p className="text-xs text-[#94A3B8] text-center py-6">
+              {tr("school.empty.testsWidget", lang)}
+            </p>
           ) : (
             <div className="flex flex-col gap-3">
               {upcomingTests.map((e) => (
                 <div key={e.id} className="flex items-center gap-3">
                   <div
                     className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: e.iconBg, color: e.iconColor }}
+                    style={{ background: isDark ? darkBg(e.iconBg) : e.iconBg, color: isDark ? darkText(e.iconColor) : e.iconColor }}
                   >
                     <Calendar size={14} strokeWidth={1.8} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-[#1A1F36] truncate">{e.title}</p>
-                    <p className="text-[11px] text-[#94A3B8] mt-0.5">{e.date}</p>
+                    <p className="text-xs font-semibold text-[#1A1F36] truncate">
+                      {e.title}
+                    </p>
+                    <p className="text-[11px] text-[#94A3B8] mt-0.5">
+                      {e.date}
+                    </p>
                   </div>
                   {daysLeftBadge(e.daysLeft, lang)}
                 </div>
@@ -1388,28 +1997,34 @@ function UlevaadeTab({
 
         {/* 3. Lähenevad eksamid */}
         <UlevaadeCard
-          title={tr('school.uv.upcomingExams', lang)}
+          title={tr("school.uv.upcomingExams", lang)}
           icon={<Star size={17} strokeWidth={1.8} />}
           iconBg="#FEE2E2"
           iconColor="#DC2626"
-          onOpen={() => onNavigate('eksamid')}
-          openLabel={tr('school.uv.openExams', lang)}
+          onOpen={() => onNavigate("eksamid")}
+          openLabel={tr("school.uv.openExams", lang)}
         >
           {upcomingExams.length === 0 ? (
-            <p className="text-xs text-[#94A3B8] text-center py-6">{tr('school.empty.examsWidget', lang)}</p>
+            <p className="text-xs text-[#94A3B8] text-center py-6">
+              {tr("school.empty.examsWidget", lang)}
+            </p>
           ) : (
             <div className="flex flex-col gap-3">
               {upcomingExams.map((e) => (
                 <div key={e.id} className="flex items-center gap-3">
                   <div
                     className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: e.iconBg, color: e.iconColor }}
+                    style={{ background: isDark ? darkBg(e.iconBg) : e.iconBg, color: isDark ? darkText(e.iconColor) : e.iconColor }}
                   >
                     <Star size={14} strokeWidth={1.8} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-[#1A1F36] truncate">{e.title}</p>
-                    <p className="text-[11px] text-[#94A3B8] mt-0.5">{e.date}</p>
+                    <p className="text-xs font-semibold text-[#1A1F36] truncate">
+                      {e.title}
+                    </p>
+                    <p className="text-[11px] text-[#94A3B8] mt-0.5">
+                      {e.date}
+                    </p>
                   </div>
                   {daysLeftBadge(e.daysLeft, lang)}
                 </div>
@@ -1420,18 +2035,30 @@ function UlevaadeTab({
 
         {/* 4. Tänane tunniplaan / õppimisplaan */}
         <UlevaadeCard
-          title={scheduleMode === 'elearning' ? tr('school.schedule.titleElearning', lang) : tr('school.schedule.titleTraditional', lang)}
+          title={
+            scheduleMode === "elearning"
+              ? tr("school.schedule.titleElearning", lang)
+              : tr("school.schedule.titleTraditional", lang)
+          }
           icon={<Clock size={17} strokeWidth={1.8} />}
           iconBg="#EDE9FB"
           iconColor="#6F5AE8"
-          onOpen={() => onNavigate('tunniplaan')}
-          openLabel={scheduleMode === 'none' ? tr('school.schedule.openLabelNone', lang) : tr('school.schedule.openLabel', lang)}
+          onOpen={() => onNavigate("tunniplaan")}
+          openLabel={
+            scheduleMode === "none"
+              ? tr("school.schedule.openLabelNone", lang)
+              : tr("school.schedule.openLabel", lang)
+          }
         >
-          {scheduleMode === 'none' ? (
-            <p className="text-xs text-[#94A3B8] text-center py-6">{tr('school.empty.scheduleWidget', lang)}</p>
+          {scheduleMode === "none" ? (
+            <p className="text-xs text-[#94A3B8] text-center py-6">
+              {tr("school.empty.scheduleWidget", lang)}
+            </p>
           ) : todayLessons.length === 0 ? (
             <p className="text-xs text-[#94A3B8] text-center py-6">
-              {scheduleMode === 'traditional' ? tr('school.schedule.noTodayTraditional', lang) : tr('school.schedule.noTodayElearning', lang)}
+              {scheduleMode === "traditional"
+                ? tr("school.schedule.noTodayTraditional", lang)
+                : tr("school.schedule.noTodayElearning", lang)}
             </p>
           ) : (
             <div className="flex flex-col gap-2.5">
@@ -1442,13 +2069,19 @@ function UlevaadeTab({
                     style={{ background: l.dotColor }}
                   />
                   <span className="text-[11px] text-[#64748B] font-medium w-24 flex-shrink-0">
-                    {l.startTime && l.endTime ? `${l.startTime}–${l.endTime}` : ''}
+                    {l.startTime && l.endTime
+                      ? `${l.startTime}–${l.endTime}`
+                      : ""}
                   </span>
-                  <span className="text-xs font-semibold text-[#1A1F36] truncate">{l.subject}</span>
+                  <span className="text-xs font-semibold text-[#1A1F36] truncate">
+                    {l.subject}
+                  </span>
                 </div>
               ))}
               {todayLessons.length > 4 && (
-                <p className="text-[11px] text-[#94A3B8] mt-1">+{todayLessons.length - 4} veel</p>
+                <p className="text-[11px] text-[#94A3B8] mt-1">
+                  +{todayLessons.length - 4} veel
+                </p>
               )}
             </div>
           )}
@@ -1456,16 +2089,20 @@ function UlevaadeTab({
 
         {/* 5. Õpitavad ained */}
         <UlevaadeCard
-          title={tr('school.uv.subjects', lang)}
+          title={tr("school.uv.subjects", lang)}
           icon={<BookOpen size={17} strokeWidth={1.8} />}
           iconBg="#EFF6FF"
           iconColor="#2563EB"
-          onOpen={() => onNavigate('ained')}
-          openLabel={tr('school.uv.openSubjects', lang)}
+          onOpen={() => onNavigate("ained")}
+          openLabel={tr("school.uv.openSubjects", lang)}
         >
           <div className="flex items-center gap-3 mb-3">
-            <p className="text-2xl font-bold text-[#1A1F36]">{activeSubjectsCount}</p>
-            <p className="text-xs text-[#94A3B8]">{tr('school.uv.subjectsSub', lang)}</p>
+            <p className="text-2xl font-bold text-[#1A1F36]">
+              {activeSubjectsCount}
+            </p>
+            <p className="text-xs text-[#94A3B8]">
+              {tr("school.uv.subjectsSub", lang)}
+            </p>
           </div>
           {subjects.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
@@ -1484,64 +2121,91 @@ function UlevaadeTab({
 
         {/* 6. Õppimise statistika */}
         <UlevaadeCard
-          title={tr('school.uv.stats', lang)}
+          title={tr("school.uv.stats", lang)}
           icon={<Sparkles size={17} strokeWidth={1.8} />}
           iconBg="#F0FDF4"
           iconColor="#16A34A"
-          onOpen={() => onNavigate('uesanded')}
-          openLabel={tr('school.uv.openStats', lang)}
+          onOpen={() => onNavigate("uesanded")}
+          openLabel={tr("school.uv.openStats", lang)}
         >
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-[#94A3B8]">{tr('school.uv.statsTime', lang)}</span>
+              <span className="text-xs text-[#94A3B8]">
+                {tr("school.uv.statsTime", lang)}
+              </span>
               <span className="text-xs font-semibold text-[#1A1F36]">
-                {Math.floor(totalStudyHours)}h {Math.round((totalStudyHours % 1) * 60)}m
+                {Math.floor(totalStudyHours)}h{" "}
+                {Math.round((totalStudyHours % 1) * 60)}m
               </span>
             </div>
             <div className="flex items-end justify-between gap-1 h-12">
-              {STUDY_HOURS.map((d) => {
-                const heightPct = (d.hours / MAX_HOURS) * 100
+              {studyHours.map((d) => {
+                const heightPct = (d.hours / MAX_HOURS) * 100;
                 return (
-                  <div key={d.day} className="flex flex-col items-center gap-1 flex-1">
-                    <div className="w-full rounded-t-md bg-[#EDE9FB]" style={{ height: `${heightPct}%` }} />
+                  <div
+                    key={d.day}
+                    className="flex flex-col items-center gap-1 flex-1"
+                  >
+                    <div
+                      className="w-full rounded-t-md bg-[#EDE9FB]"
+                      style={{ height: `${heightPct}%` }}
+                    />
                     <span className="text-[10px] text-[#94A3B8]">{d.day}</span>
                   </div>
-                )
+                );
               })}
             </div>
             <div className="flex items-center justify-between pt-2 border-t border-[#F3F3F8]">
               <div>
-                <p className="text-xs text-[#94A3B8]">{tr('school.stat.tasksDone', lang)}</p>
-                <p className="text-sm font-semibold text-[#1A1F36]">{completedTasksCount} / {tasks.length}</p>
+                <p className="text-xs text-[#94A3B8]">
+                  {tr("school.stat.tasksDone", lang)}
+                </p>
+                <p className="text-sm font-semibold text-[#1A1F36]">
+                  {completedTasksCount} / {tasks.length}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-[#94A3B8]">{tr('school.stat.testsDone', lang)}</p>
-                <p className="text-sm font-semibold text-[#1A1F36]">{completedTestsCount}</p>
+                <p className="text-xs text-[#94A3B8]">
+                  {tr("school.stat.testsDone", lang)}
+                </p>
+                <p className="text-sm font-semibold text-[#1A1F36]">
+                  {completedTestsCount}
+                </p>
               </div>
             </div>
           </div>
         </UlevaadeCard>
       </div>
     </div>
-  )
+  );
 }
 
 function PlaceholderTab({ label }: { label: string }) {
-  const lang = getLocalLanguage()
+  const lang = getLocalLanguage();
   return (
     <div className="flex flex-col items-center justify-center py-14 text-center">
       <div className="w-12 h-12 rounded-2xl bg-[#EDE9FB] flex items-center justify-center mb-3">
         <BookOpen size={22} strokeWidth={1.8} className="text-[#6F5AE8]" />
       </div>
       <p className="text-sm font-semibold text-[#1A1F36]">{label}</p>
-      <p className="text-xs text-[#94A3B8] mt-1">{tr('school.placeholder.coming', lang)}</p>
+      <p className="text-xs text-[#94A3B8] mt-1">
+        {tr("school.placeholder.coming", lang)}
+      </p>
     </div>
-  )
+  );
 }
 
-function TodaySchedule({ lessons, mode, onNavigate }: { lessons: ScheduleLesson[]; mode: ScheduleMode; onNavigate: (tab: TabId) => void }) {
-  const lang = getLocalLanguage()
-  if (mode === 'none') {
+function TodaySchedule({
+  lessons,
+  mode,
+  onNavigate,
+}: {
+  lessons: ScheduleLesson[];
+  mode: ScheduleMode;
+  onNavigate: (tab: TabId) => void;
+}) {
+  const lang = getLocalLanguage();
+  if (mode === "none") {
     return (
       <div className="bg-white rounded-2xl border border-[#ECECF2] p-5">
         <div className="flex items-center gap-3 mb-4">
@@ -1549,15 +2213,19 @@ function TodaySchedule({ lessons, mode, onNavigate }: { lessons: ScheduleLesson[
             <Calendar size={17} strokeWidth={1.8} className="text-[#94A3B8]" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-[#1A1F36]">{tr('school.schedule.titleTraditional', lang)}</p>
-            <p className="text-xs text-[#94A3B8]">{tr('school.schedule.none', lang)}</p>
+            <p className="text-sm font-semibold text-[#1A1F36]">
+              {tr("school.schedule.titleTraditional", lang)}
+            </p>
+            <p className="text-xs text-[#94A3B8]">
+              {tr("school.schedule.none", lang)}
+            </p>
           </div>
         </div>
-        <p className="text-xs text-[#94A3B8] text-center py-6">
-          {tr('school.schedule.noneSub', lang)}
+        <p className="school-today-empty text-xs text-[#94A3B8] text-center py-6">
+          {tr("school.schedule.noneSub", lang)}
         </p>
       </div>
-    )
+    );
   }
   return (
     <div className="bg-white rounded-2xl border border-[#ECECF2] p-5">
@@ -1568,15 +2236,19 @@ function TodaySchedule({ lessons, mode, onNavigate }: { lessons: ScheduleLesson[
             <Calendar size={17} strokeWidth={1.8} className="text-[#6F5AE8]" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-[#1A1F36]">{tr('school.schedule.titleTraditional', lang)}</p>
+            <p className="text-sm font-semibold text-[#1A1F36]">
+              {tr("school.schedule.titleTraditional", lang)}
+            </p>
             <p className="text-xs text-[#94A3B8]">27. juuli 2026, esmaspäev</p>
           </div>
         </div>
       </div>
 
       {lessons.length === 0 ? (
-        <p className="text-xs text-[#94A3B8] text-center py-6">
-          {mode === 'traditional' ? tr('school.schedule.noTodayTraditional', lang) : tr('school.schedule.noTodayElearning', lang)}
+        <p className="school-today-empty text-xs text-[#94A3B8] text-center py-6">
+          {mode === "traditional"
+            ? tr("school.schedule.noTodayTraditional", lang)
+            : tr("school.schedule.noTodayElearning", lang)}
         </p>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
@@ -1592,55 +2264,85 @@ function TodaySchedule({ lessons, mode, onNavigate }: { lessons: ScheduleLesson[
                   style={{ background: lesson.dotColor }}
                 />
                 <span className="text-[11px] text-[#64748B] font-medium">
-                  {lesson.startTime && lesson.endTime ? `${lesson.startTime}–${lesson.endTime}` : lesson.day || lesson.date || '—'}
+                  {lesson.startTime && lesson.endTime
+                    ? `${lesson.startTime}–${lesson.endTime}`
+                    : lesson.day || lesson.date || "—"}
                 </span>
               </div>
-              <p className="text-sm font-semibold text-[#1A1F36]">{lesson.subject}</p>
-              <p className="text-[11px] text-[#94A3B8] mt-0.5">{lesson.room || (lesson.teacher ? tr('school.teacher.prefix', lang) + lesson.teacher : '')}</p>
+              <p className="text-sm font-semibold text-[#1A1F36]">
+                {lesson.subject}
+              </p>
+              <p className="text-[11px] text-[#94A3B8] mt-0.5">
+                {lesson.room ||
+                  (lesson.teacher
+                    ? tr("school.teacher.prefix", lang) + lesson.teacher
+                    : "")}
+              </p>
             </div>
           ))}
         </div>
       )}
 
       <button
-        onClick={() => onNavigate('tunniplaan')}
+        onClick={() => onNavigate("tunniplaan")}
         className="w-full mt-4 flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-[#6F5AE8] hover:text-[#5B48D8] transition-colors"
       >
-        {tr('school.uv.viewSchedule', lang)}
+        {tr("school.uv.viewSchedule", lang)}
         <ChevronRight size={15} strokeWidth={2} />
       </button>
     </div>
-  )
+  );
 }
 
-function UpcomingExams({ exams, onShowAll }: { exams: Exam[]; onShowAll: () => void }) {
-  const lang = getLocalLanguage()
+function UpcomingExams({
+  exams,
+  onShowAll,
+}: {
+  exams: Exam[];
+  onShowAll: () => void;
+}) {
+  const lang = getLocalLanguage();
+  const isDark = useIsDark();
   return (
     <div className="bg-white rounded-2xl border border-[#ECECF2] p-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[#1A1F36]">{tr('school.schedule.upcoming', lang)}</h3>
+        <h3 className="text-sm font-semibold text-[#1A1F36]">
+          {tr("school.schedule.upcoming", lang)}
+        </h3>
       </div>
       <div className="flex flex-col gap-3">
         {exams.map((exam) => (
           <div key={exam.id} className="flex items-center gap-3">
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{ background: exam.iconBg, color: exam.iconColor }}
+              style={{ background: isDark ? darkBg(exam.iconBg) : exam.iconBg, color: isDark ? darkText(exam.iconColor) : exam.iconColor }}
             >
               <Calendar size={15} strokeWidth={1.8} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-[#1A1F36] truncate">{exam.title}</p>
-              <p className="text-[11px] text-[#94A3B8] mt-0.5">{exam.date}</p>
+              <p className="text-xs font-semibold text-[#1A1F36] truncate">
+                {exam.title}
+              </p>
+              <p className="text-[11px] text-[#94A3B8] mt-0.5">{formatDateDisplay(exam.date)}</p>
             </div>
             <span
               className="flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full"
               style={{
-                background: exam.daysLeft <= 10 ? '#FEF9C3' : exam.daysLeft <= 20 ? '#DCFCE7' : '#FEE2E2',
-                color:      exam.daysLeft <= 10 ? '#854D0E' : exam.daysLeft <= 20 ? '#15803D' : '#B91C1C',
+                background:
+                  exam.daysLeft <= 10
+                    ? "#FEF9C3"
+                    : exam.daysLeft <= 20
+                      ? "#DCFCE7"
+                      : "#FEE2E2",
+                color:
+                  exam.daysLeft <= 10
+                    ? "#854D0E"
+                    : exam.daysLeft <= 20
+                      ? "#15803D"
+                      : "#B91C1C",
               }}
             >
-              {exam.daysLeft} {tr('school.days', lang)}
+              {exam.daysLeft} {tr("school.days", lang)}
             </span>
           </div>
         ))}
@@ -1649,244 +2351,176 @@ function UpcomingExams({ exams, onShowAll }: { exams: Exam[]; onShowAll: () => v
         onClick={onShowAll}
         className="w-full mt-4 flex items-center justify-center gap-1.5 text-xs font-medium text-[#6F5AE8] hover:text-[#5B48D8] transition-colors"
       >
-        {tr('school.uv.viewAll', lang)}
+        {tr("school.uv.viewAll", lang)}
         <ChevronRight size={13} strokeWidth={2} />
       </button>
     </div>
-  )
+  );
 }
 
 function StudyTimeChart({ data }: { data: typeof STUDY_HOURS }) {
-  const lang = getLocalLanguage()
-  const total = '18h 30m'
+  const lang = getLocalLanguage();
+  const totalHours = data.reduce((s, d) => s + d.hours, 0);
+  const total = totalHours === 0 ? '0h' : (() => {
+    const h = Math.floor(totalHours);
+    const m = Math.round((totalHours % 1) * 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  })();
   return (
     <div className="bg-white rounded-2xl border border-[#ECECF2] p-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[#1A1F36]">{tr('school.studytime.title', lang)}</h3>
+        <h3 className="text-sm font-semibold text-[#1A1F36]">
+          {tr("school.studytime.title", lang)}
+        </h3>
         <span className="text-sm font-bold text-[#1A1F36]">{total}</span>
       </div>
       <div className="flex items-end justify-between gap-1 h-20">
         {data.map((d) => {
-          const heightPct = (d.hours / MAX_HOURS) * 100
+          const heightPct = (d.hours / MAX_HOURS) * 100;
           return (
-            <div key={d.day} className="flex flex-col items-center gap-1.5 flex-1">
-              <span className="text-[9px] text-[#94A3B8] font-medium">{d.label}</span>
-              <div className="w-full rounded-t-md bg-[#EDE9FB]" style={{ height: `${heightPct}%` }} />
+            <div
+              key={d.day}
+              className="flex flex-col items-center gap-1.5 flex-1"
+            >
+              <span className="text-[9px] text-[#94A3B8] font-medium">
+                {d.label}
+              </span>
+              <div
+                className="w-full rounded-t-md bg-[#EDE9FB]"
+                style={{ height: `${heightPct}%` }}
+              />
               <span className="text-[10px] text-[#94A3B8]">{d.day}</span>
             </div>
-          )
+          );
         })}
       </div>
     </div>
-  )
+  );
 }
 
 interface CustomLink {
-  id: string
-  name: string
-  url: string
+  id: string;
+  name: string;
+  url: string;
 }
-
-const LINKS_STORAGE_KEY = 'kivora_material_links'
 
 interface StoredLinks {
-  moodle: string
-  googleDrive: string
-  custom: CustomLink[]
+  googleDrive: string;
+  custom: CustomLink[];
 }
 
-function loadStoredLinks(): StoredLinks {
-  try {
-    const raw = localStorage.getItem(LINKS_STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw) as StoredLinks
-      return {
-        moodle: parsed.moodle ?? '',
-        googleDrive: parsed.googleDrive ?? '',
-        custom: Array.isArray(parsed.custom) ? parsed.custom : [],
-      }
-    }
-  } catch {}
-  return { moodle: '', googleDrive: '', custom: [] }
-}
+const STORED_LINKS_DEFAULTS: StoredLinks = { googleDrive: "", custom: [] };
 
-function saveStoredLinks(links: StoredLinks) {
-  try { localStorage.setItem(LINKS_STORAGE_KEY, JSON.stringify(links)) } catch {}
-}
+// Module-level cache so the AI context generator can read links without async Firestore calls
+let _cachedLinks: StoredLinks = STORED_LINKS_DEFAULTS;
 
 function normalizeUrl(url: string): string {
-  const trimmed = url.trim()
-  if (!trimmed) return ''
-  if (/^https?:\/\//i.test(trimmed)) return trimmed
-  return `https://${trimmed}`
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
 }
 
 function MaterialsLinks() {
-  const lang = getLocalLanguage()
-  const [stored, setStored] = useState<StoredLinks>(loadStoredLinks)
-  const [editingMoodle, setEditingMoodle] = useState(false)
-  const [editingGdrive, setEditingGdrive] = useState(false)
-  const [moodleInput, setMoodleInput] = useState('')
-  const [gdriveInput, setGdriveInput] = useState('')
-  const [addingCustom, setAddingCustom] = useState(false)
-  const [customName, setCustomName] = useState('')
-  const [customUrl, setCustomUrl] = useState('')
-  const [editingCustomId, setEditingCustomId] = useState<string | null>(null)
-  const [editName, setEditName] = useState('')
-  const [editUrl, setEditUrl] = useState('')
+  const lang = getLocalLanguage();
+  const isDark = useIsDark();
+  const { user } = useAuth();
+  const uid = user?.uid ?? null;
+  const [stored, setStored] = useState<StoredLinks>(STORED_LINKS_DEFAULTS);
+
+  useEffect(() => {
+    if (!uid) return;
+    const unsub = subscribeSettings<StoredLinks>(
+      uid,
+      "schoolLinks",
+      STORED_LINKS_DEFAULTS,
+      (s) => { setStored(s); _cachedLinks = s; },
+    );
+    return unsub;
+  }, [uid]);
+  const [editingGdrive, setEditingGdrive] = useState(false);
+  const [gdriveInput, setGdriveInput] = useState("");
+  const [addingCustom, setAddingCustom] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customUrl, setCustomUrl] = useState("");
+  const [editingCustomId, setEditingCustomId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editUrl, setEditUrl] = useState("");
 
   const persist = (next: StoredLinks) => {
-    setStored(next)
-    saveStoredLinks(next)
-  }
-
-  // ── Moodle ──
-  const startEditMoodle = () => {
-    setMoodleInput(stored.moodle)
-    setEditingMoodle(true)
-  }
-  const saveMoodle = () => {
-    persist({ ...stored, moodle: normalizeUrl(moodleInput) })
-    setEditingMoodle(false)
-    setMoodleInput('')
-  }
+    setStored(next);
+    _cachedLinks = next;
+    if (uid) saveSettings(uid, "schoolLinks", next).catch(() => {});
+  };
 
   // ── Google Drive ──
   const startEditGdrive = () => {
-    setGdriveInput(stored.googleDrive)
-    setEditingGdrive(true)
-  }
+    setGdriveInput(stored.googleDrive);
+    setEditingGdrive(true);
+  };
   const saveGdrive = () => {
-    persist({ ...stored, googleDrive: normalizeUrl(gdriveInput) })
-    setEditingGdrive(false)
-    setGdriveInput('')
-  }
+    persist({ ...stored, googleDrive: normalizeUrl(gdriveInput) });
+    setEditingGdrive(false);
+    setGdriveInput("");
+  };
 
   // ── Custom links ──
   const addCustomLink = () => {
-    const url = normalizeUrl(customUrl)
-    if (!customName.trim() || !url) return
+    const url = normalizeUrl(customUrl);
+    if (!customName.trim() || !url) return;
     const newLink: CustomLink = {
       id: `link-${Date.now()}`,
       name: customName.trim(),
       url,
-    }
-    persist({ ...stored, custom: [...stored.custom, newLink] })
-    setCustomName('')
-    setCustomUrl('')
-    setAddingCustom(false)
-  }
+    };
+    persist({ ...stored, custom: [...stored.custom, newLink] });
+    setCustomName("");
+    setCustomUrl("");
+    setAddingCustom(false);
+  };
   const startEditCustom = (link: CustomLink) => {
-    setEditingCustomId(link.id)
-    setEditName(link.name)
-    setEditUrl(link.url)
-  }
+    setEditingCustomId(link.id);
+    setEditName(link.name);
+    setEditUrl(link.url);
+  };
   const saveEditCustom = () => {
-    const url = normalizeUrl(editUrl)
-    if (!editName.trim() || !url) return
+    const url = normalizeUrl(editUrl);
+    if (!editName.trim() || !url) return;
     persist({
       ...stored,
       custom: stored.custom.map((l) =>
-        l.id === editingCustomId ? { ...l, name: editName.trim(), url } : l
+        l.id === editingCustomId ? { ...l, name: editName.trim(), url } : l,
       ),
-    })
-    setEditingCustomId(null)
-    setEditName('')
-    setEditUrl('')
-  }
+    });
+    setEditingCustomId(null);
+    setEditName("");
+    setEditUrl("");
+  };
   const deleteCustomLink = (id: string) => {
-    persist({ ...stored, custom: stored.custom.filter((l) => l.id !== id) })
-  }
+    persist({ ...stored, custom: stored.custom.filter((l) => l.id !== id) });
+  };
 
   return (
     <div className="bg-white rounded-2xl border border-[#ECECF2] p-5">
-      <h3 className="text-sm font-semibold text-[#1A1F36] mb-4">{tr('school.widget.stats', lang)}</h3>
+      <h3 className="text-sm font-semibold text-[#1A1F36] mb-4">
+        {tr("school.widget.stats", lang)}
+      </h3>
       <div className="flex flex-col divide-y divide-[#F3F3F8]">
-        {/* Moodle */}
-        <div className="py-3">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{ background: '#FEF9C3', color: '#CA8A04' }}
-            >
-              <HardDrive size={15} strokeWidth={1.8} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-[#1A1F36]">Moodle keskkond</p>
-              <p className="text-[11px] text-[#94A3B8] mt-0.5 truncate">
-                {stored.moodle || tr('school.empty.schedule', lang)}
-              </p>
-            </div>
-            {stored.moodle ? (
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                <a
-                  href={stored.moodle}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#6F5AE8] hover:bg-[#F8F7FC] transition-colors"
-                >
-                  {tr('school.action.openMoodle', lang)}
-                  <ExternalLink size={12} strokeWidth={2} />
-                </a>
-                <button
-                  onClick={startEditMoodle}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7FC] hover:text-[#1A1F36] transition-colors"
-                >
-                  <Pencil size={13} strokeWidth={2} />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={startEditMoodle}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#6F5AE8] hover:bg-[#F8F7FC] transition-colors flex-shrink-0"
-              >
-                <Plus size={13} strokeWidth={2.5} />
-                tr('school.field.examMoodle', lang) + ' link'
-              </button>
-            )}
-          </div>
-          {editingMoodle && (
-            <div className="mt-3 flex flex-col gap-2">
-              <input
-                type="url"
-                value={moodleInput}
-                onChange={(e) => setMoodleInput(e.target.value)}
-                placeholder="https://moodle.kool.ee"
-                autoFocus
-                className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-xs text-[#1A1F36] placeholder:text-[#94A3B8] focus:outline-none focus:border-[#6F5AE8]/50 transition-colors"
-              />
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  onClick={() => { setEditingMoodle(false); setMoodleInput('') }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
-                >
-                  {tr('school.action.discard', lang)}
-                </button>
-                <button
-                  onClick={saveMoodle}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
-                >
-                  <Check size={13} strokeWidth={2.5} />
-                  {tr('school.action.save', lang)}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* Google Drive */}
         <div className="py-3">
           <div className="flex items-center gap-3">
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{ background: '#DCFCE7', color: '#16A34A' }}
+              style={{ background: isDark ? "#0D2418" : "#DCFCE7", color: isDark ? "#4ADE80" : "#16A34A" }}
             >
               <HardDrive size={15} strokeWidth={1.8} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-[#1A1F36]">Google Drive</p>
+              <p className="text-xs font-semibold text-[#1A1F36]">
+                Google Drive
+              </p>
               <p className="text-[11px] text-[#94A3B8] mt-0.5 truncate">
-                {stored.googleDrive || tr('school.empty.schedule', lang)}
+                {stored.googleDrive || tr("school.empty.schedule", lang)}
               </p>
             </div>
             {stored.googleDrive ? (
@@ -1913,7 +2547,7 @@ function MaterialsLinks() {
                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#6F5AE8] hover:bg-[#F8F7FC] transition-colors flex-shrink-0"
               >
                 <Plus size={13} strokeWidth={2.5} />
-                {tr('school.action.addSubject', lang)}
+                {tr("school.action.addSubject", lang)}
               </button>
             )}
           </div>
@@ -1929,17 +2563,20 @@ function MaterialsLinks() {
               />
               <div className="flex items-center justify-end gap-2">
                 <button
-                  onClick={() => { setEditingGdrive(false); setGdriveInput('') }}
+                  onClick={() => {
+                    setEditingGdrive(false);
+                    setGdriveInput("");
+                  }}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
                 >
-                  {tr('school.action.discard', lang)}
+                  {tr("school.action.discard", lang)}
                 </button>
                 <button
                   onClick={saveGdrive}
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
                 >
                   <Check size={13} strokeWidth={2.5} />
-                  {tr('school.action.save', lang)}
+                  {tr("school.action.save", lang)}
                 </button>
               </div>
             </div>
@@ -1951,20 +2588,28 @@ function MaterialsLinks() {
           <div className="flex items-center gap-3 mb-3">
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{ background: '#EDE9FB', color: '#6F5AE8' }}
+              style={{ background: isDark ? "#1E1B2E" : "#EDE9FB", color: isDark ? "#A78BFA" : "#6F5AE8" }}
             >
               <Link2 size={15} strokeWidth={1.8} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-[#1A1F36]">Lisa muu link</p>
-              <p className="text-[11px] text-[#94A3B8] mt-0.5">OneDrive, Dropbox vms</p>
+              <p className="text-xs font-semibold text-[#1A1F36]">
+                {tr("School link custom", lang)}
+              </p>
+              <p className="text-[11px] text-[#94A3B8] mt-0.5">
+                OneDrive, Dropbox vms
+              </p>
             </div>
             <button
-              onClick={() => { setAddingCustom(true); setCustomName(''); setCustomUrl('') }}
+              onClick={() => {
+                setAddingCustom(true);
+                setCustomName("");
+                setCustomUrl("");
+              }}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#6F5AE8] hover:bg-[#F8F7FC] transition-colors flex-shrink-0"
             >
               <Plus size={13} strokeWidth={2.5} />
-              {tr('school.action.addTask', lang)}
+              {tr("school.action.addTask", lang)}
             </button>
           </div>
 
@@ -1987,10 +2632,14 @@ function MaterialsLinks() {
               />
               <div className="flex items-center justify-end gap-2">
                 <button
-                  onClick={() => { setAddingCustom(false); setCustomName(''); setCustomUrl('') }}
+                  onClick={() => {
+                    setAddingCustom(false);
+                    setCustomName("");
+                    setCustomUrl("");
+                  }}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
                 >
-                  {tr('school.action.discard', lang)}
+                  {tr("school.action.discard", lang)}
                 </button>
                 <button
                   onClick={addCustomLink}
@@ -1998,14 +2647,16 @@ function MaterialsLinks() {
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Check size={13} strokeWidth={2.5} />
-                  {tr('school.action.save', lang)}
+                  {tr("school.action.save", lang)}
                 </button>
               </div>
             </div>
           )}
 
           {stored.custom.length === 0 && !addingCustom ? (
-            <p className="text-[11px] text-[#94A3B8] text-center py-2">Lisatud linke pole.</p>
+            <p className="text-[11px] text-[#94A3B8] text-center py-2">
+              {tr("School link none", lang)}
+            </p>
           ) : (
             <div className="flex flex-col gap-2">
               {stored.custom.map((link) => (
@@ -2029,10 +2680,14 @@ function MaterialsLinks() {
                       />
                       <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => { setEditingCustomId(null); setEditName(''); setEditUrl('') }}
+                          onClick={() => {
+                            setEditingCustomId(null);
+                            setEditName("");
+                            setEditUrl("");
+                          }}
                           className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
                         >
-                          {tr('school.action.discard', lang)}
+                          {tr("school.action.discard", lang)}
                         </button>
                         <button
                           onClick={saveEditCustom}
@@ -2040,7 +2695,7 @@ function MaterialsLinks() {
                           className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Check size={13} strokeWidth={2.5} />
-                          {tr('school.action.save', lang)}
+                          {tr("school.action.save", lang)}
                         </button>
                       </div>
                     </div>
@@ -2048,13 +2703,17 @@ function MaterialsLinks() {
                     <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-[#F8F7FC] hover:bg-[#F3F1FB] transition-colors">
                       <div
                         className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                        style={{ background: '#EDE9FB', color: '#6F5AE8' }}
+                        style={{ background: isDark ? "#1E1B2E" : "#EDE9FB", color: isDark ? "#A78BFA" : "#6F5AE8" }}
                       >
                         <Link2 size={13} strokeWidth={1.8} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-[#1A1F36] truncate">{link.name}</p>
-                        <p className="text-[11px] text-[#94A3B8] truncate">{link.url}</p>
+                        <p className="text-xs font-semibold text-[#1A1F36] truncate">
+                          {link.name}
+                        </p>
+                        <p className="text-[11px] text-[#94A3B8] truncate">
+                          {link.url}
+                        </p>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <a
@@ -2069,14 +2728,14 @@ function MaterialsLinks() {
                         <button
                           onClick={() => startEditCustom(link)}
                           className="w-7 h-7 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-white hover:text-[#1A1F36] transition-colors"
-                          title={tr('school.action.edit', lang)}
+                          title={tr("school.action.edit", lang)}
                         >
                           <Pencil size={13} strokeWidth={2} />
                         </button>
                         <button
                           onClick={() => deleteCustomLink(link.id)}
                           className="w-7 h-7 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-white hover:text-[#DC2626] transition-colors"
-                          title={tr('school.action.delete', lang)}
+                          title={tr("school.action.delete", lang)}
                         >
                           <Trash2 size={13} strokeWidth={2} />
                         </button>
@@ -2090,7 +2749,7 @@ function MaterialsLinks() {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function AIStudyHelper({
@@ -2100,24 +2759,28 @@ function AIStudyHelper({
   scheduleMode,
   scheduleLessons,
 }: {
-  subjects: Subject[]
-  tasks: Task[]
-  exams: Exam[]
-  scheduleMode: ScheduleMode
-  scheduleLessons: ScheduleLesson[]
+  subjects: Subject[];
+  tasks: Task[];
+  exams: Exam[];
+  scheduleMode: ScheduleMode;
+  scheduleLessons: ScheduleLesson[];
 }) {
-  const lang = getLocalLanguage()
-  const navigate = useNavigate()
+  const lang = getLocalLanguage();
+  const navigate = useNavigate();
 
   const handleAskAI = () => {
-    const activeSubjects = subjects.map((s) => ({ name: s.name, teacher: s.teacher, room: s.room }))
+    const activeSubjects = subjects.map((s) => ({
+      name: s.name,
+      teacher: s.teacher,
+      room: s.room,
+    }));
     const schoolTasks = tasks.map((t) => ({
       subject: t.subject,
       title: t.title,
       type: t.type,
       deadline: t.deadline,
       progress: t.progress,
-    }))
+    }));
     const schoolExams = exams.map((e) => ({
       subject: e.subject,
       title: e.title,
@@ -2125,22 +2788,24 @@ function AIStudyHelper({
       type: e.type,
       status: e.status,
       daysLeft: e.daysLeft,
-    }))
+    }));
 
-    let links: { moodle?: string; googleDrive?: string; custom?: { name: string; url: string }[] } | undefined
-    try {
-      const raw = localStorage.getItem('kivora_material_links')
-      if (raw) {
-        const parsed = JSON.parse(raw) as { moodle?: string; googleDrive?: string; custom?: { name: string; url: string }[] }
-        if (parsed.moodle || parsed.googleDrive || (parsed.custom && parsed.custom.length > 0)) {
-          links = {
-            moodle: parsed.moodle || undefined,
-            googleDrive: parsed.googleDrive || undefined,
-            custom: parsed.custom,
-          }
+    let links:
+      | {
+          moodle?: string;
+          googleDrive?: string;
+          custom?: { name: string; url: string }[];
         }
-      }
-    } catch { /* ignore */ }
+      | undefined;
+    if (
+      _cachedLinks.googleDrive ||
+      (_cachedLinks.custom && _cachedLinks.custom.length > 0)
+    ) {
+      links = {
+        googleDrive: _cachedLinks.googleDrive || undefined,
+        custom: _cachedLinks.custom,
+      };
+    }
 
     const context = {
       subjects: activeSubjects,
@@ -2156,30 +2821,34 @@ function AIStudyHelper({
         teacher: l.teacher,
       })),
       links,
+    };
+    try {
+      sessionStorage.setItem("kivora_school_context", JSON.stringify(context));
+    } catch {
+      /* ignore */
     }
-    try { sessionStorage.setItem('kivora_school_context', JSON.stringify(context)) } catch { /* ignore */ }
-    sessionStorage.setItem('kivora_ai_prompt', tr('school.ai.prompt', lang))
-    navigate('/app/assistant')
-  }
+    sessionStorage.setItem("kivora_ai_prompt", tr("school.ai.prompt", lang));
+    navigate("/app/assistant");
+  };
 
   return (
-    <div className="bg-gradient-to-br from-[#6F5AE8] to-[#7C6BF0] rounded-2xl p-5 text-white">
+    <div className="school-ai-card bg-gradient-to-br from-[#6F5AE8] to-[#7C6BF0] rounded-2xl p-5 text-white">
       <div className="flex items-center gap-2 mb-3">
         <Sparkles size={16} strokeWidth={2} className="text-yellow-300" />
-        <h3 className="text-sm font-semibold">{tr('school.ai.title', lang)}</h3>
+        <h3 className="text-sm font-semibold">{tr("school.ai.title", lang)}</h3>
       </div>
       <p className="text-xs text-white/85 leading-relaxed mb-5">
-        {tr('school.ai.desc', lang)}
+        {tr("school.ai.desc", lang)}
       </p>
       <button
         onClick={handleAskAI}
         className="w-full flex items-center justify-between bg-white/15 hover:bg-white/25 transition-colors rounded-xl px-4 py-2.5 text-sm font-semibold text-white"
       >
-        {tr('school.ai.btn', lang)}
+        {tr("school.ai.btn", lang)}
         <ChevronRight size={15} strokeWidth={2.5} />
       </button>
     </div>
-  )
+  );
 }
 
 // ── Exams tab (kontrolltööd) ────────────────────────────────────────────────
@@ -2188,28 +2857,36 @@ function ExamsTab({
   exams,
   onAdd,
   onExamClick,
+  onEdit,
+  onDelete,
 }: {
-  exams: Exam[]
-  onAdd: () => void
-  onExamClick: (exam: Exam) => void
+  exams: Exam[];
+  onAdd: () => void;
+  onExamClick: (exam: Exam) => void;
+  onEdit: (exam: Exam) => void;
+  onDelete: (id: number) => void;
 }) {
-  const lang = getLocalLanguage()
+  const lang = getLocalLanguage();
+  const isDark = useIsDark();
+  const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
   const sorted = [...exams].sort((a, b) => {
-    if (a.status === 'tehtud' && b.status !== 'tehtud') return 1
-    if (a.status !== 'tehtud' && b.status === 'tehtud') return -1
-    return a.daysLeft - b.daysLeft
-  })
+    if (a.status === "tehtud" && b.status !== "tehtud") return 1;
+    if (a.status !== "tehtud" && b.status === "tehtud") return -1;
+    return a.daysLeft - b.daysLeft;
+  });
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[#1A1F36]">{tr('school.tab.kontrolltood', lang)}</h3>
+        <h3 className="text-sm font-semibold text-[#1A1F36]">
+          {tr("school.tab.kontrolltood", lang)}
+        </h3>
         <button
           onClick={onAdd}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
         >
           <Plus size={14} strokeWidth={2.5} />
-          {tr('school.action.addTest', lang)}
+          {tr("school.action.addTest", lang)}
         </button>
       </div>
 
@@ -2218,8 +2895,12 @@ function ExamsTab({
           <div className="w-12 h-12 rounded-2xl bg-[#EDE9FB] flex items-center justify-center mb-3">
             <Calendar size={22} strokeWidth={1.8} className="text-[#6F5AE8]" />
           </div>
-          <p className="text-sm font-semibold text-[#1A1F36]">{tr('school.empty.tests', lang)}</p>
-          <p className="text-xs text-[#94A3B8] mt-1">{tr('school.empty.testsSub', lang)}</p>
+          <p className="text-sm font-semibold text-[#1A1F36]">
+            {tr("school.empty.tests", lang)}
+          </p>
+          <p className="text-xs text-[#94A3B8] mt-1">
+            {tr("school.empty.testsSub", lang)}
+          </p>
         </div>
       ) : (
         <div className="flex flex-col divide-y divide-[#F3F3F8]">
@@ -2227,7 +2908,7 @@ function ExamsTab({
             <div key={exam.id} className="flex items-center gap-4 py-4">
               <div
                 className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: exam.iconBg, color: exam.iconColor }}
+                style={{ background: isDark ? darkBg(exam.iconBg) : exam.iconBg, color: isDark ? darkText(exam.iconColor) : exam.iconColor }}
               >
                 <Calendar size={16} strokeWidth={1.8} />
               </div>
@@ -2239,19 +2920,30 @@ function ExamsTab({
                   {exam.title}
                 </button>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs font-medium text-[#6F5AE8]">{exam.subject}</span>
+                  <span className="text-xs font-medium text-[#6F5AE8]">
+                    {exam.subject}
+                  </span>
                   <span className="text-xs text-[#94A3B8]">·</span>
-                  <span className="text-xs text-[#94A3B8]">{exam.date}</span>
+                  <span className="text-xs text-[#94A3B8]">{formatDateDisplay(exam.date)}</span>
                 </div>
               </div>
               <div className="hidden sm:flex flex-col items-end flex-shrink-0">
-                <span className="text-[11px] font-medium text-[#1A1F36]">{exam.date}</span>
+                <span className="text-[11px] font-medium text-[#1A1F36]">
+                  {formatDateDisplay(exam.date)}
+                </span>
                 <span className="text-[11px] text-[#94A3B8] flex items-center gap-1 mt-0.5">
                   <Clock size={10} strokeWidth={2} />
-                  {exam.status === 'tehtud' ? tr('school.detail.doneLabel', lang) : exam.daysLeft <= 0 ? tr('school.task.today', lang) : tr('school.task.daysLeft', lang).replace('{n}', String(exam.daysLeft))}
+                  {exam.status === "tehtud"
+                    ? tr("school.detail.doneLabel", lang)
+                    : exam.daysLeft <= 0
+                      ? tr("school.task.today", lang)
+                      : tr("school.task.daysLeft", lang).replace(
+                          "{n}",
+                          String(exam.daysLeft),
+                        )}
                 </span>
               </div>
-              {exam.moodleUrl && exam.moodleUrl.trim() !== '' && (
+              {exam.moodleUrl && exam.moodleUrl.trim() !== "" && (
                 <a
                   href={exam.moodleUrl}
                   target="_blank"
@@ -2259,25 +2951,90 @@ function ExamsTab({
                   className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#ECECF2] text-xs font-medium text-[#1A1F36] hover:border-[#6F5AE8]/40 hover:bg-[#F8F7FC] transition-colors flex-shrink-0"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {tr('school.action.openMoodle', lang)}
-                  <ExternalLink size={11} strokeWidth={2} className="text-[#94A3B8]" />
+                  {tr("school.action.openMoodle", lang)}
+                  <ExternalLink
+                    size={11}
+                    strokeWidth={2}
+                    className="text-[#94A3B8]"
+                  />
                 </a>
               )}
               <span
                 className="flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full"
                 style={{
-                  background: exam.status === 'tehtud' ? '#DCFCE7' : exam.daysLeft <= 10 ? '#FEF9C3' : exam.daysLeft <= 20 ? '#DCFCE7' : '#EDE9FB',
-                  color: exam.status === 'tehtud' ? '#15803D' : exam.daysLeft <= 10 ? '#854D0E' : exam.daysLeft <= 20 ? '#15803D' : '#6F5AE8',
+                  background:
+                    exam.status === "tehtud"
+                      ? "#DCFCE7"
+                      : exam.daysLeft <= 10
+                        ? "#FEF9C3"
+                        : exam.daysLeft <= 20
+                          ? "#DCFCE7"
+                          : "#EDE9FB",
+                  color:
+                    exam.status === "tehtud"
+                      ? "#15803D"
+                      : exam.daysLeft <= 10
+                        ? "#854D0E"
+                        : exam.daysLeft <= 20
+                          ? "#15803D"
+                          : "#6F5AE8",
                 }}
               >
-                {exam.status === 'tehtud' ? tr('school.detail.doneLabel', lang) : exam.daysLeft <= 0 ? tr('school.task.today', lang) : tr('school.task.daysShort', lang).replace('{n}', String(exam.daysLeft))}
+                {exam.status === "tehtud"
+                  ? tr("school.detail.doneLabel", lang)
+                  : exam.daysLeft <= 0
+                    ? tr("school.task.today", lang)
+                    : tr("school.task.daysShort", lang).replace(
+                        "{n}",
+                        String(exam.daysLeft),
+                      )}
               </span>
             </div>
           ))}
         </div>
       )}
     </div>
-  )
+  );
+}
+
+// ── Date helpers ──────────────────────────────────────────────────────────
+
+/** Convert legacy "D. Month YYYY" dates to ISO YYYY-MM-DD for <input type="date"> */
+function toISODate(s: string): string {
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const MONTH_MAP: Record<string, number> = {
+    // Estonian
+    jaanuar: 0, veebruar: 1, märts: 2, aprill: 3, mai: 4, juuni: 5,
+    juuli: 6, august: 7, september: 8, oktoober: 9, november: 10, detsember: 11,
+    // English (shared names already covered above; add distinct ones)
+    january: 0, february: 1, march: 2, april: 3, may: 4, june: 5, july: 6,
+    october: 9, december: 11,
+  };
+  const m = s.match(/(\d+)\.\s+(\w+)\s+(\d+)/);
+  if (!m) return '';
+  const month = MONTH_MAP[m[2].toLowerCase()];
+  if (month === undefined) return '';
+  const d = new Date(parseInt(m[3]), month, parseInt(m[1]));
+  if (isNaN(d.getTime())) return '';
+  // Use local getters — toISOString() converts to UTC and shifts the date
+  // backward in UTC+ timezones (e.g. Estonia UTC+2/+3).
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** Format a date string (ISO or legacy) for display */
+function formatDateDisplay(s: string): string {
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    return new Date(s + 'T00:00:00').toLocaleDateString(
+      getLocalLanguage() === 'et' ? 'et-EE' : 'en-GB',
+      { day: 'numeric', month: 'long', year: 'numeric' }
+    );
+  }
+  return s;
 }
 
 // ── Exam detail modal ──────────────────────────────────────────────────────
@@ -2288,13 +3045,14 @@ function ExamDetailModal({
   onEdit,
   onDelete,
 }: {
-  exam: Exam
-  onClose: () => void
-  onEdit: (exam: Exam) => void
-  onDelete: (id: number) => void
+  exam: Exam;
+  onClose: () => void;
+  onEdit: (exam: Exam) => void;
+  onDelete: (id: number) => void;
 }) {
-  const lang = getLocalLanguage()
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  const lang = getLocalLanguage();
+  const isDark = useIsDark();
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
     <div
@@ -2306,7 +3064,9 @@ function ExamDetailModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2]">
-          <h2 className="text-base font-semibold text-[#1A1F36]">{tr('school.detail.dataTitle', lang)}</h2>
+          <h2 className="text-base font-semibold text-[#1A1F36]">
+            {tr("school.detail.dataTitle", lang)}
+          </h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
@@ -2320,19 +3080,21 @@ function ExamDetailModal({
             <p className="text-sm text-[#1A1F36] mb-1">
               Kas soovid kontrolltöö „{exam.title}“ kindlasti kustutada?
             </p>
-            <p className="text-xs text-[#94A3B8] mb-5">{tr('school.confirm.irreversible', lang)}</p>
+            <p className="text-xs text-[#94A3B8] mb-5">
+              {tr("school.confirm.irreversible", lang)}
+            </p>
             <div className="flex items-center justify-end gap-2">
               <button
                 onClick={() => setConfirmDelete(false)}
                 className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
               >
-                {tr('school.action.discard', lang)}
+                {tr("school.action.discard", lang)}
               </button>
               <button
                 onClick={() => onDelete(exam.id)}
                 className="px-4 py-2 rounded-lg text-sm font-medium bg-[#DC2626] text-white hover:bg-[#B91C1C] transition-colors"
               >
-                {tr('school.action.delete', lang)}
+                {tr("school.action.delete", lang)}
               </button>
             </div>
           </div>
@@ -2342,51 +3104,75 @@ function ExamDetailModal({
               <div className="flex items-center gap-3">
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: exam.iconBg, color: exam.iconColor }}
+                  style={{ background: isDark ? darkBg(exam.iconBg) : exam.iconBg, color: isDark ? darkText(exam.iconColor) : exam.iconColor }}
                 >
                   <Calendar size={18} strokeWidth={1.8} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-[#1A1F36] truncate">{exam.subject}</p>
-                  <p className="text-xs text-[#94A3B8]">{tr('school.detail.testLabel', lang)}</p>
+                  <p className="text-sm font-semibold text-[#1A1F36] truncate">
+                    {exam.subject}
+                  </p>
+                  <p className="text-xs text-[#94A3B8]">
+                    {tr("school.detail.testLabel", lang)}
+                  </p>
                 </div>
                 <span
                   className="text-[11px] font-medium px-2 py-0.5 rounded-full flex-shrink-0"
                   style={{
-                    background: exam.status === 'tehtud' ? '#DCFCE7' : '#FEF9C3',
-                    color: exam.status === 'tehtud' ? '#15803D' : '#854D0E',
+                    background:
+                      exam.status === "tehtud" ? "#DCFCE7" : "#FEF9C3",
+                    color: exam.status === "tehtud" ? "#15803D" : "#854D0E",
                   }}
                 >
-                  {exam.status === 'tehtud' ? tr('school.detail.doneLabel', lang) : tr('school.detail.pendingLabel', lang)}
+                  {exam.status === "tehtud"
+                    ? tr("school.detail.doneLabel", lang)
+                    : tr("school.detail.pendingLabel", lang)}
                 </span>
               </div>
 
               <div>
-                <p className="text-xs font-medium text-[#64748B] mb-1">{tr('school.detail.titleLabel', lang)}</p>
+                <p className="text-xs font-medium text-[#64748B] mb-1">
+                  {tr("school.detail.titleLabel", lang)}
+                </p>
                 <p className="text-sm text-[#1A1F36]">{exam.title}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-xs font-medium text-[#64748B] mb-1">{tr('school.detail.dateLabel', lang)}</p>
-                  <p className="text-sm text-[#1A1F36]">{exam.date}</p>
+                  <p className="text-xs font-medium text-[#64748B] mb-1">
+                    {tr("school.detail.dateLabel", lang)}
+                  </p>
+                  <p className="text-sm text-[#1A1F36]">{formatDateDisplay(exam.date)}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#64748B] mb-1">{tr('school.detail.untilLabel', lang)}</p>
+                  <p className="text-xs font-medium text-[#64748B] mb-1">
+                    {tr("school.detail.untilLabel", lang)}
+                  </p>
                   <p className="text-sm text-[#1A1F36]">
-                    {exam.status === 'tehtud' ? tr('school.detail.doneLabel', lang) : exam.daysLeft <= 0 ? tr('school.task.today', lang) : tr('school.task.daysLeft', lang).replace('{n}', String(exam.daysLeft))}
+                    {exam.status === "tehtud"
+                      ? tr("school.detail.doneLabel", lang)
+                      : exam.daysLeft <= 0
+                        ? tr("school.task.today", lang)
+                        : tr("school.task.daysLeft", lang).replace(
+                            "{n}",
+                            String(exam.daysLeft),
+                          )}
                   </p>
                 </div>
               </div>
 
-              {exam.notes && exam.notes.trim() !== '' && (
+              {exam.notes && exam.notes.trim() !== "" && (
                 <div>
-                  <p className="text-xs font-medium text-[#64748B] mb-1">{tr('school.detail.notesLabel', lang)}</p>
-                  <p className="text-sm text-[#1A1F36] whitespace-pre-wrap">{exam.notes}</p>
+                  <p className="text-xs font-medium text-[#64748B] mb-1">
+                    {tr("school.detail.notesLabel", lang)}
+                  </p>
+                  <p className="text-sm text-[#1A1F36] whitespace-pre-wrap">
+                    {exam.notes}
+                  </p>
                 </div>
               )}
 
-              {exam.moodleUrl && exam.moodleUrl.trim() !== '' && (
+              {exam.moodleUrl && exam.moodleUrl.trim() !== "" && (
                 <a
                   href={exam.moodleUrl}
                   target="_blank"
@@ -2394,9 +3180,14 @@ function ExamDetailModal({
                   className="flex items-center gap-1.5 text-sm text-[#6F5AE8] hover:text-[#5B48D8] transition-colors"
                 >
                   <ExternalLink size={14} strokeWidth={2} />
-                  {tr('school.action.openMoodle', lang)}
+                  {tr("school.action.openMoodle", lang)}
                 </a>
               )}
+              <LinkedItemsPanel
+                type="school"
+                entityId={encodeSchoolId("exam", exam.id)}
+                lang={lang}
+              />
             </div>
 
             <div className="flex items-center justify-between px-5 py-4 border-t border-[#ECECF2]">
@@ -2405,21 +3196,21 @@ function ExamDetailModal({
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-[#DC2626] hover:bg-[#FEF2F2] transition-colors"
               >
                 <Trash2 size={14} strokeWidth={2} />
-                {tr('school.action.delete', lang)}
+                {tr("school.action.delete", lang)}
               </button>
               <div className="flex items-center gap-2">
                 <button
                   onClick={onClose}
                   className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
                 >
-                  {tr('school.action.close', lang)}
+                  {tr("school.action.close", lang)}
                 </button>
                 <button
                   onClick={() => onEdit(exam)}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
                 >
                   <Pencil size={14} strokeWidth={2} />
-                  {tr('school.action.edit', lang)}
+                  {tr("school.action.edit", lang)}
                 </button>
               </div>
             </div>
@@ -2427,7 +3218,7 @@ function ExamDetailModal({
         )}
       </div>
     </div>
-  )
+  );
 }
 
 // ── Exam form modal (add + edit) ─────────────────────────────────────────────
@@ -2438,44 +3229,47 @@ function ExamFormModal({
   onClose,
   onSave,
 }: {
-  exam?: Exam
-  nextId: number
-  onClose: () => void
-  onSave: (exam: Exam) => void
+  exam?: Exam;
+  nextId: number;
+  onClose: () => void;
+  onSave: (exam: Exam) => void;
 }) {
-  const lang = getLocalLanguage()
-  const isEdit = !!exam
-  const [subject, setSubject] = useState(exam?.subject ?? '')
-  const [title, setTitle] = useState(exam?.title ?? '')
-  const [date, setDate] = useState(exam?.date ?? '')
-  const [notes, setNotes] = useState(exam?.notes ?? '')
-  const [moodleUrl, setMoodleUrl] = useState(exam?.moodleUrl ?? '')
-  const [error, setError] = useState('')
+  const lang = getLocalLanguage();
+  const subjects = useSchoolSubjectsFromLessons();
+  const isEdit = !!exam;
+  const [subject, setSubject] = useState(exam?.subject ?? "");
+  const [title, setTitle] = useState(exam?.title ?? "");
+  const [date, setDate] = useState(toISODate(exam?.date ?? ""));
+  const [notes, setNotes] = useState(exam?.notes ?? "");
+  const [moodleUrl, setMoodleUrl] = useState(exam?.moodleUrl ?? "");
+  const [error, setError] = useState("");
 
   const handleSave = () => {
     if (!title.trim()) {
-      setError(tr('school.field.testNameLabel', lang) + ' on kohustuslik.')
-      return
+      setError(tr("school.field.testNameLabel", lang) + " on kohustuslik.");
+      return;
     }
     if (!subject.trim()) {
-      setError(tr('school.field.testSubjectLabel', lang) + ' on kohustuslik.')
-      return
+      setError(tr("school.field.testSubjectLabel", lang) + " on kohustuslik.");
+      return;
     }
-    const palette = SUBJECT_PALETTE[(nextId - 1) % SUBJECT_PALETTE.length]
+    const palette = SUBJECT_PALETTE[(nextId - 1) % SUBJECT_PALETTE.length];
+    const matchedSubject = subjects.find((s) => s.name === subject.trim());
     onSave({
       id: exam?.id ?? nextId,
       subject: subject.trim(),
+      subjectId: matchedSubject?.id,
       title: title.trim(),
-      date: date.trim() || tr('school.field.examDateLabel', lang),
-      daysLeft: computeDaysLeft(date.trim() || ''),
-      type: 'kontrolltöö',
-      status: exam?.status ?? 'ootel',
-      iconBg: exam?.iconBg ?? palette.bg,
-      iconColor: exam?.iconColor ?? palette.color,
+      date: date.trim(),
+      daysLeft: computeDaysLeft(date.trim() || ""),
+      type: "kontrolltöö",
+      status: exam?.status ?? "ootel",
+      iconBg: exam?.iconBg ?? (matchedSubject?.bg ?? palette.bg),
+      iconColor: exam?.iconColor ?? (matchedSubject?.color ?? palette.color),
       notes: notes.trim() || undefined,
       moodleUrl: moodleUrl.trim() || undefined,
-    })
-  }
+    });
+  };
 
   return (
     <div
@@ -2483,12 +3277,14 @@ function ExamFormModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-white rounded-2xl shadow-xl"
+        className="w-full max-w-md bg-white rounded-2xl shadow-xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2] flex-shrink-0">
           <h2 className="text-base font-semibold text-[#1A1F36]">
-            {isEdit ? tr('school.modal.editTest', lang) : tr('school.modal.addTest', lang)}
+            {isEdit
+              ? tr("school.modal.editTest", lang)
+              : tr("school.modal.addTest", lang)}
           </h2>
           <button
             onClick={onClose}
@@ -2498,54 +3294,77 @@ function ExamFormModal({
           </button>
         </div>
 
-        <div className="px-5 py-4 flex flex-col gap-4 max-h-[70vh] overflow-y-auto">
+        <div className="px-5 py-4 flex flex-col gap-4 flex-1 overflow-y-auto">
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.testSubjectLabel', lang)} <span className="text-red-500">*</span></label>
-            <input
-              type="text"
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.testSubjectLabel", lang)}{" "}
+              <span className="text-red-500">*</span>
+            </label>
+            <select
               value={subject}
-              onChange={(e) => { setSubject(e.target.value); setError('') }}
-              placeholder={tr('school.subject.placeholder', lang)}
-              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
-            />
+              onChange={(e) => { setSubject(e.target.value); setError(""); }}
+              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] bg-white"
+            >
+              <option value="">{lang === 'et' ? '— vali aine —' : '— select subject —'}</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.name}>{s.name}</option>
+              ))}
+            </select>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.testNameLabel', lang)} <span className="text-red-500">*</span></label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.testNameLabel", lang)}{" "}
+              <span className="text-red-500">*</span>
+            </label>
             <input
               type="text"
               value={title}
-              onChange={(e) => { setTitle(e.target.value); setError('') }}
-              placeholder={tr('school.field.examNamePh', lang)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setError("");
+              }}
+              placeholder={tr("school.field.examNamePh", lang)}
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             />
             {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.examDateLabel', lang)}</label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.examDateLabel", lang)}
+            </label>
             <input
-              type="text"
+              type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              placeholder={tr('school.field.taskDeadlinePh', lang)}
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.examNotes', lang)} <span className="text-[#CBD5E1] font-normal">{tr('school.field.optional', lang)}</span></label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.examNotes", lang)}{" "}
+              <span className="text-[#CBD5E1] font-normal">
+                {tr("school.field.optional", lang)}
+              </span>
+            </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder={tr('school.form.notesPlaceholder', lang)}
+              placeholder={tr("school.form.notesPlaceholder", lang)}
               rows={3}
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] resize-none"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.examMoodle', lang)} <span className="text-[#CBD5E1] font-normal">{tr('school.field.optional', lang)}</span></label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.examMoodle", lang)}{" "}
+              <span className="text-[#CBD5E1] font-normal">
+                {tr("school.field.optional", lang)}
+              </span>
+            </label>
             <input
               type="text"
               value={moodleUrl}
@@ -2556,23 +3375,23 @@ function ExamFormModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2]">
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2] flex-shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
           >
-            {tr('school.action.cancel', lang)}
+            {tr("school.action.cancel", lang)}
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
           >
-            {tr('school.action.save', lang)}
+            {tr("school.action.save", lang)}
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // ── Eksamid tab ───────────────────────────────────────────────────────────
@@ -2586,23 +3405,24 @@ function EksamidTab({
   onMarkUndone,
   onDelete,
 }: {
-  exams: Exam[]
-  onAdd: () => void
-  onExamClick: (exam: Exam) => void
-  onEdit: (exam: Exam) => void
-  onMarkDone: (id: number) => void
-  onMarkUndone: (id: number) => void
-  onDelete: (id: number) => void
+  exams: Exam[];
+  onAdd: () => void;
+  onExamClick: (exam: Exam) => void;
+  onEdit: (exam: Exam) => void;
+  onMarkDone: (id: number) => void;
+  onMarkUndone: (id: number) => void;
+  onDelete: (id: number) => void;
 }) {
-  const lang = getLocalLanguage()
-  const [openMenuId, setOpenMenuId] = useState<number | null>(null)
-  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+  const lang = getLocalLanguage();
+  const isDark = useIsDark();
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const sorted = [...exams].sort((a, b) => {
-    if (a.status === 'tehtud' && b.status !== 'tehtud') return 1
-    if (a.status !== 'tehtud' && b.status === 'tehtud') return -1
-    return a.daysLeft - b.daysLeft
-  })
+    if (a.status === "tehtud" && b.status !== "tehtud") return 1;
+    if (a.status !== "tehtud" && b.status === "tehtud") return -1;
+    return a.daysLeft - b.daysLeft;
+  });
 
   return (
     <div>
@@ -2613,7 +3433,7 @@ function EksamidTab({
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
         >
           <Plus size={14} strokeWidth={2.5} />
-          {tr('school.action.addExam', lang)}
+          {tr("school.action.addExam", lang)}
         </button>
       </div>
 
@@ -2622,8 +3442,12 @@ function EksamidTab({
           <div className="w-12 h-12 rounded-2xl bg-[#EDE9FB] flex items-center justify-center mb-3">
             <Calendar size={22} strokeWidth={1.8} className="text-[#6F5AE8]" />
           </div>
-          <p className="text-sm font-semibold text-[#1A1F36]">{tr('school.empty.examModal', lang)}</p>
-          <p className="text-xs text-[#94A3B8] mt-1">Vajuta "Lisa eksam", et lisada uus.</p>
+          <p className="text-sm font-semibold text-[#1A1F36]">
+            {tr("school.empty.examModal", lang)}
+          </p>
+          <p className="text-xs text-[#94A3B8] mt-1">
+            Vajuta "Lisa eksam", et lisada uus.
+          </p>
         </div>
       ) : (
         <div className="flex flex-col divide-y divide-[#F3F3F8]">
@@ -2631,7 +3455,7 @@ function EksamidTab({
             <div key={exam.id} className="flex items-center gap-4 py-4">
               <div
                 className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: exam.iconBg, color: exam.iconColor }}
+                style={{ background: isDark ? darkBg(exam.iconBg) : exam.iconBg, color: isDark ? darkText(exam.iconColor) : exam.iconColor }}
               >
                 <Calendar size={16} strokeWidth={1.8} />
               </div>
@@ -2643,31 +3467,46 @@ function EksamidTab({
                   {exam.title}
                 </button>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs font-medium text-[#6F5AE8]">{exam.subject}</span>
+                  <span className="text-xs font-medium text-[#6F5AE8]">
+                    {exam.subject}
+                  </span>
                   <span className="text-xs text-[#94A3B8]">·</span>
-                  <span className="text-xs text-[#94A3B8]">{exam.date}</span>
-                  {exam.time && exam.time.trim() !== '' && (
+                  <span className="text-xs text-[#94A3B8]">{formatDateDisplay(exam.date)}</span>
+                  {exam.time && exam.time.trim() !== "" && (
                     <>
                       <span className="text-xs text-[#94A3B8]">·</span>
-                      <span className="text-xs text-[#94A3B8]">{exam.time}</span>
+                      <span className="text-xs text-[#94A3B8]">
+                        {exam.time}
+                      </span>
                     </>
                   )}
-                  {exam.location && exam.location.trim() !== '' && (
+                  {exam.location && exam.location.trim() !== "" && (
                     <>
                       <span className="text-xs text-[#94A3B8]">·</span>
-                      <span className="text-xs text-[#94A3B8]">{exam.location}</span>
+                      <span className="text-xs text-[#94A3B8]">
+                        {exam.location}
+                      </span>
                     </>
                   )}
                 </div>
               </div>
               <div className="hidden sm:flex flex-col items-end flex-shrink-0">
-                <span className="text-[11px] font-medium text-[#1A1F36]">{exam.date}</span>
+                <span className="text-[11px] font-medium text-[#1A1F36]">
+                  {formatDateDisplay(exam.date)}
+                </span>
                 <span className="text-[11px] text-[#94A3B8] flex items-center gap-1 mt-0.5">
                   <Clock size={10} strokeWidth={2} />
-                  {exam.status === 'tehtud' ? tr('school.detail.doneLabel', lang) : exam.daysLeft <= 0 ? tr('school.task.today', lang) : tr('school.task.daysLeft', lang).replace('{n}', String(exam.daysLeft))}
+                  {exam.status === "tehtud"
+                    ? tr("school.detail.doneLabel", lang)
+                    : exam.daysLeft <= 0
+                      ? tr("school.task.today", lang)
+                      : tr("school.task.daysLeft", lang).replace(
+                          "{n}",
+                          String(exam.daysLeft),
+                        )}
                 </span>
               </div>
-              {exam.moodleUrl && exam.moodleUrl.trim() !== '' && (
+              {exam.moodleUrl && exam.moodleUrl.trim() !== "" && (
                 <a
                   href={exam.moodleUrl}
                   target="_blank"
@@ -2675,60 +3514,119 @@ function EksamidTab({
                   className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#ECECF2] text-xs font-medium text-[#1A1F36] hover:border-[#6F5AE8]/40 hover:bg-[#F8F7FC] transition-colors flex-shrink-0"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {tr('school.action.openMoodle', lang)}
-                  <ExternalLink size={11} strokeWidth={2} className="text-[#94A3B8]" />
+                  {tr("school.action.openMoodle", lang)}
+                  <ExternalLink
+                    size={11}
+                    strokeWidth={2}
+                    className="text-[#94A3B8]"
+                  />
                 </a>
               )}
               <span
                 className="flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full"
                 style={{
-                  background: exam.status === 'tehtud' ? '#DCFCE7' : exam.daysLeft <= 10 ? '#FEF9C3' : exam.daysLeft <= 20 ? '#DCFCE7' : '#EDE9FB',
-                  color: exam.status === 'tehtud' ? '#15803D' : exam.daysLeft <= 10 ? '#854D0E' : exam.daysLeft <= 20 ? '#15803D' : '#6F5AE8',
+                  background:
+                    exam.status === "tehtud"
+                      ? "#DCFCE7"
+                      : exam.daysLeft <= 10
+                        ? "#FEF9C3"
+                        : exam.daysLeft <= 20
+                          ? "#DCFCE7"
+                          : "#EDE9FB",
+                  color:
+                    exam.status === "tehtud"
+                      ? "#15803D"
+                      : exam.daysLeft <= 10
+                        ? "#854D0E"
+                        : exam.daysLeft <= 20
+                          ? "#15803D"
+                          : "#6F5AE8",
                 }}
               >
-                {exam.status === 'tehtud' ? tr('school.detail.doneLabel', lang) : exam.daysLeft <= 0 ? tr('school.task.today', lang) : tr('school.task.daysShort', lang).replace('{n}', String(exam.daysLeft))}
+                {exam.status === "tehtud"
+                  ? tr("school.detail.doneLabel", lang)
+                  : exam.daysLeft <= 0
+                    ? tr("school.task.today", lang)
+                    : tr("school.task.daysShort", lang).replace(
+                        "{n}",
+                        String(exam.daysLeft),
+                      )}
               </span>
               <div className="relative flex-shrink-0">
                 <button
-                  onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === exam.id ? null : exam.id) }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenMenuId(openMenuId === exam.id ? null : exam.id);
+                  }}
                   className="text-[#94A3B8] hover:text-[#1A1F36] transition-colors"
                 >
                   <MoreHorizontal size={16} />
                 </button>
                 {openMenuId === exam.id && (
                   <>
-                    <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setOpenMenuId(null)}
+                    />
                     <div className="absolute right-0 z-20 mt-1 w-44 bg-white rounded-lg border border-[#ECECF2] shadow-lg overflow-hidden">
                       <button
-                        onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); onEdit(exam) }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuId(null);
+                          onEdit(exam);
+                        }}
                         className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
                       >
-                        <Pencil size={14} strokeWidth={2} className="text-[#64748B]" />
-                        {tr('school.action.edit', lang)}
+                        <Pencil
+                          size={14}
+                          strokeWidth={2}
+                          className="text-[#64748B]"
+                        />
+                        {tr("school.action.edit", lang)}
                       </button>
-                      {exam.status === 'tehtud' ? (
+                      {exam.status === "tehtud" ? (
                         <button
-                          onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); onMarkUndone(exam.id) }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuId(null);
+                            onMarkUndone(exam.id);
+                          }}
                           className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
                         >
-                          <Check size={14} strokeWidth={2} className="text-[#64748B]" />
-                          {tr('school.action.markUndone', lang)}
+                          <Check
+                            size={14}
+                            strokeWidth={2}
+                            className="text-[#64748B]"
+                          />
+                          {tr("school.action.markUndone", lang)}
                         </button>
                       ) : (
                         <button
-                          onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); onMarkDone(exam.id) }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuId(null);
+                            onMarkDone(exam.id);
+                          }}
                           className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
                         >
-                          <Check size={14} strokeWidth={2} className="text-[#64748B]" />
-                          {tr('school.action.markDone', lang)}
+                          <Check
+                            size={14}
+                            strokeWidth={2}
+                            className="text-[#64748B]"
+                          />
+                          {tr("school.action.markDone", lang)}
                         </button>
                       )}
                       <button
-                        onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); setConfirmDeleteId(exam.id) }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuId(null);
+                          setConfirmDeleteId(exam.id);
+                        }}
                         className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#DC2626] hover:bg-[#FEF2F2] transition-colors"
                       >
                         <Trash2 size={14} strokeWidth={2} />
-                        {tr('school.action.delete', lang)}
+                        {tr("school.action.delete", lang)}
                       </button>
                     </div>
                   </>
@@ -2747,19 +3645,24 @@ function EksamidTab({
                       <p className="text-sm text-[#1A1F36] mb-1">
                         Kas soovid eksami „{exam.title}“ kindlasti kustutada?
                       </p>
-                      <p className="text-xs text-[#94A3B8] mb-5">{tr('school.confirm.irreversible', lang)}</p>
+                      <p className="text-xs text-[#94A3B8] mb-5">
+                        {tr("school.confirm.irreversible", lang)}
+                      </p>
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => setConfirmDeleteId(null)}
                           className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
                         >
-                          {tr('school.action.discard', lang)}
+                          {tr("school.action.discard", lang)}
                         </button>
                         <button
-                          onClick={() => { onDelete(exam.id); setConfirmDeleteId(null) }}
+                          onClick={() => {
+                            onDelete(exam.id);
+                            setConfirmDeleteId(null);
+                          }}
                           className="px-4 py-2 rounded-lg text-sm font-medium bg-[#DC2626] text-white hover:bg-[#B91C1C] transition-colors"
                         >
-                          {tr('school.action.delete', lang)}
+                          {tr("school.action.delete", lang)}
                         </button>
                       </div>
                     </div>
@@ -2771,7 +3674,7 @@ function EksamidTab({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 // ── Eksam detail modal ─────────────────────────────────────────────────────
@@ -2784,17 +3687,18 @@ function EksamDetailModal({
   onMarkDone,
   onMarkUndone,
 }: {
-  exam: Exam
-  onClose: () => void
-  onEdit: (exam: Exam) => void
-  onDelete: (id: number) => void
-  onMarkDone: (id: number) => void
-  onMarkUndone: (id: number) => void
+  exam: Exam;
+  onClose: () => void;
+  onEdit: (exam: Exam) => void;
+  onDelete: (id: number) => void;
+  onMarkDone: (id: number) => void;
+  onMarkUndone: (id: number) => void;
 }) {
-  const lang = getLocalLanguage()
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const isDone = exam.status === 'tehtud'
+  const lang = getLocalLanguage();
+  const isDark = useIsDark();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const isDone = exam.status === "tehtud";
 
   return (
     <div
@@ -2806,7 +3710,9 @@ function EksamDetailModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2]">
-          <h2 className="text-base font-semibold text-[#1A1F36]">Eksami andmed</h2>
+          <h2 className="text-base font-semibold text-[#1A1F36]">
+            Eksami andmed
+          </h2>
           <div className="flex items-center gap-1">
             <div className="relative">
               <button
@@ -2817,38 +3723,65 @@ function EksamDetailModal({
               </button>
               {menuOpen && (
                 <>
-                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setMenuOpen(false)}
+                  />
                   <div className="absolute right-0 z-20 mt-1 w-44 bg-white rounded-lg border border-[#ECECF2] shadow-lg overflow-hidden">
                     <button
-                      onClick={() => { setMenuOpen(false); onEdit(exam) }}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onEdit(exam);
+                      }}
                       className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
                     >
-                      <Pencil size={14} strokeWidth={2} className="text-[#64748B]" />
-                      {tr('school.action.edit', lang)}
+                      <Pencil
+                        size={14}
+                        strokeWidth={2}
+                        className="text-[#64748B]"
+                      />
+                      {tr("school.action.edit", lang)}
                     </button>
                     {isDone ? (
                       <button
-                        onClick={() => { setMenuOpen(false); onMarkUndone(exam.id) }}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onMarkUndone(exam.id);
+                        }}
                         className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
                       >
-                        <Check size={14} strokeWidth={2} className="text-[#64748B]" />
-                        {tr('school.action.markUndone', lang)}
+                        <Check
+                          size={14}
+                          strokeWidth={2}
+                          className="text-[#64748B]"
+                        />
+                        {tr("school.action.markUndone", lang)}
                       </button>
                     ) : (
                       <button
-                        onClick={() => { setMenuOpen(false); onMarkDone(exam.id) }}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onMarkDone(exam.id);
+                        }}
                         className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
                       >
-                        <Check size={14} strokeWidth={2} className="text-[#64748B]" />
-                        {tr('school.action.markDone', lang)}
+                        <Check
+                          size={14}
+                          strokeWidth={2}
+                          className="text-[#64748B]"
+                        />
+                        {tr("school.action.markDone", lang)}
                       </button>
                     )}
                     <button
-                      onClick={() => { setMenuOpen(false); setConfirmDelete(true) }}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setConfirmDelete(true);
+                      }}
                       className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#DC2626] hover:bg-[#FEF2F2] transition-colors"
                     >
                       <Trash2 size={14} strokeWidth={2} />
-                      {tr('school.action.delete', lang)}
+                      {tr("school.action.delete", lang)}
                     </button>
                   </div>
                 </>
@@ -2868,19 +3801,21 @@ function EksamDetailModal({
             <p className="text-sm text-[#1A1F36] mb-1">
               Kas soovid eksami „{exam.title}“ kindlasti kustutada?
             </p>
-            <p className="text-xs text-[#94A3B8] mb-5">{tr('school.confirm.irreversible', lang)}</p>
+            <p className="text-xs text-[#94A3B8] mb-5">
+              {tr("school.confirm.irreversible", lang)}
+            </p>
             <div className="flex items-center justify-end gap-2">
               <button
                 onClick={() => setConfirmDelete(false)}
                 className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
               >
-                {tr('school.action.discard', lang)}
+                {tr("school.action.discard", lang)}
               </button>
               <button
                 onClick={() => onDelete(exam.id)}
                 className="px-4 py-2 rounded-lg text-sm font-medium bg-[#DC2626] text-white hover:bg-[#B91C1C] transition-colors"
               >
-                {tr('school.action.delete', lang)}
+                {tr("school.action.delete", lang)}
               </button>
             </div>
           </div>
@@ -2890,68 +3825,94 @@ function EksamDetailModal({
               <div className="flex items-center gap-3">
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: exam.iconBg, color: exam.iconColor }}
+                  style={{ background: isDark ? darkBg(exam.iconBg) : exam.iconBg, color: isDark ? darkText(exam.iconColor) : exam.iconColor }}
                 >
                   <Calendar size={18} strokeWidth={1.8} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-[#1A1F36] truncate">{exam.subject}</p>
+                  <p className="text-sm font-semibold text-[#1A1F36] truncate">
+                    {exam.subject}
+                  </p>
                   <p className="text-xs text-[#94A3B8]">Eksam</p>
                 </div>
                 <span
                   className="text-[11px] font-medium px-2 py-0.5 rounded-full flex-shrink-0"
                   style={{
-                    background: isDone ? '#DCFCE7' : '#FEF9C3',
-                    color: isDone ? '#15803D' : '#854D0E',
+                    background: isDone ? "#DCFCE7" : "#FEF9C3",
+                    color: isDone ? "#15803D" : "#854D0E",
                   }}
                 >
-                  {isDone ? tr('school.detail.doneLabel', lang) : tr('school.detail.pendingLabel', lang)}
+                  {isDone
+                    ? tr("school.detail.doneLabel", lang)
+                    : tr("school.detail.pendingLabel", lang)}
                 </span>
               </div>
 
               <div>
-                <p className="text-xs font-medium text-[#64748B] mb-1">{tr('school.detail.titleLabel', lang)}</p>
+                <p className="text-xs font-medium text-[#64748B] mb-1">
+                  {tr("school.detail.titleLabel", lang)}
+                </p>
                 <p className="text-sm text-[#1A1F36]">{exam.title}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-xs font-medium text-[#64748B] mb-1">{tr('school.detail.dateLabel', lang)}</p>
-                  <p className="text-sm text-[#1A1F36]">{exam.date}</p>
+                  <p className="text-xs font-medium text-[#64748B] mb-1">
+                    {tr("school.detail.dateLabel", lang)}
+                  </p>
+                  <p className="text-sm text-[#1A1F36]">{formatDateDisplay(exam.date)}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#64748B] mb-1">{tr('school.detail.untilLabel', lang)}</p>
+                  <p className="text-xs font-medium text-[#64748B] mb-1">
+                    {tr("school.detail.untilLabel", lang)}
+                  </p>
                   <p className="text-sm text-[#1A1F36]">
-                    {isDone ? tr('school.detail.doneLabel', lang) : exam.daysLeft <= 0 ? tr('school.task.today', lang) : tr('school.task.daysLeft', lang).replace('{n}', String(exam.daysLeft))}
+                    {isDone
+                      ? tr("school.detail.doneLabel", lang)
+                      : exam.daysLeft <= 0
+                        ? tr("school.task.today", lang)
+                        : tr("school.task.daysLeft", lang).replace(
+                            "{n}",
+                            String(exam.daysLeft),
+                          )}
                   </p>
                 </div>
               </div>
 
               {(exam.time || exam.location) && (
                 <div className="grid grid-cols-2 gap-4">
-                  {exam.time && exam.time.trim() !== '' && (
+                  {exam.time && exam.time.trim() !== "" && (
                     <div>
-                      <p className="text-xs font-medium text-[#64748B] mb-1">Kellaaeg</p>
+                      <p className="text-xs font-medium text-[#64748B] mb-1">
+                        {tr("school.field.examTime", lang)}
+                      </p>
+
                       <p className="text-sm text-[#1A1F36]">{exam.time}</p>
                     </div>
                   )}
-                  {exam.location && exam.location.trim() !== '' && (
+                  {exam.location && exam.location.trim() !== "" && (
                     <div>
-                      <p className="text-xs font-medium text-[#64748B] mb-1">Asukoht</p>
+                      <p className="text-xs font-medium text-[#64748B] mb-1">
+                        {tr("school.field.examLocation", lang)}
+                      </p>
                       <p className="text-sm text-[#1A1F36]">{exam.location}</p>
                     </div>
                   )}
                 </div>
               )}
 
-              {exam.notes && exam.notes.trim() !== '' && (
+              {exam.notes && exam.notes.trim() !== "" && (
                 <div>
-                  <p className="text-xs font-medium text-[#64748B] mb-1">{tr('school.detail.notesLabel', lang)}</p>
-                  <p className="text-sm text-[#1A1F36] whitespace-pre-wrap">{exam.notes}</p>
+                  <p className="text-xs font-medium text-[#64748B] mb-1">
+                    {tr("school.detail.notesLabel", lang)}
+                  </p>
+                  <p className="text-sm text-[#1A1F36] whitespace-pre-wrap">
+                    {exam.notes}
+                  </p>
                 </div>
               )}
 
-              {exam.moodleUrl && exam.moodleUrl.trim() !== '' && (
+              {exam.moodleUrl && exam.moodleUrl.trim() !== "" && (
                 <a
                   href={exam.moodleUrl}
                   target="_blank"
@@ -2959,24 +3920,31 @@ function EksamDetailModal({
                   className="flex items-center gap-1.5 text-sm text-[#6F5AE8] hover:text-[#5B48D8] transition-colors"
                 >
                   <ExternalLink size={14} strokeWidth={2} />
-                  {tr('school.action.openMoodle', lang)}
+                  {tr("school.action.openMoodle", lang)}
                 </a>
               )}
             </div>
+
+            <LinkedItemsPanel
+              type="school"
+              entityId={encodeSchoolId("exam", exam.id)}
+              lang={lang}
+              className="px-5 pb-2"
+            />
 
             <div className="flex items-center justify-end px-5 py-4 border-t border-[#ECECF2]">
               <button
                 onClick={onClose}
                 className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
               >
-                {tr('school.action.close', lang)}
+                {tr("school.action.close", lang)}
               </button>
             </div>
           </>
         )}
       </div>
     </div>
-  )
+  );
 }
 
 // ── Eksam form modal (add + edit) ───────────────────────────────────────────
@@ -2987,48 +3955,51 @@ function EksamFormModal({
   onClose,
   onSave,
 }: {
-  exam?: Exam
-  nextId: number
-  onClose: () => void
-  onSave: (exam: Exam) => void
+  exam?: Exam;
+  nextId: number;
+  onClose: () => void;
+  onSave: (exam: Exam) => void;
 }) {
-  const lang = getLocalLanguage()
-  const isEdit = !!exam
-  const [subject, setSubject] = useState(exam?.subject ?? '')
-  const [title, setTitle] = useState(exam?.title ?? '')
-  const [date, setDate] = useState(exam?.date ?? '')
-  const [time, setTime] = useState(exam?.time ?? '')
-  const [location, setLocation] = useState(exam?.location ?? '')
-  const [notes, setNotes] = useState(exam?.notes ?? '')
-  const [moodleUrl, setMoodleUrl] = useState(exam?.moodleUrl ?? '')
-  const [error, setError] = useState('')
+  const lang = getLocalLanguage();
+  const subjects = useSchoolSubjectsFromLessons();
+  const isEdit = !!exam;
+  const [subject, setSubject] = useState(exam?.subject ?? "");
+  const [title, setTitle] = useState(exam?.title ?? "");
+  const [date, setDate] = useState(toISODate(exam?.date ?? ""));
+  const [time, setTime] = useState(exam?.time ?? "");
+  const [location, setLocation] = useState(exam?.location ?? "");
+  const [notes, setNotes] = useState(exam?.notes ?? "");
+  const [moodleUrl, setMoodleUrl] = useState(exam?.moodleUrl ?? "");
+  const [error, setError] = useState("");
 
   const handleSave = () => {
     if (!title.trim()) {
-      setError(tr('school.field.examNameLabel', lang) + ' on kohustuslik.')
-      return
+      setError(tr("school.field.examNameLabel", lang) + " on kohustuslik.");
+      return;
     }
     if (!subject.trim()) {
-      setError('Sisesta aine.')
-      return
+      setError("Sisesta aine.");
+      return;
     }
-    const palette = SUBJECT_PALETTE[(nextId - 1) % SUBJECT_PALETTE.length]
+    const palette = SUBJECT_PALETTE[(nextId - 1) % SUBJECT_PALETTE.length];
+    const matchedSubject = subjects.find((s) => s.name === subject.trim());
     onSave({
       id: exam?.id ?? nextId,
       subject: subject.trim(),
+      subjectId: matchedSubject?.id,
       title: title.trim(),
-      date: date.trim() || tr('school.field.examDateLabel', lang),
-      daysLeft: computeDaysLeft(date.trim() || ''),
-      type: 'eksam',
-      status: exam?.status ?? 'ootel',
-      iconBg: exam?.iconBg ?? palette.bg,
-      iconColor: exam?.iconColor ?? palette.color,
+      date: date.trim(),
+      daysLeft: computeDaysLeft(date.trim() || ""),
+      type: "eksam",
+      status: exam?.status ?? "ootel",
+      iconBg: exam?.iconBg ?? (matchedSubject?.bg ?? palette.bg),
+      iconColor: exam?.iconColor ?? (matchedSubject?.color ?? palette.color),
       time: time.trim() || undefined,
       location: location.trim() || undefined,
       notes: notes.trim() || undefined,
       moodleUrl: moodleUrl.trim() || undefined,
-    })
-  }
+    });
+  };
 
   return (
     <div
@@ -3036,12 +4007,14 @@ function EksamFormModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-white rounded-2xl shadow-xl"
+        className="w-full max-w-md bg-white rounded-2xl shadow-xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2] flex-shrink-0">
           <h2 className="text-base font-semibold text-[#1A1F36]">
-            {isEdit ? tr('school.modal.editExam', lang) : tr('school.modal.addExam', lang)}
+            {isEdit
+              ? tr("school.modal.editExam", lang)
+              : tr("school.modal.addExam", lang)}
           </h2>
           <button
             onClick={onClose}
@@ -3051,77 +4024,110 @@ function EksamFormModal({
           </button>
         </div>
 
-        <div className="px-5 py-4 flex flex-col gap-4 max-h-[70vh] overflow-y-auto">
+        <div className="px-5 py-4 flex flex-col gap-4 flex-1 overflow-y-auto">
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.examSubjectLabel', lang)} <span className="text-red-500">*</span></label>
-            <input
-              type="text"
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.examSubjectLabel", lang)}{" "}
+              <span className="text-red-500">*</span>
+            </label>
+            <select
               value={subject}
-              onChange={(e) => { setSubject(e.target.value); setError('') }}
-              placeholder={tr('school.subject.placeholder', lang)}
-              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
-            />
+              onChange={(e) => { setSubject(e.target.value); setError(""); }}
+              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] bg-white"
+            >
+              <option value="">{lang === 'et' ? '— vali aine —' : '— select subject —'}</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.name}>{s.name}</option>
+              ))}
+            </select>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.examNameLabel', lang)} <span className="text-red-500">*</span></label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.examNameLabel", lang)}{" "}
+              <span className="text-red-500">*</span>
+            </label>
             <input
               type="text"
               value={title}
-              onChange={(e) => { setTitle(e.target.value); setError('') }}
-              placeholder={tr('school.field.examNamePh', lang)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setError("");
+              }}
+              placeholder={tr("school.field.examNamePh", lang)}
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             />
             {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.examDateLabel', lang)}</label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.examDateLabel", lang)}
+            </label>
             <input
-              type="text"
+              type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              placeholder={tr('school.field.taskDeadlinePh', lang)}
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-[#64748B] mb-1.5">Kellaaeg <span className="text-[#CBD5E1] font-normal">{tr('school.field.optional', lang)}</span></label>
+              <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+                {tr("school.field.examTime", lang)}{" "}
+                <span className="text-[#CBD5E1] font-normal">
+                  {tr("school.field.optional", lang)}
+                </span>
+              </label>
               <input
                 type="text"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
-                placeholder={tr('school.field.examTimePh', lang)}
+                placeholder={tr("school.field.examTimePh", lang)}
                 className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-[#64748B] mb-1.5">Asukoht <span className="text-[#CBD5E1] font-normal">{tr('school.field.optional', lang)}</span></label>
+              <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+                {tr("school.field.examLocation", lang)}{" "}
+                <span className="text-[#CBD5E1] font-normal">
+                  {tr("school.field.optional", lang)}
+                </span>
+              </label>
               <input
                 type="text"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                placeholder={tr('school.field.examLocationPh', lang)}
+                placeholder={tr("school.field.examLocationPh", lang)}
                 className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.examNotes', lang)} <span className="text-[#CBD5E1] font-normal">{tr('school.field.optional', lang)}</span></label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.examNotes", lang)}{" "}
+              <span className="text-[#CBD5E1] font-normal">
+                {tr("school.field.optional", lang)}
+              </span>
+            </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder={tr('school.field.examNotesPh', lang)}
+              placeholder={tr("school.field.examNotesPh", lang)}
               rows={3}
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] resize-none"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.examMoodle', lang)} <span className="text-[#CBD5E1] font-normal">{tr('school.field.optional', lang)}</span></label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.examMoodle", lang)}{" "}
+              <span className="text-[#CBD5E1] font-normal">
+                {tr("school.field.optional", lang)}
+              </span>
+            </label>
             <input
               type="text"
               value={moodleUrl}
@@ -3132,60 +4138,66 @@ function EksamFormModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2]">
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2] flex-shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
           >
-            {tr('school.action.cancel', lang)}
+            {tr("school.action.cancel", lang)}
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
           >
-            {tr('school.action.save', lang)}
+            {tr("school.action.save", lang)}
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // ── Task parts editor (used in add/edit modals) ────────────────────────────
 
-let _partIdCounter = 0
+let _partIdCounter = 0;
 function makePartId(): string {
-  _partIdCounter += 1
-  return `part-${Date.now()}-${_partIdCounter}`
+  _partIdCounter += 1;
+  return `part-${Date.now()}-${_partIdCounter}`;
 }
 
 function TaskPartsEditor({
   parts,
   onChange,
 }: {
-  parts: TaskPart[]
-  onChange: (parts: TaskPart[]) => void
+  parts: TaskPart[];
+  onChange: (parts: TaskPart[]) => void;
 }) {
-  const lang = getLocalLanguage()
+  const lang = getLocalLanguage();
   const addPart = () =>
-    onChange([...parts, { id: makePartId(), label: '', done: false }])
-  const removePart = (id: string) =>
-    onChange(parts.filter((p) => p.id !== id))
+    onChange([...parts, { id: makePartId(), label: "", done: false }]);
+  const removePart = (id: string) => onChange(parts.filter((p) => p.id !== id));
   const updateLabel = (id: string, label: string) =>
-    onChange(parts.map((p) => (p.id === id ? { ...p, label } : p)))
+    onChange(parts.map((p) => (p.id === id ? { ...p, label } : p)));
 
   return (
     <div>
-      <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.task.parts.label', lang)} <span className="text-[#CBD5E1] font-normal">({tr('school.task.parts.optional', lang)})</span></label>
+      <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+        {tr("school.task.parts.label", lang)}{" "}
+        <span className="text-[#CBD5E1] font-normal">
+          ({tr("school.task.parts.optional", lang)})
+        </span>
+      </label>
       <div className="flex flex-col gap-2">
         {parts.map((part, idx) => (
           <div key={part.id} className="flex items-center gap-2">
-            <span className="text-xs text-[#94A3B8] w-5 text-right flex-shrink-0">{idx + 1}.</span>
+            <span className="text-xs text-[#94A3B8] w-5 text-right flex-shrink-0">
+              {idx + 1}.
+            </span>
             <input
               type="text"
               value={part.label}
               onChange={(e) => updateLabel(part.id, e.target.value)}
-              placeholder={tr('school.task.parts.phPart', lang)}
+              placeholder={tr("school.task.parts.phPart", lang)}
               className="flex-1 px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             />
             <button
@@ -3201,11 +4213,11 @@ function TaskPartsEditor({
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-[#6F5AE8] hover:bg-[#EDE9FB] transition-colors w-fit"
         >
           <Plus size={14} strokeWidth={2.5} />
-          {tr('school.task.parts.addPart', lang)}
+          {tr("school.task.parts.addPart", lang)}
         </button>
       </div>
     </div>
-  )
+  );
 }
 
 // ── Task detail modal ─────────────────────────────────────────────────────
@@ -3219,22 +4231,23 @@ function TaskDetailModal({
   onTogglePart,
   onDelete,
 }: {
-  task: Task
-  onClose: () => void
-  onEdit: (task: Task) => void
-  onMarkDone: (id: number) => void
-  onMarkUndone: (id: number) => void
-  onTogglePart: (taskId: number, partId: string) => void
-  onDelete: (id: number) => void
+  task: Task;
+  onClose: () => void;
+  onEdit: (task: Task) => void;
+  onMarkDone: (id: number) => void;
+  onMarkUndone: (id: number) => void;
+  onTogglePart: (taskId: number, partId: string) => void;
+  onDelete: (id: number) => void;
 }) {
-  const lang = getLocalLanguage()
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const status = statusFromProgress(task.progress)
-  const isDone = status === 'tehtud'
-  const hasParts = task.parts && task.parts.length > 0
-  const partsDone = hasParts ? task.parts!.filter((p) => p.done).length : 0
-  const partsTotal = hasParts ? task.parts!.length : 0
+  const lang = getLocalLanguage();
+  const isDark = useIsDark();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const status = statusFromProgress(task.progress);
+  const isDone = status === "tehtud";
+  const hasParts = task.parts && task.parts.length > 0;
+  const partsDone = hasParts ? task.parts!.filter((p) => p.done).length : 0;
+  const partsTotal = hasParts ? task.parts!.length : 0;
 
   return (
     <div
@@ -3246,7 +4259,9 @@ function TaskDetailModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2]">
-          <h2 className="text-base font-semibold text-[#1A1F36]">{tr('school.modal.taskData', lang)}</h2>
+          <h2 className="text-base font-semibold text-[#1A1F36]">
+            {tr("school.modal.taskData", lang)}
+          </h2>
           <div className="flex items-center gap-1">
             <div className="relative">
               <button
@@ -3257,38 +4272,65 @@ function TaskDetailModal({
               </button>
               {menuOpen && (
                 <>
-                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setMenuOpen(false)}
+                  />
                   <div className="absolute right-0 z-20 mt-1 w-44 bg-white rounded-lg border border-[#ECECF2] shadow-lg overflow-hidden">
                     <button
-                      onClick={() => { setMenuOpen(false); onEdit(task) }}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onEdit(task);
+                      }}
                       className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
                     >
-                      <Pencil size={14} strokeWidth={2} className="text-[#64748B]" />
-                      {tr('school.action.edit', lang)}
+                      <Pencil
+                        size={14}
+                        strokeWidth={2}
+                        className="text-[#64748B]"
+                      />
+                      {tr("school.action.edit", lang)}
                     </button>
                     {isDone ? (
                       <button
-                        onClick={() => { setMenuOpen(false); onMarkUndone(task.id) }}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onMarkUndone(task.id);
+                        }}
                         className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
                       >
-                        <Check size={14} strokeWidth={2} className="text-[#64748B]" />
-                        {tr('school.action.markUndone', lang)}
+                        <Check
+                          size={14}
+                          strokeWidth={2}
+                          className="text-[#64748B]"
+                        />
+                        {tr("school.action.markUndone", lang)}
                       </button>
                     ) : (
                       <button
-                        onClick={() => { setMenuOpen(false); onMarkDone(task.id) }}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onMarkDone(task.id);
+                        }}
                         className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
                       >
-                        <Check size={14} strokeWidth={2} className="text-[#64748B]" />
-                        {tr('school.action.markDone', lang)}
+                        <Check
+                          size={14}
+                          strokeWidth={2}
+                          className="text-[#64748B]"
+                        />
+                        {tr("school.action.markDone", lang)}
                       </button>
                     )}
                     <button
-                      onClick={() => { setMenuOpen(false); setConfirmDelete(true) }}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setConfirmDelete(true);
+                      }}
                       className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#DC2626] hover:bg-[#FEF2F2] transition-colors"
                     >
                       <Trash2 size={14} strokeWidth={2} />
-                      {tr('school.action.delete', lang)}
+                      {tr("school.action.delete", lang)}
                     </button>
                   </div>
                 </>
@@ -3308,19 +4350,21 @@ function TaskDetailModal({
             <p className="text-sm text-[#1A1F36] mb-1">
               Kas soovid ülesande „{task.title}“ kindlasti kustutada?
             </p>
-            <p className="text-xs text-[#94A3B8] mb-5">{tr('school.confirm.irreversible', lang)}</p>
+            <p className="text-xs text-[#94A3B8] mb-5">
+              {tr("school.confirm.irreversible", lang)}
+            </p>
             <div className="flex items-center justify-end gap-2">
               <button
                 onClick={() => setConfirmDelete(false)}
                 className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
               >
-                {tr('school.action.discard', lang)}
+                {tr("school.action.discard", lang)}
               </button>
               <button
                 onClick={() => onDelete(task.id)}
                 className="px-4 py-2 rounded-lg text-sm font-medium bg-[#DC2626] text-white hover:bg-[#B91C1C] transition-colors"
               >
-                {tr('school.action.delete', lang)}
+                {tr("school.action.delete", lang)}
               </button>
             </div>
           </div>
@@ -3330,34 +4374,54 @@ function TaskDetailModal({
               <div className="flex items-center gap-3">
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: task.subjectBg, color: task.subjectColor }}
+                  style={{
+                    background: task.subjectBg,
+                    color: task.subjectColor,
+                  }}
                 >
                   {task.subjectIcon}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-[#1A1F36] truncate">{task.subject}</p>
-                  <p className="text-xs text-[#94A3B8]">{task.type}</p>
+                  <p className="text-sm font-semibold text-[#1A1F36] truncate">
+                    {task.subject}
+                  </p>
+                  <p className="text-xs text-[#94A3B8]">
+                    {getTaskTypeLabel(task.type, lang)}
+                  </p>
                 </div>
                 <span
                   className="text-[11px] font-medium px-2 py-0.5 rounded-full flex-shrink-0"
-                  style={{ background: STATUS_STYLES[status].bg, color: STATUS_STYLES[status].color }}
+                  style={{
+                    background: isDark
+                      ? ({ tegemata: '#1A2332', pooleli: '#1F1507', tehtud: '#0D2418' } as Record<TaskStatus, string>)[status]
+                      : STATUS_STYLES[status].bg,
+                    color: isDark
+                      ? ({ tegemata: '#8B9EB5', pooleli: '#FCD34D', tehtud: '#4ADE80' } as Record<TaskStatus, string>)[status]
+                      : STATUS_STYLES[status].color,
+                  }}
                 >
                   {getStatusLabels(lang)[status]}
                 </span>
               </div>
 
               <div>
-                <p className="text-xs font-medium text-[#64748B] mb-1">Teema</p>
+                <p className="text-xs font-medium text-[#64748B] mb-1">
+                  {tr("school.field.taskTopic", lang)}
+                </p>
                 <p className="text-sm text-[#1A1F36]">{task.title}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-xs font-medium text-[#64748B] mb-1">Tähtaeg</p>
+                  <p className="text-xs font-medium text-[#64748B] mb-1">
+                    {tr("school.field.taskDeadline", lang)}
+                  </p>
                   <p className="text-sm text-[#1A1F36]">{task.deadline}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-[#64748B] mb-1">Edenemine</p>
+                  <p className="text-xs font-medium text-[#64748B] mb-1">
+                    {tr("school.field.taskProgress", lang)}
+                  </p>
                   <p className="text-sm text-[#1A1F36]">{task.progress}%</p>
                 </div>
               </div>
@@ -3365,8 +4429,13 @@ function TaskDetailModal({
               {hasParts && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-[#64748B]">Ülesande osad</p>
-                    <span className="text-xs font-medium text-[#1A1F36]">{partsDone}/{partsTotal} osa tehtud</span>
+                    <p className="text-xs font-medium text-[#64748B]">
+                      {tr("school.task.parts", lang)}
+                    </p>
+                    <span className="text-xs font-medium text-[#1A1F36]">
+                      {partsDone}/{partsTotal}{" "}
+                      {tr("school.task.partsCompleted", lang)}
+                    </span>
                   </div>
                   <div className="flex flex-col gap-1.5">
                     {task.parts!.map((part) => (
@@ -3375,18 +4444,26 @@ function TaskDetailModal({
                         className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-[#ECECF2] hover:bg-[#F8F7FC] transition-colors cursor-pointer"
                       >
                         <button
-                          onClick={(e) => { e.preventDefault(); onTogglePart(task.id, part.id) }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onTogglePart(task.id, part.id);
+                          }}
                           className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
                             part.done
-                              ? 'bg-[#6F5AE8] border-[#6F5AE8] text-white'
-                              : 'bg-white border-[#CBD5E1] hover:border-[#6F5AE8]'
-                          }`
-                          }
+                              ? "bg-[#6F5AE8] border-[#6F5AE8] text-white"
+                              : "bg-white border-[#CBD5E1] hover:border-[#6F5AE8]"
+                          }`}
                         >
                           {part.done && <Check size={13} strokeWidth={3} />}
                         </button>
-                        <span className={`text-sm ${part.done ? 'text-[#94A3B8] line-through' : 'text-[#1A1F36]'}`}>
-                          {part.label || tr('school.task.parts.partN', lang).replace('{n}', String(task.parts!.indexOf(part) + 1))}
+                        <span
+                          className={`text-sm ${part.done ? "text-[#94A3B8] line-through" : "text-[#1A1F36]"}`}
+                        >
+                          {part.label ||
+                            tr("school.task.parts.partN", lang).replace(
+                              "{n}",
+                              String(task.parts!.indexOf(part) + 1),
+                            )}
                         </span>
                       </label>
                     ))}
@@ -3394,7 +4471,7 @@ function TaskDetailModal({
                 </div>
               )}
 
-              {task.moodleUrl && task.moodleUrl !== '#' && (
+              {task.moodleUrl && task.moodleUrl !== "#" && (
                 <a
                   href={task.moodleUrl}
                   target="_blank"
@@ -3402,9 +4479,28 @@ function TaskDetailModal({
                   className="flex items-center gap-1.5 text-sm text-[#6F5AE8] hover:text-[#5B48D8] transition-colors"
                 >
                   <ExternalLink size={14} strokeWidth={2} />
-                  {tr('school.action.openMoodle', lang)}
+                  {tr("school.action.openMoodle", lang)}
                 </a>
               )}
+
+              {task.linkedTaskId && (() => {
+                const linked = getAllTasks().find((t) => t.id === task.linkedTaskId);
+                return linked ? (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#EDE9FB] text-[#6F5AE8] text-sm">
+                    <CheckSquare size={14} strokeWidth={2} />
+                    <span className="flex-1 truncate">
+                      {lang === 'et' ? 'Seotud ülesanne: ' : 'Linked task: '}
+                      <span className="font-medium">{linked.title}</span>
+                    </span>
+                  </div>
+                ) : null;
+              })()}
+
+              <LinkedItemsPanel
+                type="school"
+                entityId={encodeSchoolId("task", task.id)}
+                lang={lang}
+              />
             </div>
 
             <div className="flex items-center justify-end px-5 py-4 border-t border-[#ECECF2]">
@@ -3412,14 +4508,14 @@ function TaskDetailModal({
                 onClick={onClose}
                 className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
               >
-                {tr('school.action.close', lang)}
+                {tr("school.action.close", lang)}
               </button>
             </div>
           </>
         )}
       </div>
     </div>
-  )
+  );
 }
 
 // ── Task edit modal ────────────────────────────────────────────────────────
@@ -3429,39 +4525,97 @@ function TaskEditModal({
   onClose,
   onSave,
 }: {
-  task: Task
-  onClose: () => void
-  onSave: (id: number, patch: Partial<Task>) => void
+  task: Task;
+  onClose: () => void;
+  onSave: (id: number, patch: Partial<Task>) => void;
 }) {
-  const lang = getLocalLanguage()
-  const [title, setTitle] = useState(task.title)
-  const [subject, setSubject] = useState(task.subject)
-  const [type, setType] = useState(task.type)
-  const [deadline, setDeadline] = useState(task.deadline)
-  const [progress, setProgress] = useState(task.progress)
-  const [moodleUrl, setMoodleUrl] = useState(task.moodleUrl)
-  const [parts, setParts] = useState<TaskPart[]>(task.parts ?? [])
-  const [error, setError] = useState('')
+  const lang = getLocalLanguage();
+  const subjects = useSchoolSubjectsFromLessons();
+  const [title, setTitle] = useState(task.title);
+  const [subject, setSubject] = useState(task.subject);
+  const [type, setType] = useState<TaskTypeValue>(
+    (TASK_TYPE_VALUES as readonly string[]).includes(task.type)
+      ? (task.type as TaskTypeValue)
+      : "other"
+  );
+  const [deadline, setDeadline] = useState(toISODate(task.deadline));
+  const [progress, setProgress] = useState(task.progress);
+  const [moodleUrl, setMoodleUrl] = useState(task.moodleUrl);
+  const [parts, setParts] = useState<TaskPart[]>(task.parts ?? []);
+  const [addToTasks, setAddToTasks] = useState(!!task.linkedTaskId);
+  const [error, setError] = useState("");
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title.trim()) {
-      setError(tr('school.modal.taskData', lang) + ' on kohustuslik.')
-      return
+      setError(tr("school.modal.taskData", lang) + " on kohustuslik.");
+      return;
     }
-    const cleanParts = parts.filter((p) => p.label.trim() !== '')
-    const partsProgress = computePartsProgress(cleanParts)
-    const finalProgress = cleanParts.length > 0 ? partsProgress : Math.max(0, Math.min(100, progress))
+    const cleanParts = parts.filter((p) => p.label.trim() !== "");
+    const partsProgress = computePartsProgress(cleanParts);
+    const finalProgress =
+      cleanParts.length > 0
+        ? partsProgress
+        : Math.max(0, Math.min(100, progress));
+
+    let resolvedLinkedTaskId: string | undefined = task.linkedTaskId;
+
+    if (addToTasks) {
+      if (resolvedLinkedTaskId) {
+        // Update the existing linked task; read and preserve its current completed state
+        const existing = getAllTasks().find((t) => t.id === resolvedLinkedTaskId);
+        await tasksStoreUpdateTask({
+          id: resolvedLinkedTaskId,
+          title: title.trim(),
+          description: subject.trim()
+            ? `${subject.trim()} — ${getTaskTypeLabel(type, lang)}`
+            : undefined,
+          date: deadline.trim() || undefined,
+          priority: "medium",
+          completed: existing?.completed ?? false,
+          category: "Kool",
+        });
+      } else {
+        // Create a new linked task with a UUID — never derive from school-task ID
+        // to avoid collisions with unrelated tasks
+        const newId = crypto.randomUUID();
+        try {
+          await tasksStoreAddTask({
+            id: newId,
+            title: title.trim(),
+            description: subject.trim()
+              ? `${subject.trim()} — ${getTaskTypeLabel(type, lang)}`
+              : undefined,
+            date: deadline.trim() || undefined,
+            priority: "medium",
+            completed: false,
+            category: "Kool",
+          } as GlobalTask);
+          resolvedLinkedTaskId = newId;
+        } catch {
+          // If write fails, do not persist a broken linkedTaskId
+          resolvedLinkedTaskId = undefined;
+        }
+      }
+    } else if (task.linkedTaskId) {
+      // User toggled off — remove the linked task entry and clear the reference
+      tasksStoreDeleteTask(task.linkedTaskId);
+      resolvedLinkedTaskId = undefined;
+    }
+
+    const matchedSubject = subjects.find((s) => s.name === subject.trim());
     onSave(task.id, {
       title: title.trim(),
       subject: subject.trim(),
-      type: type.trim(),
+      subjectId: matchedSubject?.id,
+      type: type,
       deadline: deadline.trim(),
       deadlineLabel: deadlineToLabel(deadline.trim(), lang),
       progress: finalProgress,
       moodleUrl: moodleUrl.trim(),
       parts: cleanParts.length > 0 ? cleanParts : undefined,
-    })
-  }
+      linkedTaskId: resolvedLinkedTaskId,
+    });
+  };
 
   return (
     <div
@@ -3469,11 +4623,13 @@ function TaskEditModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-white rounded-2xl shadow-xl"
+        className="w-full max-w-md bg-white rounded-2xl shadow-xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2]">
-          <h2 className="text-base font-semibold text-[#1A1F36]">{tr('school.modal.editTask', lang)}</h2>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2] flex-shrink-0">
+          <h2 className="text-base font-semibold text-[#1A1F36]">
+            {tr("school.modal.editTask", lang)}
+          </h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
@@ -3482,57 +4638,77 @@ function TaskEditModal({
           </button>
         </div>
 
-        <div className="px-5 py-4 flex flex-col gap-4 max-h-[70vh] overflow-y-auto">
+        <div className="px-5 py-4 flex flex-col gap-4 flex-1 overflow-y-auto">
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.taskSubject', lang)}</label>
-            <input
-              type="text"
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.taskSubject", lang)}
+            </label>
+            <select
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder={tr('school.subject.placeholder', lang)}
-              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
-            />
+              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] bg-white"
+            >
+              <option value="">{lang === 'et' ? '— vali aine —' : '— select subject —'}</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.name}>{s.name}</option>
+              ))}
+            </select>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.taskTopic', lang)} <span className="text-red-500">*</span></label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.taskTopic", lang)}{" "}
+              <span className="text-red-500">*</span>
+            </label>
             <input
               type="text"
               value={title}
-              onChange={(e) => { setTitle(e.target.value); setError('') }}
-              placeholder={tr('school.field.taskTopicPh', lang)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setError("");
+              }}
+              placeholder={tr("school.field.taskTopicPh", lang)}
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             />
             {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.taskType', lang)}</label>
-            <input
-              type="text"
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.taskType", lang)}
+            </label>
+            <select
               value={type}
-              onChange={(e) => setType(e.target.value)}
-              placeholder={tr('school.field.taskTypePh', lang)}
-              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
-            />
+              onChange={(e) => setType(e.target.value as TaskTypeValue)}
+              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] bg-white"
+            >
+              {TASK_TYPE_VALUES.map((v) => (
+                <option key={v} value={v}>
+                  {getTaskTypeLabel(v, lang)}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.taskDeadline', lang)}</label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.taskDeadline", lang)}
+            </label>
             <input
-              type="text"
+              type="date"
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
-              placeholder="nt. 28. juuli 2026"
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             />
           </div>
 
           <TaskPartsEditor parts={parts} onChange={setParts} />
 
-          {parts.filter((p) => p.label.trim() !== '').length === 0 && (
+          {parts.filter((p) => p.label.trim() !== "").length === 0 && (
             <div>
-              <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.taskProgress', lang)}</label>
+              <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+                {tr("school.field.taskProgress", lang)}
+              </label>
               <input
                 type="number"
                 min={0}
@@ -3545,7 +4721,9 @@ function TaskEditModal({
           )}
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.examMoodle', lang)}</label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.examMoodle", lang)}
+            </label>
             <input
               type="text"
               value={moodleUrl}
@@ -3554,25 +4732,37 @@ function TaskEditModal({
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             />
           </div>
+
+          <label className="flex items-center gap-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={addToTasks}
+              onChange={(e) => setAddToTasks(e.target.checked)}
+              className="w-4 h-4 rounded accent-[#6F5AE8]"
+            />
+            <span className="text-sm text-[#1A1F36]">
+              {lang === 'et' ? 'Lisa ka ülesannete moodulisse' : 'Also add to Tasks module'}
+            </span>
+          </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2]">
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2] flex-shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
           >
-            {tr('school.action.cancel', lang)}
+            {tr("school.action.cancel", lang)}
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
           >
-            {tr('school.action.save', lang)}
+            {tr("school.action.save", lang)}
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // ── Task add modal ──────────────────────────────────────────────────────────
@@ -3581,45 +4771,81 @@ function TaskAddModal({
   nextId,
   onClose,
   onSave,
+  prefillSubject,
 }: {
-  nextId: number
-  onClose: () => void
-  onSave: (task: Task) => void
+  nextId: number;
+  onClose: () => void;
+  onSave: (task: Task) => void;
+  prefillSubject?: string;
 }) {
-  const lang = getLocalLanguage()
-  const [subject, setSubject] = useState('')
-  const [title, setTitle] = useState('')
-  const [type, setType] = useState('')
-  const [deadline, setDeadline] = useState('')
-  const [progress, setProgress] = useState(0)
-  const [moodleUrl, setMoodleUrl] = useState('')
-  const [parts, setParts] = useState<TaskPart[]>([])
-  const [error, setError] = useState('')
+  const lang = getLocalLanguage();
+  const subjects = useSchoolSubjectsFromLessons();
+  const [subject, setSubject] = useState(prefillSubject ?? "");
+  const [title, setTitle] = useState("");
+  const [type, setType] = useState<TaskTypeValue>("homework");
+  const [deadline, setDeadline] = useState("");
+  const [progress, setProgress] = useState(0);
+  const [moodleUrl, setMoodleUrl] = useState("");
+  const [parts, setParts] = useState<TaskPart[]>([]);
+  const [addToTasks, setAddToTasks] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title.trim()) {
-      setError(tr('school.field.taskTopicPh', lang).replace('nt ', ''))
-      return
+      setError(tr("school.field.taskTopicPh", lang).replace("nt ", ""));
+      return;
     }
-    const cleanParts = parts.filter((p) => p.label.trim() !== '')
-    const partsProgress = computePartsProgress(cleanParts)
-    const finalProgress = cleanParts.length > 0 ? partsProgress : Math.max(0, Math.min(100, progress))
-    const palette = SUBJECT_PALETTE[(nextId - 1) % SUBJECT_PALETTE.length]
+    const cleanParts = parts.filter((p) => p.label.trim() !== "");
+    const partsProgress = computePartsProgress(cleanParts);
+    const finalProgress =
+      cleanParts.length > 0
+        ? partsProgress
+        : Math.max(0, Math.min(100, progress));
+    // Pick color from matched subject or fallback palette
+    const matchedSubject = subjects.find((s) => s.name === subject.trim());
+    const palette = SUBJECT_PALETTE[(nextId - 1) % SUBJECT_PALETTE.length];
+    const subjectColor = matchedSubject ? matchedSubject.color : palette.color;
+    const subjectBg = matchedSubject ? matchedSubject.bg : palette.bg;
+    const subjectIcon = matchedSubject
+      ? <span style={{ color: matchedSubject.color }}>{/* icon */}</span>
+      : palette.icon;
+
+    let linkedTaskId: string | undefined = undefined;
+    if (addToTasks) {
+      // Use UUID so the linked task ID never collides with an existing task
+      const newId = crypto.randomUUID();
+      try {
+        await tasksStoreAddTask({
+          id: newId,
+          title: title.trim(),
+          description: subject.trim() ? `${subject.trim()} — ${getTaskTypeLabel(type, lang)}` : undefined,
+          date: deadline.trim() || undefined,
+          priority: "medium",
+          completed: false,
+          category: "Kool",
+        } as GlobalTask);
+        linkedTaskId = newId; // only set after confirmed write
+      } catch {
+        // If write fails, do not persist a broken linkedTaskId on the school task
+      }
+    }
     onSave({
       id: nextId,
-      subject: subject.trim() || 'Üldine',
-      subjectColor: palette.color,
-      subjectBg: palette.bg,
-      subjectIcon: palette.icon,
+      subject: subject.trim() || "Üldine",
+      subjectId: matchedSubject?.id,
+      subjectColor,
+      subjectBg,
+      subjectIcon,
       title: title.trim(),
-      type: type.trim() || tr('school.detail.testLabel', lang),
+      type: type,
       deadline: deadline.trim(),
       deadlineLabel: deadlineToLabel(deadline.trim(), lang),
       progress: finalProgress,
       moodleUrl: moodleUrl.trim(),
       parts: cleanParts.length > 0 ? cleanParts : undefined,
-    })
-  }
+      linkedTaskId,
+    });
+  };
 
   return (
     <div
@@ -3627,11 +4853,13 @@ function TaskAddModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-white rounded-2xl shadow-xl"
+        className="w-full max-w-md bg-white rounded-2xl shadow-xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2]">
-          <h2 className="text-base font-semibold text-[#1A1F36]">{tr('school.modal.addTask2', lang)}</h2>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2] flex-shrink-0">
+          <h2 className="text-base font-semibold text-[#1A1F36]">
+            {tr("school.modal.addTask2", lang)}
+          </h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
@@ -3640,57 +4868,78 @@ function TaskAddModal({
           </button>
         </div>
 
-        <div className="px-5 py-4 flex flex-col gap-4 max-h-[70vh] overflow-y-auto">
+        <div className="px-5 py-4 flex flex-col gap-4 flex-1 overflow-y-auto">
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.taskSubject', lang)}</label>
-            <input
-              type="text"
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.taskSubject", lang)}
+            </label>
+            <select
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder={tr('school.subject.placeholder', lang)}
-              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
-            />
+              disabled={!!prefillSubject}
+              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] bg-white disabled:opacity-70"
+            >
+              <option value="">{lang === 'et' ? '— vali aine —' : '— select subject —'}</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.name}>{s.name}</option>
+              ))}
+            </select>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.taskTopic', lang)} <span className="text-red-500">*</span></label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.taskTopic", lang)}{" "}
+              <span className="text-red-500">*</span>
+            </label>
             <input
               type="text"
               value={title}
-              onChange={(e) => { setTitle(e.target.value); setError('') }}
-              placeholder={tr('school.field.taskTopicPh', lang)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setError("");
+              }}
+              placeholder={tr("school.field.taskTopicPh", lang)}
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             />
             {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.taskType', lang)}</label>
-            <input
-              type="text"
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.taskType", lang)}
+            </label>
+            <select
               value={type}
-              onChange={(e) => setType(e.target.value)}
-              placeholder={tr('school.field.taskTypePh', lang)}
-              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
-            />
+              onChange={(e) => setType(e.target.value as TaskTypeValue)}
+              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] bg-white"
+            >
+              {TASK_TYPE_VALUES.map((v) => (
+                <option key={v} value={v}>
+                  {getTaskTypeLabel(v, lang)}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.taskDeadline', lang)}</label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.taskDeadline", lang)}
+            </label>
             <input
-              type="text"
+              type="date"
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
-              placeholder="nt. 28. juuli 2026"
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             />
           </div>
 
           <TaskPartsEditor parts={parts} onChange={setParts} />
 
-          {parts.filter((p) => p.label.trim() !== '').length === 0 && (
+          {parts.filter((p) => p.label.trim() !== "").length === 0 && (
             <div>
-              <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.taskProgress', lang)}</label>
+              <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+                {tr("school.field.taskProgress", lang)}
+              </label>
               <input
                 type="number"
                 min={0}
@@ -3703,7 +4952,12 @@ function TaskAddModal({
           )}
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{tr('school.field.examMoodle', lang)} <span className="text-[#CBD5E1] font-normal">{tr('school.field.optional', lang)}</span></label>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {tr("school.field.examMoodle", lang)}{" "}
+              <span className="text-[#CBD5E1] font-normal">
+                {tr("school.field.optional", lang)}
+              </span>
+            </label>
             <input
               type="text"
               value={moodleUrl}
@@ -3712,23 +4966,35 @@ function TaskAddModal({
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             />
           </div>
+
+          <label className="flex items-center gap-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={addToTasks}
+              onChange={(e) => setAddToTasks(e.target.checked)}
+              className="w-4 h-4 rounded accent-[#6F5AE8]"
+            />
+            <span className="text-sm text-[#1A1F36]">
+              {lang === 'et' ? 'Lisa ka ülesannete moodulisse' : 'Also add to Tasks module'}
+            </span>
+          </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2]">
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2] flex-shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
           >
-            {tr('school.action.cancel', lang)}
+            {tr("school.action.cancel", lang)}
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
           >
-            {tr('school.action.save', lang)}
+            {tr("school.action.save", lang)}
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }

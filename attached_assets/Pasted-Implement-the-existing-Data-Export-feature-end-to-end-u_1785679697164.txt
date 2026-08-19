@@ -1,0 +1,121 @@
+Implement the existing Data Export feature end-to-end using only the formats already present in the UI.
+
+Important:
+- JSON has already been removed.
+- Do not add JSON back.
+- Do not redesign the page.
+- Keep the current format choices exactly as they are.
+
+Required formats:
+- PDF
+- Excel (.xlsx)
+
+Current state:
+- The export button is fake.
+- No real user data is read.
+- No file is created.
+- No browser download happens.
+- Success messages are misleading.
+
+Required behavior:
+
+1. Firebase data source
+Read the signed-in user’s current live data from Firestore at export time.
+
+Supported selected categories:
+- tasks → users/{uid}/tasks
+- calendar → users/{uid}/calendarEvents
+- habits → users/{uid}/habits
+- goals → users/{uid}/goals
+- notes → users/{uid}/notes
+- school → users/{uid}/schoolItems
+
+Do not export:
+- another user’s data
+- passwords
+- Firebase tokens
+- authentication secrets
+- backups unless there is an explicit UI option for them
+- unchecked categories
+
+2. PDF export
+Create one real readable PDF containing only the selected categories.
+
+Requirements:
+- clear section headings
+- item counts
+- readable dates and times
+- statuses and relevant fields
+- correct Estonian characters
+- sensible page breaks
+- filename:
+  kivora-export-YYYY-MM-DD.pdf
+
+PDF is a readable report, not a restorable backup.
+Do not claim otherwise.
+
+3. Excel export
+Create one real .xlsx workbook.
+
+Requirements:
+- one worksheet per selected category
+- readable worksheet names
+- readable column headers
+- only selected categories included
+- correct dates, times, booleans, and Estonian characters
+- filename:
+  kivora-export-YYYY-MM-DD.xlsx
+
+4. Real browser download
+- Generate the file in the browser
+- Trigger a real download
+- Show loading while Firestore data is fetched and the file is generated
+- Show success only after the download has actually been triggered
+- Show the real error on failure
+
+5. Export settings
+The existing users/{uid}/settings/export document may store:
+- selected format
+- selected categories
+- lastExportAt
+
+Update lastExportAt only after a real file was successfully created and download triggered.
+
+6. Notifications
+Dispatch the export-complete notification only after a successful real export.
+Do not dispatch it on failure.
+
+7. Firebase reporting rule
+At the end explicitly report:
+- Firebase status: CONNECTED / NOT CONNECTED
+- PDF status: REAL FILE / SIMULATED
+- Excel status: REAL FILE / SIMULATED
+- Firebase Storage: USED / NOT USED
+- Firestore rules: SUFFICIENT / CHANGES REQUIRED
+
+8. Firestore rules
+Audit read access for every exported collection.
+Do not add new rules if the existing owner-only read rules are already sufficient.
+
+9. UI truthfulness
+Update ET and EN text so:
+- success means a real file was created
+- the note below the button accurately describes what happens
+- no message claims export succeeded before download starts
+
+10. Testing before stopping
+- Select only Tasks and export PDF
+- Confirm the PDF downloads and contains only tasks
+- Select Notes and Goals and export Excel
+- Confirm the workbook downloads with exactly two worksheets
+- Confirm unchecked categories are absent
+- Confirm live Firestore data is present
+- Confirm Estonian characters display correctly
+- Confirm failure does not show success
+
+After finishing:
+- Run TypeScript typecheck
+- Check runtime console
+- List every modified file
+- Explain which Firestore collections are read
+- Stop for manual testing

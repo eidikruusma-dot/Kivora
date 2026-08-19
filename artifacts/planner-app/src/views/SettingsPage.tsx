@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
@@ -8,15 +8,18 @@ import TurvalisusPage from '@/views/settings/TurvalisusPage'
 import TeavitusedPage from '@/views/settings/TeavitusedPage'
 import KuupaevJaAegPage from '@/views/settings/KuupaevJaAegPage'
 import KeelPage from '@/views/settings/KeelPage'
+import EPostPage from '@/views/settings/EPostPage'
+import PrivaatsusPage from '@/views/settings/PrivaatsusPage'
+import SünkroonimisePage from '@/views/settings/SünkroonimisePage'
+import VarundaminePage from '@/views/settings/VarundaminePage'
+import AndmeteEksportPage from '@/views/settings/AndmeteEksportPage'
+import AndmeteKustutaminePage from '@/views/settings/AndmeteKustutaminePage'
+import AbiJaTugiPage from '@/views/settings/AbiJaTugiPage'
+import TagasisidePage from '@/views/settings/TagasisidePage'
+import MisOnUutPage from '@/views/settings/MisOnUutPage'
+import RakendusePage from '@/views/settings/RakendusePage'
+import ModulesPage from '@/views/settings/ModulesPage'
 import { useAuth } from '@/context/AuthContext'
-import {
-  getUserProfile,
-  updateUserPreferences,
-  type UserPreferencesUpdate,
-} from '@/lib/userProfile'
-import type { UserProfile } from '@/types'
-import PreferencesSection from '@/components/profile/PreferencesSection'
-import PreferencesEditForm from '@/components/profile/PreferencesEditForm'
 import {
   User,
   Shield,
@@ -39,6 +42,7 @@ import {
   RefreshCw,
   Headphones,
   ArrowLeft,
+  LayoutGrid,
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -73,6 +77,7 @@ interface QuickAction {
   iconBg: string
   iconColor: string
   label: string
+  routeKey: string   // stable Estonian key — used for navigation, not displayed
 }
 
 // ── Data helpers (language-aware) ──────────────────────────────────────────
@@ -87,28 +92,28 @@ function getSections(lang: AppLang): Section[] {
           iconBg: '#EDE9FB', iconColor: '#6F5AE8',
           routeKey: 'Profiil ja konto',
           title: t('settings.card.profile', lang),
-          description: 'Vaata ja muuda oma isikuandmeid, profiilipilti ja konto seadeid.',
+          description: t('settings.desc.profile', lang),
         },
         {
           icon: <Shield size={22} strokeWidth={1.8} />,
           iconBg: '#DCFCE7', iconColor: '#16A34A',
           routeKey: 'Turvalisus',
           title: t('settings.card.security', lang),
-          description: 'Parool, kaheastmeline tuvastus ja sisselogimise seaded.',
+          description: t('settings.desc.security', lang),
         },
         {
           icon: <Mail size={22} strokeWidth={1.8} />,
           iconBg: '#FEF9C3', iconColor: '#CA8A04',
           routeKey: 'E-posti seaded',
           title: t('settings.card.email', lang),
-          description: 'Halda e-posti teavitusi ja kinnituseelistusi.',
+          description: t('settings.desc.email', lang),
         },
         {
           icon: <Lock size={22} strokeWidth={1.8} />,
           iconBg: '#FEE2E2', iconColor: '#DC2626',
           routeKey: 'Privaatsus',
           title: t('settings.card.privacy', lang),
-          description: 'Andmete privaatsus, nähtavus ja jagamise seaded.',
+          description: t('settings.desc.privacy', lang),
         },
       ],
     },
@@ -116,32 +121,39 @@ function getSections(lang: AppLang): Section[] {
       heading: t('settings.section.app', lang),
       cards: [
         {
-          icon: <Palette size={22} strokeWidth={1.8} />,
+          icon: <LayoutGrid size={22} strokeWidth={1.8} />,
           iconBg: '#EDE9FB', iconColor: '#6F5AE8',
+          routeKey: 'Moodulid',
+          title: t('settings.card.modules', lang),
+          description: t('settings.desc.modules', lang),
+        },
+        {
+          icon: <Palette size={22} strokeWidth={1.8} />,
+          iconBg: '#F0FDF4', iconColor: '#16A34A',
           routeKey: 'Välimus',
           title: t('settings.card.appearance', lang),
-          description: 'Vali teema, värvid ja rakenduse kujunduse seaded.',
+          description: t('settings.desc.appearance', lang),
         },
         {
           icon: <Bell size={22} strokeWidth={1.8} />,
           iconBg: '#DCFCE7', iconColor: '#16A34A',
           routeKey: 'Teavitused',
           title: t('settings.card.notifications', lang),
-          description: 'Halda märguandeid, meeldetuletusi ja teavituste kanaleid.',
+          description: t('settings.desc.notifications', lang),
         },
         {
           icon: <Clock size={22} strokeWidth={1.8} />,
           iconBg: '#FEF9C3', iconColor: '#CA8A04',
           routeKey: 'Kuupäev ja aeg',
           title: t('settings.card.datetime', lang),
-          description: 'Vali ajavöönd, kuupäevavorming ja kellaaja formaat.',
+          description: t('settings.desc.datetime', lang),
         },
         {
           icon: <Globe size={22} strokeWidth={1.8} />,
           iconBg: '#FEE2E2', iconColor: '#DC2626',
           routeKey: 'Keel',
           title: t('settings.card.language', lang),
-          description: 'Rakenduse keel ja piirkonna seaded.',
+          description: t('settings.desc.language', lang),
         },
       ],
     },
@@ -153,28 +165,28 @@ function getSections(lang: AppLang): Section[] {
           iconBg: '#EDE9FB', iconColor: '#6F5AE8',
           routeKey: 'Sünkroonimine',
           title: t('settings.card.sync', lang),
-          description: 'Sünkrooni andmeid seadmete vahel ja vaata staatust.',
+          description: t('settings.desc.sync', lang),
         },
         {
           icon: <UploadCloud size={22} strokeWidth={1.8} />,
           iconBg: '#DCFCE7', iconColor: '#16A34A',
           routeKey: 'Varundamine',
           title: t('settings.card.backup', lang),
-          description: 'Loo varukoopia oma andmetest ja taasta neid vajadusel.',
+          description: t('settings.desc.backup', lang),
         },
         {
           icon: <Download size={22} strokeWidth={1.8} />,
           iconBg: '#FEF9C3', iconColor: '#CA8A04',
           routeKey: 'Andmete eksport',
           title: t('settings.card.export', lang),
-          description: 'Ekspordi oma andmed erinevates vormingutes.',
+          description: t('settings.desc.export', lang),
         },
         {
           icon: <Trash2 size={22} strokeWidth={1.8} />,
           iconBg: '#FEE2E2', iconColor: '#DC2626',
           routeKey: 'Andmete kustutamine',
           title: t('settings.card.delete', lang),
-          description: 'Kustuta oma konto või erinevaid andmeid.',
+          description: t('settings.desc.delete', lang),
         },
       ],
     },
@@ -186,28 +198,28 @@ function getSections(lang: AppLang): Section[] {
           iconBg: '#EDE9FB', iconColor: '#6F5AE8',
           routeKey: 'Abi ja tugi',
           title: t('settings.card.helpSupport', lang),
-          description: 'Korduma kippuvad küsimused, juhendid ja tugi.',
+          description: t('settings.desc.helpSupport', lang),
         },
         {
           icon: <Sparkles size={22} strokeWidth={1.8} />,
           iconBg: '#DCFCE7', iconColor: '#16A34A',
           routeKey: 'Mis on uut?',
           title: t('settings.card.whatsNew', lang),
-          description: 'Vaata viimaseid uuendusi ja parandusi.',
+          description: t('settings.desc.whatsNew', lang),
         },
         {
           icon: <MessageSquare size={22} strokeWidth={1.8} />,
           iconBg: '#FEF9C3', iconColor: '#CA8A04',
           routeKey: 'Tagasiside',
           title: t('settings.card.feedback', lang),
-          description: 'Jaga oma ideid või anna meile tagasisidet.',
+          description: t('settings.desc.feedback', lang),
         },
         {
           icon: <Info size={22} strokeWidth={1.8} />,
           iconBg: '#FEE2E2', iconColor: '#DC2626',
           routeKey: 'Rakenduse info',
           title: t('settings.card.appInfo', lang),
-          description: 'Vaata versiooni, litsentse ja seaduslikku infot.',
+          description: t('settings.desc.appInfo', lang),
         },
       ],
     },
@@ -220,24 +232,24 @@ function getUsageStats(lang: AppLang): UsageStat[] {
       icon: <HardDrive size={16} strokeWidth={1.8} />,
       iconBg: '#EDE9FB', iconColor: '#6F5AE8',
       label: t('settings.usage.storage', lang),
-      used: '2.4 GB', total: '10 GB',
-      pct: 24,
+      used: '—', total: '—',
+      pct: 0,
       barColor: '#6F5AE8',
     },
     {
       icon: <Sparkles size={16} strokeWidth={1.8} />,
       iconBg: '#DCFCE7', iconColor: '#16A34A',
       label: t('settings.usage.ai', lang),
-      used: '156', total: '500',
-      pct: 31,
+      used: '—', total: '—',
+      pct: 0,
       barColor: '#16A34A',
     },
     {
       icon: <Cloud size={16} strokeWidth={1.8} />,
       iconBg: '#FEF9C3', iconColor: '#CA8A04',
       label: t('settings.usage.projects', lang),
-      used: '7', total: '20',
-      pct: 38,
+      used: '—', total: '—',
+      pct: 0,
       barColor: '#CA8A04',
     },
   ]
@@ -249,21 +261,25 @@ function getQuickActions(lang: AppLang): QuickAction[] {
       icon: <Lock size={15} strokeWidth={1.8} />,
       iconBg: '#EDE9FB', iconColor: '#6F5AE8',
       label: t('settings.quick.changePassword', lang),
+      routeKey: 'Turvalisus',
     },
     {
       icon: <Download size={15} strokeWidth={1.8} />,
       iconBg: '#DCFCE7', iconColor: '#16A34A',
       label: t('settings.quick.downloadData', lang),
+      routeKey: 'Andmete eksport',
     },
     {
       icon: <RefreshCw size={15} strokeWidth={1.8} />,
       iconBg: '#FEF9C3', iconColor: '#CA8A04',
       label: t('settings.quick.checkSync', lang),
+      routeKey: 'Sünkroonimine',
     },
     {
       icon: <Headphones size={15} strokeWidth={1.8} />,
       iconBg: '#FEE2E2', iconColor: '#DC2626',
       label: t('settings.quick.contactSupport', lang),
+      routeKey: 'Abi ja tugi',
     },
   ]
 }
@@ -288,52 +304,8 @@ export default function SettingsPage() {
     setOpenView(null)
   }, [location.key])
 
-  // ── Preferences state ───────────────────────────────────────────────────
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [editingPrefs, setEditingPrefs] = useState(false)
-  const [savingPrefs, setSavingPrefs] = useState(false)
-  const [prefsDirty, setPrefsDirty] = useState(false)
-
-  useEffect(() => {
-    if (!user) return
-    getUserProfile(user.uid)
-      .then((data) => { if (data) setProfile(data) })
-      .catch(() => {})
-  }, [user])
-
-  useEffect(() => {
-    if (!prefsDirty) return
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
-    window.addEventListener('beforeunload', handler)
-    return () => window.removeEventListener('beforeunload', handler)
-  }, [prefsDirty])
-
-  const handlePrefsDirtyChange = useCallback((d: boolean) => setPrefsDirty(d), [])
-
-  const handleEditPrefs = () => setEditingPrefs(true)
-
-  const handleCancelPrefs = () => {
-    if (prefsDirty) {
-      const confirmed = window.confirm('Kas soovid loobuda? Salvestamata muudatused lähevad kaotsi.')
-      if (!confirmed) return
-    }
-    setEditingPrefs(false)
-    setPrefsDirty(false)
-  }
-
-  const handleSavePrefs = async (preferences: UserPreferencesUpdate) => {
-    if (!user) return
-    setSavingPrefs(true)
-    try {
-      await updateUserPreferences(user.uid, preferences)
-      setProfile((prev) => prev ? { ...prev, preferences, updatedAt: new Date() } : prev)
-      setEditingPrefs(false)
-      setPrefsDirty(false)
-    } catch {
-      // error is surfaced by PreferencesEditForm internally
-    } finally {
-      setSavingPrefs(false)
-    }
+  if (openView === 'Moodulid') {
+    return <ModulesPage onBack={() => setOpenView(null)} />
   }
 
   if (openView === 'Välimus') {
@@ -342,6 +314,14 @@ export default function SettingsPage() {
 
   if (openView === 'Turvalisus') {
     return <TurvalisusPage onBack={() => setOpenView(null)} />
+  }
+
+  if (openView === 'E-posti seaded') {
+    return <EPostPage onBack={() => setOpenView(null)} />
+  }
+
+  if (openView === 'Privaatsus') {
+    return <PrivaatsusPage onBack={() => setOpenView(null)} />
   }
 
   if (openView === 'Teavitused') {
@@ -356,12 +336,44 @@ export default function SettingsPage() {
     return <KeelPage onBack={() => setOpenView(null)} />
   }
 
+  if (openView === 'Sünkroonimine') {
+    return <SünkroonimisePage onBack={() => setOpenView(null)} />
+  }
+
+  if (openView === 'Varundamine') {
+    return <VarundaminePage onBack={() => setOpenView(null)} />
+  }
+
+  if (openView === 'Andmete eksport') {
+    return <AndmeteEksportPage onBack={() => setOpenView(null)} />
+  }
+
+  if (openView === 'Andmete kustutamine') {
+    return <AndmeteKustutaminePage onBack={() => setOpenView(null)} />
+  }
+
+  if (openView === 'Abi ja tugi') {
+    return <AbiJaTugiPage onBack={() => setOpenView(null)} />
+  }
+
+  if (openView === 'Tagasiside') {
+    return <TagasisidePage onBack={() => setOpenView(null)} />
+  }
+
+  if (openView === 'Mis on uut?') {
+    return <MisOnUutPage onBack={() => setOpenView(null)} />
+  }
+
+  if (openView === 'Rakenduse info') {
+    return <RakendusePage onBack={() => setOpenView(null)} />
+  }
+
   if (openView) {
     return <PlaceholderView title={openView} onBack={() => setOpenView(null)} />
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 p-6 max-w-[1400px] mx-auto w-full">
+    <div className="settings-page flex flex-col md:flex-row gap-6 p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto w-full">
 
       {/* ── Main content ──────────────────────────────────────────────── */}
       <div className="flex-1 min-w-0 flex flex-col gap-8">
@@ -386,29 +398,10 @@ export default function SettingsPage() {
           </section>
         ))}
 
-        {/* Eelistused */}
-        {profile && (
-          <section>
-            {editingPrefs ? (
-              <PreferencesEditForm
-                profile={profile}
-                saving={savingPrefs}
-                onSave={handleSavePrefs}
-                onCancel={handleCancelPrefs}
-                onDirtyChange={handlePrefsDirtyChange}
-              />
-            ) : (
-              <PreferencesSection
-                profile={profile}
-                onEdit={handleEditPrefs}
-              />
-            )}
-          </section>
-        )}
       </div>
 
       {/* ── Right sidebar ─────────────────────────────────────────────── */}
-      <aside className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4">
+      <aside className="w-full md:w-72 flex-shrink-0 flex flex-col gap-4">
         <UsageCard title={t('settings.usage.title', lang)} stats={getUsageStats(lang)} />
         <QuickActionsCard
           title={t('settings.quick.title', lang)}
@@ -423,6 +416,8 @@ export default function SettingsPage() {
 // ── Sub-components ─────────────────────────────────────────────────────────
 
 function PlaceholderView({ title, onBack }: { title: string; onBack: () => void }) {
+  const [lang, setLang] = useState<AppLang>(getLocalLanguage)
+  useEffect(() => { return subscribeToLanguage((s) => setLang(s.appLang)) }, [])
   return (
     <div className="p-6 max-w-[1400px] mx-auto w-full">
       <button
@@ -430,11 +425,11 @@ function PlaceholderView({ title, onBack }: { title: string; onBack: () => void 
         className="flex items-center gap-2 text-sm font-medium text-[#64748B] hover:text-[#6F5AE8] transition-colors mb-6"
       >
         <ArrowLeft size={16} strokeWidth={2} />
-        Tagasi seadetesse
+        {t('settings.back', lang)}
       </button>
       <div className="bg-white rounded-2xl border border-[#ECECF2] p-10 flex flex-col items-center text-center">
         <h1 className="text-xl font-bold text-[#1A1F36] mb-3">{title}</h1>
-        <p className="text-sm text-[#94A3B8]">See seadete vaade on arendamisel.</p>
+        <p className="text-sm text-[#94A3B8]">{t('settings.wip', lang)}</p>
       </div>
     </div>
   )
@@ -507,7 +502,7 @@ function QuickActionsCard({
 }: {
   title: string
   actions: QuickAction[]
-  onAction: (label: string) => void
+  onAction: (routeKey: string) => void
 }) {
   return (
     <div className="bg-white rounded-2xl border border-[#ECECF2] p-5">
@@ -515,8 +510,8 @@ function QuickActionsCard({
       <div className="flex flex-col divide-y divide-[#F3F3F8]">
         {actions.map((action) => (
           <button
-            key={action.label}
-            onClick={() => onAction(action.label)}
+            key={action.routeKey}
+            onClick={() => onAction(action.routeKey)}
             className="flex items-center gap-3 py-3 group hover:opacity-80 transition-opacity text-left"
           >
             <div

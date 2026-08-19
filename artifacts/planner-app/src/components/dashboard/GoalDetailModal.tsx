@@ -6,14 +6,19 @@ import type { Goal, GoalStatus } from '@/data/goalsData'
 import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
+import { useIsDark } from '@/lib/themeColors'
 
 interface Props {
   goalId: string | null
   onClose: () => void
 }
 
-function getStatusOptions(lang: AppLang): { value: GoalStatus; label: string; bg: string; text: string }[] {
-  return [
+function getStatusOptions(lang: AppLang, isDark: boolean): { value: GoalStatus; label: string; bg: string; text: string }[] {
+  return isDark ? [
+    { value: 'active',    label: t('goals.status.active',  lang), bg: '#0F3020', text: '#4ADE80' },
+    { value: 'paused',    label: t('goals.status.paused',  lang), bg: '#2A2010', text: '#FCD34D' },
+    { value: 'completed', label: t('goals.status.done',    lang), bg: '#1A2332', text: '#94A3B8' },
+  ] : [
     { value: 'active',    label: t('goals.status.active',  lang), bg: '#DCFCE7', text: '#16A34A' },
     { value: 'paused',    label: t('goals.status.paused',  lang), bg: '#FEF9C3', text: '#CA8A04' },
     { value: 'completed', label: t('goals.status.done',    lang), bg: '#E2E8F0', text: '#64748B' },
@@ -23,6 +28,7 @@ function getStatusOptions(lang: AppLang): { value: GoalStatus; label: string; bg
 export default function GoalDetailModal({ goalId, onClose }: Props) {
   const navigate = useNavigate()
   const goals = useGoals()
+  const isDark = useIsDark()
   const goal: Goal | undefined = goals.find((g) => g.id === goalId)
 
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
@@ -37,7 +43,7 @@ export default function GoalDetailModal({ goalId, onClose }: Props) {
   if (!goalId) return null
   if (!goal) return null
 
-  const statusOptions = getStatusOptions(lang)
+  const statusOptions = getStatusOptions(lang, isDark)
   const pct = Math.round((goal.progressValue / Math.max(goal.progressMax, 1)) * 100)
   const doneCnt = goal.steps.filter((s) => s.done).length
   const totalCnt = goal.steps.length
@@ -197,7 +203,7 @@ export default function GoalDetailModal({ goalId, onClose }: Props) {
                       className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
                       style={editStatus === s.value
                         ? { background: s.bg, color: s.text }
-                        : { background: '#F8F7F4', color: '#64748B' }
+                        : { background: isDark ? '#1A2B40' : '#F8F7F4', color: isDark ? '#7A90A8' : '#64748B' }
                       }
                     >
                       {s.label}

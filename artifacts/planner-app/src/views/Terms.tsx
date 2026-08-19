@@ -164,7 +164,7 @@ function TermsEN() {
         <div className="space-y-2">
           <p className="text-[15px] text-[#64748B] leading-relaxed">Eidi Kruusmaa / Kivora</p>
           <p className="text-[15px] text-[#64748B] leading-relaxed">🌐 kivora.ee</p>
-          <p className="text-[15px] text-[#64748B] leading-relaxed">📧 To be added before Kivora's public launch.</p>
+          <p className="text-[15px] text-[#64748B] leading-relaxed">📧 <a href="mailto:info@kivora.ee" className="text-[#6F5AE8] hover:underline">info@kivora.ee</a></p>
         </div>
       </section>
     </div>

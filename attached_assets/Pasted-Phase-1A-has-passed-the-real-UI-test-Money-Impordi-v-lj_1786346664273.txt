@@ -1,0 +1,132 @@
+Phase 1A has passed the real UI test:
+
+Money → “Impordi väljavõte” works.
+The dedicated bank-import endpoint works.
+The review card works inside Money.
+Validation correctly blocks an inconsistent import.
+No transactions were written.
+
+Now focus ONLY on extraction reliability.
+
+Confirmed problem
+
+The same bank statement has produced inconsistent extraction results across runs.
+
+In the latest Money-module test the extractor returned 45 transactions, but reconciliation still failed because the extracted transaction totals did not match the document control totals.
+
+Do NOT hardcode any values, transaction counts, bank names, account numbers, descriptions, or amounts from the test document.
+
+Goal
+
+Design a deterministic bank-statement extraction layer suitable for financial importing.
+
+AI must NOT be the sole authority deciding which transaction rows exist.
+
+Prefer:
+
+PDF → structural/positional extraction → deterministic rows/columns → normalization → reconciliation → optional AI assistance only for ambiguous cases
+
+over:
+
+PDF → LLM → complete transaction array
+
+Inspect the current codebase
+
+Analyze:
+
+current PDF dependencies and their versions
+extractPdfText
+extractBankStatementDirect
+callDirectPdfApi
+normalizeBankTransaction
+running-balance reconciliation
+computeValidationStatus
+existing bankExtraction.test.ts
+the new /api/ai/bank-import endpoint
+
+Determine whether the existing PDF libraries can expose positional text information such as:
+
+page number
+x/y coordinates
+text tokens/items
+width/height where available
+
+Do NOT assume a library supports this — verify from the installed package/API.
+
+Structural parser design
+
+Propose how to:
+
+Extract text items with coordinates from every page.
+Group tokens into visual rows using Y-position tolerance.
+Detect the transaction table and its column headers dynamically.
+Determine date, description, debit, credit and balance columns from the document itself.
+Preserve every genuine transaction row exactly once.
+Handle multiline descriptions.
+Handle repeated merchants and identical transactions without accidental deduplication.
+Parse European number formats deterministically.
+Detect page headers, footers, subtotals and opening/closing balance rows without treating them as transactions.
+Preserve source page and row identity for audit/debugging.
+Reconciliation
+
+Explain how the parser should validate extracted rows using all available independent controls:
+
+opening balance
+closing balance
+printed total credits/income
+printed total debits/expenses
+per-row running balances when present
+
+A mismatch must fail closed.
+
+Do NOT weaken current validation.
+
+AI fallback
+
+Define precisely when AI may be used.
+
+AI may help interpret ambiguous column labels or individual ambiguous rows, but it should not silently regenerate the entire transaction table when structural extraction is available.
+
+For scanned/image-only PDFs, propose a separate OCR fallback strategy and explain how its output is validated before import.
+
+Testing
+
+Propose deterministic tests including:
+
+same PDF parsed repeatedly → byte-for-byte equivalent canonical transactions
+multi-page statement
+repeated identical transactions
+missing IBAN
+unknown bank
+debit/credit columns
+amount + running-balance layouts
+European decimal formats
+malformed/partial pages
+reconciliation failure
+scanned PDF fallback
+
+Tests must use synthetic/anonymized fixtures. Never put real user financial data into test fixtures or source code.
+
+Important constraints
+Do NOT change Phase 1A UI.
+Do NOT change MoneyImportReviewCard.
+Do NOT change confirmation/write logic.
+Do NOT remove the legacy AI-chat path yet.
+Do NOT weaken validation.
+Do NOT hardcode bank-specific rules unless you can justify why a generic structural method cannot work.
+Do NOT implement anything yet.
+Return only an engineering report
+
+Give me:
+
+Root-cause assessment of the current nondeterminism.
+Existing libraries/capabilities we can reuse.
+Proposed structural extraction architecture.
+Exact files/functions that would change.
+AI/OCR fallback design.
+Reconciliation strategy.
+Test strategy.
+Risks and edge cases.
+Smallest safe implementation sequence.
+
+STOP after the report and wait for approval.

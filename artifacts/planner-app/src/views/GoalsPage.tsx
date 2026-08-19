@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
+import { useIsDark, darkBg, darkText } from '@/lib/themeColors'
 import { useLocation } from 'react-router-dom'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
+import { toast } from 'sonner'
 import {
   Plus,
   User,
@@ -31,10 +33,15 @@ import {
   CheckCircle2,
   PlusCircle,
   Trash,
+  Loader2,
 } from 'lucide-react'
-import { UPCOMING_DEADLINES } from '@/data/goalsData'
 import type { Goal, GoalStatus } from '@/data/goalsData'
-import { useGoals, addGoal, updateGoal, deleteGoal as deleteGoalStore, toggleStep, addStep, deleteStep } from '@/lib/goalsStore'
+import { useGoals, useGoalsLoading, addGoal, updateGoal, deleteGoal as deleteGoalStore, toggleStep, addStep, deleteStep } from '@/lib/goalsStore'
+import LinkedItemsPanel from '@/components/links/LinkedItemsPanel'
+import { removeLinksForEntity } from '@/lib/entityLinksStore'
+import PostSaveLinkSuggestionsDialog from '@/components/links/PostSaveLinkSuggestionsDialog'
+import AutoLinkToast from '@/components/links/AutoLinkToast'
+import { runAutomaticLinking, type AutoLinkResult } from '@/lib/automaticLinking'
 
 const ICON_MAP: Record<Goal['icon'], React.ReactNode> = {
   personal: <User size={18} strokeWidth={2} />,
@@ -113,14 +120,17 @@ const emptyForm: NewGoalForm = {
 
 export default function GoalsPage() {
   const goals = useGoals()
+  const goalsLoading = useGoalsLoading()
+  const [saving, setSaving] = useState(false)
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
 
+  const isDark = useIsDark()
   const STATUS_STYLE: Record<GoalStatus, { label: string; bg: string; color: string }> = {
-    active:    { label: t('goals.status.active',  lang), bg: '#DCFCE7', color: '#16A34A' },
-    paused:    { label: t('goals.status.paused',  lang), bg: '#FEF9C3', color: '#CA8A04' },
-    completed: { label: t('goals.status.done',    lang), bg: '#E2E8F0', color: '#64748B' },
-    expired:   { label: t('goals.status.expired', lang), bg: '#FEE2E2', color: '#DC2626' },
+    active:    { label: t('goals.status.active',  lang), bg: isDark ? '#0D2418' : '#DCFCE7', color: isDark ? '#4ADE80' : '#16A34A' },
+    paused:    { label: t('goals.status.paused',  lang), bg: isDark ? '#1F1507' : '#FEF9C3', color: isDark ? '#FCD34D' : '#CA8A04' },
+    completed: { label: t('goals.status.done',    lang), bg: isDark ? '#1A2332' : '#E2E8F0', color: isDark ? '#8B9EB5' : '#64748B' },
+    expired:   { label: t('goals.status.expired', lang), bg: isDark ? '#200A0A' : '#FEE2E2', color: isDark ? '#F87171' : '#DC2626' },
   }
 
   const ICON_OPTIONS_LANG: { value: Goal['icon']; label: string }[] = [
@@ -141,6 +151,8 @@ export default function GoalsPage() {
   const [filter, setFilter] = useState<'all' | 'active' | 'paused' | 'completed'>('all')
 
   const [showAddModal, setShowAddModal] = useState(false)
+  const [postSave, setPostSave] = useState<{ type: 'goal'; id: string } | null>(null)
+  const [autoLink, setAutoLink] = useState<AutoLinkResult | null>(null)
   const [form, setForm] = useState<NewGoalForm>(emptyForm)
   const [formError, setFormError] = useState('')
 
@@ -151,7 +163,6 @@ export default function GoalsPage() {
   const [editGoal, setEditGoal] = useState<Goal | null>(null)
   const [detailGoal, setDetailGoal] = useState<Goal | null>(null)
   const [deleteGoal, setDeleteGoal] = useState<Goal | null>(null)
-  const [recommendOpen, setRecommendOpen] = useState(false)
   const [newStepText, setNewStepText] = useState('')
 
   const location = useLocation()
@@ -164,8 +175,16 @@ export default function GoalsPage() {
     setEditGoal(null)
     setDeleteGoal(null)
     setMenuOpenId(null)
-    setRecommendOpen(false)
   }, [location.key])
+
+  // Deep-link: open specific goal navigated from a linked items panel
+  useEffect(() => {
+    const openId = (location.state as { openId?: string } | null)?.openId
+    if (!openId) return
+    window.history.replaceState({ ...(window.history.state ?? {}), usr: null }, '')
+    const goal = goals.find(g => g.id === openId)
+    if (goal) setDetailGoal(goal)
+  }, [location.key]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!menuOpenId) return
@@ -216,36 +235,47 @@ export default function GoalsPage() {
     }
   }, [goals, detailGoal])
 
-  const handleAddGoal = () => {
+  const handleAddGoal = async () => {
     if (!form.title.trim()) {
       setFormError(t('goals.modal.error', lang))
       return
     }
-    const color = makeColorOptions(lang)[form.colorIndex]
-    const stepLines = form.stepsText.split('\n').map((s) => s.trim()).filter(Boolean)
-    const steps = stepLines.length > 0
-      ? stepLines.map((title, i) => ({ id: `s${Date.now()}-${i}`, title, done: false }))
-      : [{ id: `s${Date.now()}`, title: t('goals.defaultStep', lang), done: false }]
-    const newGoal: Goal = {
-      id: `g${Date.now()}`,
-      title: form.title.trim(),
-      description: form.description.trim() || t('goals.descMissing', lang),
-      iconBg: color.iconBg,
-      iconColor: color.iconColor,
-      icon: form.icon,
-      status: form.status,
-      progressType: 'fraction',
-      progressValue: 0,
-      progressMax: steps.length,
-      deadline: form.deadline || t('goals.deadlineUndefined', lang),
-      deadlineShort: form.deadline || '',
-      barColor: color.barColor,
-      steps,
+    setSaving(true)
+    try {
+      const color = makeColorOptions(lang)[form.colorIndex]
+      const stepLines = form.stepsText.split('\n').map((s) => s.trim()).filter(Boolean)
+      const steps = stepLines.length > 0
+        ? stepLines.map((title, i) => ({ id: `s${Date.now()}-${i}`, title, done: false }))
+        : [{ id: `s${Date.now()}`, title: t('goals.defaultStep', lang), done: false }]
+      const newGoal: Goal = {
+        id: `g${Date.now()}`,
+        title: form.title.trim(),
+        description: form.description.trim() || t('goals.descMissing', lang),
+        iconBg: color.iconBg,
+        iconColor: color.iconColor,
+        icon: form.icon,
+        status: form.status,
+        progressType: 'fraction',
+        progressValue: 0,
+        progressMax: steps.length,
+        deadline: form.deadline || t('goals.deadlineUndefined', lang),
+        deadlineShort: form.deadline || '',
+        barColor: color.barColor,
+        steps,
+      }
+      addGoal(newGoal)
+      toast.success(lang === 'et' ? 'Eesmärk lisatud' : 'Goal added')
+      setPostSave({ type: 'goal', id: newGoal.id })
+      runAutomaticLinking('goal', newGoal.id, lang, {
+        title: newGoal.title,
+        description: newGoal.description,
+      }).then((r) => { if (r.linkIds.length > 0) setAutoLink(r) })
+      setShowAddModal(false)
+      setForm(emptyForm)
+      setFormError('')
+    } finally {
+      setSaving(false)
     }
-    addGoal(newGoal)
-    setShowAddModal(false)
-    setForm(emptyForm)
-    setFormError('')
   }
 
   const handleStatusChange = (id: string, status: GoalStatus) => {
@@ -255,16 +285,24 @@ export default function GoalsPage() {
 
   const handleDeleteGoal = () => {
     if (!deleteGoal) return
+    removeLinksForEntity('goal', deleteGoal.id)
     deleteGoalStore(deleteGoal.id)
+    toast.success(lang === 'et' ? 'Eesmärk kustutatud' : 'Goal deleted')
     setDeleteGoal(null)
     setMenuOpenId(null)
   }
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editGoal) return
-    updateGoal(editGoal.id, editGoal)
-    setEditGoal(null)
-    setMenuOpenId(null)
+    setSaving(true)
+    try {
+      updateGoal(editGoal.id, editGoal)
+      toast.success(lang === 'et' ? 'Eesmärk uuendatud' : 'Goal updated')
+      setEditGoal(null)
+      setMenuOpenId(null)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleAddStep = () => {
@@ -285,32 +323,8 @@ export default function GoalsPage() {
     setMenuOpenId(id)
   }
 
-  const recommendation = longest
-    ? {
-        goalId: longest.id,
-        goalTitle: longest.title,
-        summary: t('goals.rec.summary', lang).replace('{title}', longest.title),
-        reason: t('goals.rec.reason', lang).replace('{pct}', String(Math.round((longest.progressValue / longest.progressMax) * 100))),
-        tips: [
-          t('goals.rec.tip1', lang),
-          t('goals.rec.tip2', lang),
-          t('goals.rec.tip3', lang),
-        ],
-      }
-    : {
-        goalId: null as string | null,
-        goalTitle: t('goals.rec.goalDefault', lang),
-        summary: t('goals.rec.noGoals', lang),
-        reason: t('goals.rec.noGoals2', lang),
-        tips: [
-          t('goals.rec.tip1', lang),
-          t('goals.rec.tip2', lang),
-          t('goals.rec.tip3', lang),
-        ],
-      }
-
   return (
-    <div className="flex flex-col lg:flex-row gap-6 p-6 max-w-[1400px] mx-auto w-full">
+    <div className="flex flex-col md:flex-row gap-6 p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto w-full">
       {/* ── Main content ─────────────────────────────────────────────── */}
       <div className="flex-1 min-w-0 flex flex-col gap-5">
 
@@ -362,13 +376,13 @@ export default function GoalsPage() {
               <div
                 key={goal.id}
                 onClick={() => setDetailGoal(goal)}
-                className="bg-white rounded-2xl border border-[#ECECF2] p-5 hover:border-[#6F5AE8]/30 hover:shadow-md transition-all cursor-pointer"
+                className="bg-white rounded-2xl border border-[#ECECF2] p-5 hover:border-[#6F5AE8]/30 cursor-pointer kv-card"
               >
                 <div className="flex items-start gap-4">
                   {/* Icon */}
                   <div
                     className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: goal.iconBg, color: goal.iconColor }}
+                    style={{ background: isDark ? darkBg(goal.iconBg) : goal.iconBg, color: isDark ? darkText(goal.iconColor) : goal.iconColor }}
                   >
                     {ICON_MAP[goal.icon]}
                   </div>
@@ -407,7 +421,8 @@ export default function GoalsPage() {
                   <div className="relative flex-shrink-0" ref={(el) => { menuRefs.current[goal.id] = el }} onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={(e) => openMenu(e, goal.id)}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
+                      aria-label={lang === 'et' ? 'Eesmärgi valikud' : 'Goal options'}
+                      className="w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
                     >
                       <MoreHorizontal size={16} />
                     </button>
@@ -460,19 +475,28 @@ export default function GoalsPage() {
           })}
 
           {filtered.length === 0 && (
-            <div className="bg-white rounded-2xl border border-[#ECECF2] flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-12 h-12 rounded-full bg-[#F8F7F4] flex items-center justify-center mb-3">
+            <div className="bg-white rounded-2xl border border-[#ECECF2] flex flex-col items-center justify-center py-16 text-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-[#F8F7F4] flex items-center justify-center">
                 <Target size={20} className="text-[#94A3B8]" />
               </div>
-              <p className="text-sm font-medium text-[#1A1F36]">{t('goals.empty.title', lang)}</p>
-              <p className="text-xs text-[#94A3B8] mt-1">{t('goals.empty.body', lang)}</p>
+              <div>
+                <p className="text-sm font-medium text-[#1A1F36]">{t('goals.empty.title', lang)}</p>
+                <p className="text-xs text-[#94A3B8] mt-1">{t('goals.empty.body', lang)}</p>
+              </div>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#6F5AE8] text-white rounded-xl text-sm font-medium hover:bg-[#5B48D8] transition-colors shadow-sm"
+              >
+                <Plus size={14} />
+                {lang === 'et' ? 'Lisa eesmärk' : 'Add goal'}
+              </button>
             </div>
           )}
         </div>
       </div>
 
       {/* ── Right sidebar ─────────────────────────────────────────────── */}
-      <aside className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-4">
+      <aside className="w-full md:w-80 flex-shrink-0 flex flex-col gap-4">
 
         {/* Ülevaade */}
         <div className="bg-white rounded-2xl border border-[#ECECF2] p-5">
@@ -480,7 +504,7 @@ export default function GoalsPage() {
           <div className="flex items-center gap-4">
             <div className="relative w-20 h-20 flex-shrink-0">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
-                <circle cx="18" cy="18" r="15.5" fill="none" stroke="#F1F0EB" strokeWidth="3.5" />
+                <circle cx="18" cy="18" r="15.5" fill="none" stroke="#F1F0EB" strokeWidth="3.5" className="kv-chart-track" />
                 {segments.map((seg) => {
                   const fraction = seg.count / Math.max(total, 1)
                   const dash = fraction * circumference
@@ -539,42 +563,45 @@ export default function GoalsPage() {
           </div>
         )}
 
-        {/* Järgmised tähtajad */}
-        <div className="bg-white rounded-2xl border border-[#ECECF2] p-5">
-          <h3 className="text-sm font-semibold text-[#1A1F36] mb-4">{t('goals.upcoming.title', lang)}</h3>
-          <div className="flex flex-col gap-3">
-            {UPCOMING_DEADLINES.map((d, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{ background: d.iconBg, color: d.iconColor }}
-                >
-                  {DEADLINE_ICON[d.icon]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-[#1A1F36] truncate">{d.label}</p>
-                  <p className="text-[11px] text-[#94A3B8]">{d.date}</p>
-                </div>
-              </div>
-            ))}
+        {/* Järgmised tähtajad — derived from real user goals */}
+        {goals.filter(g => g.status === 'active' && g.deadline).length > 0 && (
+          <div className="bg-white rounded-2xl border border-[#ECECF2] p-5">
+            <h3 className="text-sm font-semibold text-[#1A1F36] mb-4">{t('goals.upcoming.title', lang)}</h3>
+            <div className="flex flex-col gap-3">
+              {goals
+                .filter(g => g.status === 'active' && g.deadline)
+                .slice(0, 3)
+                .map((goal) => (
+                  <div key={goal.id} className="flex items-center gap-3">
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{ background: isDark ? darkBg(goal.iconBg) : goal.iconBg, color: isDark ? darkText(goal.iconColor) : goal.iconColor }}
+                    >
+                      {ICON_MAP[goal.icon]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-[#1A1F36] truncate">{goal.title}</p>
+                      <p className="text-[11px] text-[#94A3B8]">{goal.deadlineShort}</p>
+                    </div>
+                  </div>
+                ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* AI suggestion */}
-        <div className="bg-gradient-to-br from-[#6F5AE8] to-[#7C6BF0] rounded-2xl p-5 text-white">
-          <div className="flex items-center gap-2 mb-3">
-            <Sparkles size={15} strokeWidth={2} />
-            <h3 className="text-sm font-semibold">{t('goals.ai.title', lang)}</h3>
+        {/* AI placeholder — no real AI yet */}
+        <div className="bg-white rounded-2xl border border-[#ECECF2] p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles size={14} strokeWidth={1.8} className="text-[#6F5AE8] flex-shrink-0" />
+            <h3 className="text-sm font-semibold text-[#1A1F36]">
+              {lang === 'et' ? 'Personaliseeritud nõuanded tulemas' : 'Personalized insights coming soon'}
+            </h3>
           </div>
-          <p className="text-sm leading-relaxed text-white/90 mb-4">
-            {t('goals.ai.body', lang).replace('{pct}', String(longest ? Math.round((longest.progressValue / longest.progressMax) * 100) : 0)).replace('{goal}', longest?.title ?? '')}
+          <p className="text-xs text-[#64748B] leading-relaxed">
+            {lang === 'et'
+              ? 'Kivora õpib sinu harjumusi, ülesandeid, eesmärke ja rutiine. Personaliseeritud soovitused ilmuvad automaatselt, kui piisavalt andmeid on kogutud.'
+              : 'Kivora is learning about your habits, tasks, goals and routines. Personalized recommendations will appear automatically once enough information has been collected.'}
           </p>
-          <button
-            onClick={() => setRecommendOpen(true)}
-            className="w-full py-2 bg-white/20 hover:bg-white/30 transition-colors rounded-xl text-sm font-medium text-white"
-          >
-            {t('goals.viewRecommendation', lang)}
-          </button>
         </div>
       </aside>
 
@@ -586,14 +613,18 @@ export default function GoalsPage() {
           onClick={() => setShowAddModal(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[90vh] overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-goal-title"
+            className="kv-modal-enter bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#F4F4F0] sticky top-0 bg-white rounded-t-2xl">
-              <h2 className="text-base font-semibold text-[#1A1F36]">{t('goals.modal.addTitle', lang)}</h2>
+              <h2 id="add-goal-title" className="text-base font-semibold text-[#1A1F36]">{t('goals.modal.addTitle', lang)}</h2>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
+                aria-label="Close"
+                className="w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
               >
                 <X size={18} />
               </button>
@@ -601,11 +632,13 @@ export default function GoalsPage() {
 
             <div className="px-5 py-4 flex flex-col gap-4">
               <div>
-                <label className="text-xs font-medium text-[#94A3B8] uppercase tracking-wide mb-1 block">{t('goals.modal.nameLabel', lang)} *</label>
+                <label htmlFor="goal-add-title" className="text-xs font-medium text-[#94A3B8] uppercase tracking-wide mb-1 block">{t('goals.modal.nameLabel', lang)} *</label>
                 <input
+                  id="goal-add-title"
                   type="text"
                   value={form.title}
                   onChange={(e) => { setForm({ ...form, title: e.target.value }); setFormError('') }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleAddGoal() }}
                   placeholder={t('goals.modal.namePlaceholder', lang)}
                   className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] transition-colors"
                 />
@@ -655,7 +688,7 @@ export default function GoalsPage() {
                     <button
                       key={c.name}
                       onClick={() => setForm({ ...form, colorIndex: i })}
-                      className={`w-8 h-8 rounded-full transition-all ${form.colorIndex === i ? 'ring-2 ring-offset-2 ring-[#1A1F36]' : ''}`}
+                      className={`w-8 h-8 rounded-full transition-all ${form.colorIndex === i ? 'ring-2 ring-offset-2 ring-[#1A1F36]' : 'goals-color-inactive'}`}
                       style={{ background: c.barColor }}
                       title={c.name}
                     />
@@ -696,14 +729,17 @@ export default function GoalsPage() {
             <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#F4F4F0] sticky bottom-0 bg-white rounded-b-2xl">
               <button
                 onClick={() => { setShowAddModal(false); setForm(emptyForm); setFormError('') }}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
+                disabled={saving}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors disabled:opacity-50"
               >
                 {t('goals.modal.cancel', lang)}
               </button>
               <button
                 onClick={handleAddGoal}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B48D8] transition-colors shadow-sm"
+                disabled={!form.title.trim() || saving}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B48D8] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
+                {saving && <Loader2 size={14} className="animate-spin" />}
                 {t('goals.modal.save', lang)}
               </button>
             </div>
@@ -719,14 +755,18 @@ export default function GoalsPage() {
           onClick={() => setEditGoal(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[90vh] overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-goal-title"
+            className="kv-modal-enter bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#F4F4F0] sticky top-0 bg-white rounded-t-2xl">
-              <h2 className="text-base font-semibold text-[#1A1F36]">{t('goals.modal.editTitle', lang)}</h2>
+              <h2 id="edit-goal-title" className="text-base font-semibold text-[#1A1F36]">{t('goals.modal.editTitle', lang)}</h2>
               <button
                 onClick={() => setEditGoal(null)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
+                aria-label="Close"
+                className="w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
               >
                 <X size={18} />
               </button>
@@ -787,7 +827,7 @@ export default function GoalsPage() {
                       <button
                         key={c.name}
                         onClick={() => setEditGoal({ ...editGoal, barColor: c.barColor, iconBg: c.iconBg, iconColor: c.iconColor })}
-                        className={`w-8 h-8 rounded-full transition-all ${matchIdx === i ? 'ring-2 ring-offset-2 ring-[#1A1F36]' : ''}`}
+                        className={`w-8 h-8 rounded-full transition-all ${matchIdx === i ? 'ring-2 ring-offset-2 ring-[#1A1F36]' : 'goals-color-inactive'}`}
                         style={{ background: c.barColor }}
                         title={c.name}
                       />
@@ -824,14 +864,17 @@ export default function GoalsPage() {
             <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#F4F4F0] sticky bottom-0 bg-white rounded-b-2xl">
               <button
                 onClick={() => setEditGoal(null)}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
+                disabled={saving}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors disabled:opacity-50"
               >
                 {t('goals.modal.cancel', lang)}
               </button>
               <button
                 onClick={handleSaveEdit}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B48D8] transition-colors shadow-sm"
+                disabled={!editGoal?.title.trim() || saving}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B48D8] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
+                {saving && <Loader2 size={14} className="animate-spin" />}
                 {t('goals.modal.save', lang)}
               </button>
             </div>
@@ -847,7 +890,10 @@ export default function GoalsPage() {
           onClick={() => setDetailGoal(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="detail-goal-title"
+            className="kv-modal-enter bg-white rounded-2xl shadow-xl w-full max-w-2xl flex flex-col max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -855,18 +901,19 @@ export default function GoalsPage() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setDetailGoal(null)}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
+                  aria-label="Back"
+                  className="w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
                 >
                   <ChevronLeft size={18} />
                 </button>
                 <div
                   className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: detailGoal.iconBg, color: detailGoal.iconColor }}
+                  style={{ background: isDark ? darkBg(detailGoal.iconBg) : detailGoal.iconBg, color: isDark ? darkText(detailGoal.iconColor) : detailGoal.iconColor }}
                 >
                   {ICON_MAP[detailGoal.icon]}
                 </div>
                 <div>
-                  <h2 className="text-base font-semibold text-[#1A1F36]">{detailGoal.title}</h2>
+                  <h2 id="detail-goal-title" className="text-base font-semibold text-[#1A1F36]">{detailGoal.title}</h2>
                   <span
                     className="text-[11px] font-medium px-2 py-0.5 rounded-full"
                     style={{ background: STATUS_STYLE[detailGoal.status].bg, color: STATUS_STYLE[detailGoal.status].color }}
@@ -877,7 +924,8 @@ export default function GoalsPage() {
               </div>
               <button
                 onClick={() => setDetailGoal(null)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
+                aria-label="Close"
+                className="w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
               >
                 <X size={18} />
               </button>
@@ -993,6 +1041,13 @@ export default function GoalsPage() {
                 </div>
               </div>
 
+              <LinkedItemsPanel
+                type="goal"
+                entityId={detailGoal.id}
+                lang={lang}
+                className="py-1"
+              />
+
               {/* Mark completed button */}
               {detailGoal.status !== 'completed' && (
                 <button
@@ -1016,11 +1071,14 @@ export default function GoalsPage() {
           onClick={() => setDeleteGoal(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-sm flex flex-col"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-goal-title"
+            className="kv-modal-enter bg-white rounded-2xl shadow-xl w-full max-w-sm flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-5 py-4 border-b border-[#F4F4F0]">
-              <h2 className="text-base font-semibold text-[#1A1F36]">{t('goals.deleteConfirm.title', lang)}</h2>
+              <h2 id="delete-goal-title" className="text-base font-semibold text-[#1A1F36]">{t('goals.deleteConfirm.title', lang)}</h2>
             </div>
             <div className="px-5 py-4">
               <p className="text-sm text-[#64748B]">{t('goals.deleteConfirm.body', lang).replace('{title}', deleteGoal.title)}</p>
@@ -1043,78 +1101,21 @@ export default function GoalsPage() {
         </div>
       )}
 
-      {/* ── AI recommendation modal ──────────────────────────────────── */}
-      {recommendOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(15, 23, 42, 0.4)' }}
-          onClick={() => setRecommendOpen(false)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#F4F4F0]">
-              <div className="flex items-center gap-2">
-                <span className="text-base">🤖</span>
-                <h2 className="text-base font-semibold text-[#1A1F36]">{t('goals.recommend.title', lang)}</h2>
-              </div>
-              <button
-                onClick={() => setRecommendOpen(false)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="px-5 py-4 flex flex-col gap-4">
-              <div>
-                <p className="text-xs font-medium text-[#94A3B8] uppercase tracking-wide mb-1">{t('goals.title', lang)}</p>
-                <p className="text-sm font-semibold text-[#1A1F36]">{recommendation.goalTitle}</p>
-                <p className="text-sm text-[#64748B] leading-relaxed mt-1">{recommendation.summary}</p>
-              </div>
-
-              <div>
-                <p className="text-xs font-medium text-[#94A3B8] uppercase tracking-wide mb-1">{t('goals.recommend.reason', lang)}</p>
-                <p className="text-sm text-[#374151] leading-relaxed">{recommendation.reason}</p>
-              </div>
-
-              <div>
-                <p className="text-xs font-medium text-[#94A3B8] uppercase tracking-wide mb-2">{t('goals.recommend.tips', lang)}</p>
-                <ul className="flex flex-col gap-2">
-                  {recommendation.tips.map((tip, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-[#374151] leading-relaxed">
-                      <Check size={14} className="text-[#6F5AE8] mt-0.5 flex-shrink-0" />
-                      <span>{tip}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#F4F4F0]">
-              <button
-                onClick={() => setRecommendOpen(false)}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
-              >
-                {t('goals.recommend.close', lang)}
-              </button>
-              <button
-                onClick={() => {
-                  const g = goals.find((x) => x.id === recommendation.goalId)
-                  if (g) {
-                    setRecommendOpen(false)
-                    setDetailGoal(g)
-                  }
-                }}
-                disabled={!recommendation.goalId}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B48D8] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {t('goals.recommend.edit', lang)}
-              </button>
-            </div>
-          </div>
-        </div>
+      {postSave && (
+        <PostSaveLinkSuggestionsDialog
+          type={postSave.type}
+          entityId={postSave.id}
+          lang={lang}
+          onClose={() => setPostSave(null)}
+        />
+      )}
+      {autoLink && (
+        <AutoLinkToast
+          linkIds={autoLink.linkIds}
+          calendarEventId={autoLink.calendarEventId}
+          lang={lang}
+          onClose={() => setAutoLink(null)}
+        />
       )}
     </div>
   )

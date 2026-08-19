@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
+import { addDoc, collection, serverTimestamp, updateDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 import PublicHeader from '@/components/layout/PublicHeader'
 import PublicFooter from '@/components/layout/PublicFooter'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
 
-type Status = 'idle' | 'submitting' | 'success' | 'error'
+type Status = 'idle' | 'submitting' | 'success' | 'saved' | 'error'
 
 export default function Contact() {
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
@@ -21,16 +23,65 @@ export default function Contact() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!name.trim() || !email.trim() || !message.trim()) {
+      setStatus('error')
+      return
+    }
     setStatus('submitting')
+
+    // 1. Persist to Firestore before attempting email delivery
+    let docRef: Awaited<ReturnType<typeof addDoc>> | null = null
     try {
-      await new Promise<void>((resolve, reject) => {
-        if (!name.trim() || !email.trim() || !message.trim()) reject(new Error('Missing'))
-        else setTimeout(resolve, 600)
+      docRef = await addDoc(collection(db, 'contactSubmissions'), {
+        senderName: name.trim(),
+        senderEmail: email.trim(),
+        subject: subject.trim() || null,
+        message: message.trim(),
+        type: 'contact',
+        source: 'contact_page',
+        uid: null,
+        mayContact: null,
+        createdAt: serverTimestamp(),
+        emailDeliveryStatus: 'pending',
       })
-      setStatus('success')
-      setName(''); setEmail(''); setSubject(''); setMessage('')
     } catch {
       setStatus('error')
+      return
+    }
+
+    // 2. Attempt email delivery via API
+    let emailOk = false
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          subject: subject.trim(),
+          message: message.trim(),
+        }),
+      })
+      const json = await res.json().catch(() => ({ ok: false }))
+      emailOk = res.ok && json.ok === true
+    } catch {
+      emailOk = false
+    }
+
+    // 3. Update delivery status in Firestore
+    try {
+      await updateDoc(docRef, {
+        emailDeliveryStatus: emailOk ? 'sent' : 'failed',
+      })
+    } catch {
+      // Status update is best-effort; the submission is already saved
+    }
+
+    if (emailOk) {
+      setName(''); setEmail(''); setSubject(''); setMessage('')
+      setStatus('success')
+    } else {
+      setStatus('saved')
     }
   }
 
@@ -60,6 +111,10 @@ export default function Contact() {
             {status === 'success' ? (
               <div className="py-6 text-center">
                 <p className="text-sm font-medium text-[#16A34A]">{t('contact.success', lang)}</p>
+              </div>
+            ) : status === 'saved' ? (
+              <div className="py-6 text-center">
+                <p className="text-sm font-medium text-[#CA8A04]">{t('contact.saved', lang)}</p>
               </div>
             ) : (
               <form className="space-y-4" onSubmit={handleSubmit}>

@@ -1,0 +1,130 @@
+Kivora AI Final Integration Check
+
+Do not perform another broad audit.
+Do not redesign the AI interface.
+Do not modify unrelated modules.
+Do not rewrite working systems.
+
+Goal:
+Verify and fix the existing AI so it can use real user data from every active Core module.
+
+The AI must use the existing real stores and Firestore data as the single source of truth.
+
+Check these modules:
+
+- Calendar
+- Tasks
+- Notes
+- Habits
+- Goals
+- Finance
+- School
+- Notifications
+
+Requirements:
+
+1. AI must read real current user data from each enabled module.
+
+2. AI must not use:
+- mock data;
+- demo data;
+- hardcoded examples;
+- separate duplicated AI data.
+
+3. If a module is disabled in Settings → Modules:
+- AI must not proactively recommend that module;
+- AI must not say the data was deleted;
+- stored data must remain untouched.
+
+4. If a module contains no data:
+- AI must say honestly that no data exists;
+- AI must never invent an answer.
+
+5. AI must understand at least:
+
+Calendar:
+- today’s events;
+- upcoming events;
+- all-day events;
+- bill deadlines.
+
+Tasks:
+- today’s tasks;
+- overdue tasks;
+- completed and incomplete tasks.
+
+Notes:
+- note titles and content;
+- recently created notes.
+
+Habits:
+- active habits;
+- completion status;
+- streaks, if real data exists.
+
+Goals:
+- active goals;
+- progress;
+- deadlines;
+- linked savings goals.
+
+Finance:
+- income;
+- expenses;
+- categories;
+- bills;
+- upcoming and overdue bills;
+- savings;
+- monthly plan;
+- available money.
+
+School:
+- assignments;
+- tests;
+- deadlines;
+- school calendar items.
+
+Notifications:
+- unread notifications;
+- important recent notifications.
+
+6. Support Estonian and English.
+
+AI must answer in the user’s selected language.
+
+7. Do not change the AI chat design.
+
+Only fix missing data connections and context-building logic.
+
+8. Test using the visible AI chat with real saved data.
+
+Test these questions:
+
+- What do I have in my calendar today?
+- Which tasks are still unfinished?
+- What notes have I created recently?
+- How are my habits progressing?
+- Which goals are active?
+- How much income do I have this month?
+- Which bills are due soon?
+- How much have I saved?
+- What school deadlines are coming up?
+- Do I have any unread notifications?
+- What should I pay attention to today?
+
+9. Also test one disabled module:
+- disable School;
+- ask AI about School;
+- AI must not proactively use School data;
+- re-enable School;
+- confirm the same stored data becomes available again.
+
+After completion, report only:
+
+- which modules already worked;
+- which integrations were missing;
+- files changed;
+- which test questions passed;
+- anything still incomplete.
+
+Begin now.

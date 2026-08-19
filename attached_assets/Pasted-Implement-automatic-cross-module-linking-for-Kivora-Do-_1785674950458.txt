@@ -1,0 +1,204 @@
+Implement automatic cross-module linking for Kivora.
+
+Do not ask the user to manually search for or select obvious relationships.
+
+Current problems:
+1. Task saving can fail because Firestore receives undefined fields such as time.
+2. The current linking flow is too manual.
+3. Users may not even realize that linking is possible.
+4. Obvious related items should be connected automatically.
+
+Required implementation order:
+
+PHASE 1 — Fix all Firestore undefined-field writes first
+
+Create or reuse one shared helper that recursively removes undefined values before Firestore writes.
+
+Apply it to all entity stores that write user-created records:
+- tasks
+- calendar events
+- notes
+- habits
+- goals
+- school items
+- AI conversations/items
+- settings where relevant
+- entity links if relevant
+
+Do not convert undefined into the string "undefined".
+Optional fields must either be omitted or use a valid explicit fallback only where the existing schema requires it.
+
+The current confirmed error is:
+tasksStore.ts
+Unsupported field value: undefined
+found in field time
+
+Also verify calendar event description and all other optional fields.
+
+PHASE 2 — Automatic linking
+
+Goal:
+When a user saves a task, note, habit, goal, school item, calendar event, or AI-created item, Kivora should automatically find and create obvious cross-module relationships.
+
+The user should not need to:
+- open the link picker
+- choose a module
+- search manually
+- select a relation type
+- confirm obvious matches
+
+Use the existing:
+- entityLinksStore
+- entityResolver
+- linkSuggestions.ts
+- existing entity stores
+- existing Firestore entityLinks schema
+
+Do not create a second relationship system.
+
+Automatic matching signals:
+- shared significant words in title
+- shared words in description/content
+- same subject
+- same category
+- same tags
+- close or identical date
+- close or identical time
+- school subject matching notes/tasks/goals
+- calendar event title matching another entity
+- explicit references to an existing entity title
+
+Confidence rules:
+- High confidence: create the link automatically after save
+- Medium confidence: show a compact non-blocking suggestion
+- Low confidence: do nothing
+
+A single generic keyword must never be enough for automatic linking.
+Require at least two independent signals for auto-linking.
+
+Examples:
+
+School item:
+- subject: Matemaatika
+- topic: Kontrolltöö
+- date: 05.08.2026
+
+Existing note:
+- Matemaatika valemid
+
+Existing goal:
+- Matemaatika hinne 5
+
+Expected:
+- auto-link the school item to the note and goal if confidence is high enough
+- create or link a calendar event when the item has a date/time and no duplicate event already exists
+
+Task:
+- title: Õpi matemaatika kontrolltööks
+- same date as school item
+
+Expected:
+- auto-link task to matching school item
+- auto-link to matching goal and note
+- add or link calendar event if applicable
+
+Calendar behavior:
+- Date/time-based entities should automatically create a calendar event only when the confidence is high and no duplicate event exists
+- Use a valid calendarId:
+  mine, school, work, family, training
+- School items default to calendarId: school
+- General items default to calendarId: mine
+- Prevent duplicate generated events
+- Preserve existing user-created calendar events
+- Store the relation in entityLinks
+
+Automatic relation types:
+- task ↔ calendar: scheduled
+- school ↔ calendar: scheduled
+- habit ↔ calendar: scheduled
+- note ↔ task/goal/school: related
+- task ↔ goal: supports
+- habit ↔ goal: supports
+- AI-created item ↔ source conversation: createdFrom
+- use related when no more specific relation applies
+
+User feedback:
+After save, show a small non-blocking status such as:
+“3 seotud elementi lisati automaatselt”
+or
+“3 related items linked automatically”
+
+Include:
+- View links
+- Undo
+
+Do not force a modal after every save.
+Do not interrupt saving.
+Do not require manual confirmation for high-confidence matches.
+
+Undo:
+- Undo must remove only the links created by that save action
+- It must not delete the actual entities
+
+Removal:
+- Existing linked-item Remove action must work for every entity type
+- Removing from either side deletes the shared entityLinks document
+- The link disappears immediately from both sides
+- Sync removal in real time across browsers
+- Do not delete the linked records themselves
+
+Deletion cleanup:
+When an entity is deleted, remove all entityLinks referencing that entity.
+
+Fallback:
+Keep the manual LinkPickerModal available for unusual or missing relationships.
+Manual linking is a fallback, not the primary flow.
+
+Architecture requirements:
+- Create one shared automatic linking service, for example automaticLinking.ts
+- Do not duplicate matching logic in every page
+- Run automatic linking only after the source entity has been successfully saved
+- Keep existing stores and UI intact
+- Do not redesign unrelated pages
+- Add missing ET and EN translation keys only where needed
+
+Audit before coding:
+Create a short table for:
+- task
+- calendar
+- note
+- habit
+- goal
+- school
+- ai
+
+For each, confirm:
+- save function
+- optional undefined fields
+- automatic linking hook point
+- calendar generation support
+- delete cleanup
+- removal support
+
+Required tests before stopping:
+1. Task without time saves successfully
+2. Calendar event without description saves successfully
+3. School item auto-links to matching note and goal
+4. Task auto-links to matching school item
+5. Date/time item creates one visible calendar event
+6. Duplicate event is not created
+7. Auto-created links appear on both entities
+8. Links sync across two browsers
+9. Remove works from either side
+10. Undo removes only the newly created links
+11. Deleting an entity cleans up its links
+
+After finishing:
+- Run TypeScript typecheck
+- Check runtime console
+- List every modified file
+- Explain the confidence rules
+- Explain duplicate prevention
+- Explain undo behavior
+- State any remaining limitation honestly
+- Stop for manual testing

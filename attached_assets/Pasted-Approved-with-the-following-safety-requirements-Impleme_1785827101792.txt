@@ -1,0 +1,149 @@
+Approved, with the following safety requirements.
+
+Implement the real account deletion system using the smallest possible changes.
+
+Do not rewrite existing working systems.
+
+Create:
+
+artifacts/planner-app/src/lib/accountDeletionService.ts
+
+Modify only:
+
+artifacts/planner-app/src/views/settings/AndmeteKustutaminePage.tsx
+
+Implementation requirements:
+
+1. Provider-aware reauthentication
+
+Email/password users:
+- ask for the current password;
+- use EmailAuthProvider.credential();
+- use reauthenticateWithCredential();
+
+Google users:
+- use GoogleAuthProvider();
+- use reauthenticateWithPopup();
+
+Do not start deleting any data until reauthentication succeeds.
+
+2. Full account deletion order
+
+Delete all Firestore data first.
+
+Required paths:
+
+- users/{uid}/tasks
+- users/{uid}/calendarEvents
+- users/{uid}/notes
+- users/{uid}/habits, if this collection exists in Firestore
+- users/{uid}/goals
+- users/{uid}/schoolItems
+- users/{uid}/aiConversations
+- users/{uid}/notifications
+- users/{uid}/settings
+- users/{uid}/entityLinks
+- users/{uid}/backups/{backupId}/chunks
+- users/{uid}/backups/{backupId}
+- users/{uid}
+
+Only after all Firestore deletion steps succeed:
+- call deleteUser(currentUser);
+- clear local stores and cached user data;
+- navigate to the public home page.
+
+Do not call deleteUser() if any Firestore deletion step fails.
+
+3. Firestore deletion implementation
+
+- use getDocs() and writeBatch();
+- respect the Firestore 500-operation batch limit;
+- process large collections in chunks;
+- reuse the existing deleteBackup() implementation where safe;
+- do not duplicate backup deletion logic unnecessarily.
+
+4. Individual data deletion
+
+Replace the fake per-item deletion handlers with real deletion.
+
+Each UI data category must delete only the corresponding Firestore collection.
+
+Do not show a green success state unless the deletion really succeeds.
+
+If deletion fails:
+- keep the item visible;
+- show a clear error;
+- do not mark it as deleted.
+
+5. Habits audit
+
+Before implementation, confirm whether habits are:
+- stored only in memory;
+- stored in localStorage;
+- stored in Firestore;
+- or synchronized through another store.
+
+Do not assume habits are in-memory only if the current project now has Firestore habit synchronization.
+
+Use the current real implementation as the source of truth.
+
+6. Error handling
+
+Handle at least:
+
+- auth/wrong-password
+- auth/invalid-credential
+- auth/popup-closed-by-user
+- auth/requires-recent-login
+- permission-denied
+- network failure
+- partial Firestore deletion failure
+
+Display honest user-facing errors.
+
+Do not show account deletion as completed unless:
+- reauthentication succeeded;
+- all Firestore data was deleted;
+- the Firebase Auth user was deleted.
+
+7. UI
+
+Keep the existing confirmation UI.
+
+Keep:
+- the typed DELETE confirmation;
+- the two-step warning;
+- the cancel option.
+
+Add only the necessary password or Google reauthentication step.
+
+8. Firestore rules
+
+Before coding, verify that the currently deployed Firestore rules allow the authenticated owner to delete every listed collection and nested backup chunk.
+
+If any deployed rule is missing, report it before implementation.
+
+9. Testing
+
+After implementation, test with disposable accounts:
+
+- one email/password account;
+- one Google account, if Google login is enabled.
+
+For each test verify:
+- Firestore user document is gone;
+- all subcollections are gone;
+- backup chunks are gone;
+- Firebase Authentication user is gone;
+- the user is signed out;
+- reopening the app does not restore stale local data.
+
+Do not mark account deletion complete until the full test passes.
+
+Before writing code, report:
+- the exact files to create and modify;
+- the actual habits storage implementation;
+- any missing Firestore delete permissions;
+- the final deletion sequence.
+
+Wait for my approval after that report.

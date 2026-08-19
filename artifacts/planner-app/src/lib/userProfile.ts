@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import type { User } from 'firebase/auth'
 import { db } from '@/lib/firebase'
 import type { UserProfile, UserPreferences, StartOfWeek, TimeFormat, DateFormat } from '@/types'
@@ -7,6 +7,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   startOfWeek: 'monday',
   timeFormat: '24h',
   dateFormat: 'DD.MM.YYYY',
+  timezone: 'Europe/Tallinn',
 }
 
 export function getEffectivePreferences(profile: UserProfile): UserPreferences {
@@ -14,6 +15,8 @@ export function getEffectivePreferences(profile: UserProfile): UserPreferences {
     startOfWeek: profile.preferences?.startOfWeek ?? DEFAULT_PREFERENCES.startOfWeek,
     timeFormat: profile.preferences?.timeFormat ?? DEFAULT_PREFERENCES.timeFormat,
     dateFormat: profile.preferences?.dateFormat ?? DEFAULT_PREFERENCES.dateFormat,
+    // timezone is stored at the top level of UserProfile, not inside preferences
+    timezone: profile.timezone || DEFAULT_PREFERENCES.timezone,
   }
 }
 
@@ -110,7 +113,7 @@ export async function updateUserProfile(
   if (changes.photoURL !== undefined) {
     updateData.photoURL = changes.photoURL
   }
-  await updateDoc(ref, updateData)
+  await setDoc(ref, updateData, { merge: true })
 }
 
 export async function updateUserPreferences(
@@ -118,12 +121,14 @@ export async function updateUserPreferences(
   preferences: UserPreferencesUpdate,
 ): Promise<void> {
   const ref = doc(db, 'users', uid)
-  await updateDoc(ref, {
-    'preferences.startOfWeek': preferences.startOfWeek,
-    'preferences.timeFormat': preferences.timeFormat,
-    'preferences.dateFormat': preferences.dateFormat,
+  await setDoc(ref, {
+    preferences: {
+      startOfWeek: preferences.startOfWeek,
+      timeFormat: preferences.timeFormat,
+      dateFormat: preferences.dateFormat,
+    },
     preferredLanguage: preferences.preferredLanguage,
     timezone: preferences.timezone,
     updatedAt: serverTimestamp(),
-  })
+  }, { merge: true })
 }

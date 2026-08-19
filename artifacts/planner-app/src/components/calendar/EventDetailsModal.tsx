@@ -1,9 +1,12 @@
 import { X, Calendar, Clock, MapPin, AlignLeft, Pencil, Trash2 } from 'lucide-react'
+import LinkedItemsPanel from '@/components/links/LinkedItemsPanel'
 import { useEffect, useState } from 'react'
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
 import { t } from '@/lib/translations'
 import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
+import type { TimeFormat } from '@/types'
+import { formatTimeRange } from '@/lib/calendar/dateUtils'
 
 interface Props {
   event: MockCalendarEvent | null
@@ -11,6 +14,7 @@ interface Props {
   onEdit: () => void
   onDelete: (id: string) => void
   calendars: { id: string; label: string; color: string }[]
+  timeFormat?: TimeFormat
 }
 
 const ET_MONTHS = [
@@ -31,7 +35,7 @@ function formatDate(dateStr: string, lang: AppLang): string {
   return `${d}. ${ET_MONTHS[m - 1]} ${y}`
 }
 
-export default function EventDetailsModal({ event, onClose, onEdit, onDelete, calendars }: Props) {
+export default function EventDetailsModal({ event, onClose, onEdit, onDelete, calendars, timeFormat = '24h' }: Props) {
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
 
@@ -46,7 +50,7 @@ export default function EventDetailsModal({ event, onClose, onEdit, onDelete, ca
 
   const timeLabel = event.allDay
     ? t('cal.allDay', lang)
-    : `${event.startTime} – ${event.endTime}`
+    : formatTimeRange(event.startTime, event.endTime, timeFormat)
 
   return (
     <div
@@ -54,16 +58,19 @@ export default function EventDetailsModal({ event, onClose, onEdit, onDelete, ca
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="event-detail-title"
+        className="kv-modal-enter bg-white rounded-2xl shadow-xl w-full max-w-sm flex flex-col max-h-[90dvh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Colour bar + header */}
         <div
-          className="flex items-start justify-between px-5 pt-5 pb-4"
+          className="flex items-start justify-between px-5 pt-5 pb-4 flex-shrink-0"
           style={{ borderBottom: `3px solid ${event.color ?? '#6F5AE8'}` }}
         >
           <div className="flex-1 min-w-0 pr-3">
-            <p className="text-base font-semibold text-[#1A1F36] leading-snug">{event.title}</p>
+            <p id="event-detail-title" className="text-base font-semibold text-[#1A1F36] leading-snug">{event.title}</p>
             {cal && (
               <span
                 className="inline-flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-white"
@@ -76,14 +83,15 @@ export default function EventDetailsModal({ event, onClose, onEdit, onDelete, ca
           </div>
           <button
             onClick={onClose}
-            className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
+            aria-label="Close"
+            className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-lg text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Detail rows */}
-        <div className="px-5 py-4 flex flex-col gap-3">
+        <div className="px-5 py-4 flex flex-col gap-3 flex-1 overflow-y-auto">
           {/* Date */}
           <div className="flex items-start gap-3">
             <Calendar size={15} className="text-[#94A3B8] mt-0.5 flex-shrink-0" />
@@ -112,6 +120,9 @@ export default function EventDetailsModal({ event, onClose, onEdit, onDelete, ca
             </div>
           )}
         </div>
+
+        {/* Linked items */}
+        <LinkedItemsPanel type="calendar" entityId={event.id} lang={lang} className="px-5 pb-2" />
 
         {/* Actions */}
         <div className="flex items-center justify-between px-5 py-4 border-t border-[#EBEBEB]">

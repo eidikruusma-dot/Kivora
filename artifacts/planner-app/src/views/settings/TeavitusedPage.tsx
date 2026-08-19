@@ -8,11 +8,11 @@ import {
   Target,
   GraduationCap,
   Sparkles,
+  Shield,
   Monitor,
   Smartphone,
   Clock,
   Moon,
-  SendHorizonal,
   CheckCircle2,
   AlertCircle,
   Loader2,
@@ -28,6 +28,12 @@ import type { NotificationSettings, NotificationModules } from '@/lib/notificati
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
+import {
+  isPushSupported,
+  enablePush,
+  disablePush,
+  getActivePushSubscription,
+} from '@/lib/pushNotifications'
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
@@ -81,11 +87,11 @@ function Toggle({
       aria-checked={checked}
       disabled={disabled}
       onClick={() => !disabled && onChange(!checked)}
-      className="relative flex-shrink-0 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+      className={`relative flex-shrink-0 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed${checked ? '' : ' notif-toggle-off'}`}
       style={{
         width: '38px',
         height: '22px',
-        backgroundColor: checked ? '#6F5AE8' : '#D1D5DB',
+        backgroundColor: checked ? '#6F5AE8' : undefined,
       }}
     >
       <div
@@ -157,6 +163,7 @@ function makeModuleConfig(lang: AppLang): {
     { key: 'goals', label: t('teavit.mod.goals', lang), desc: t('teavit.mod.goals.desc', lang), icon: <Target size={16} strokeWidth={1.8} />, iconBg: '#FEF9C3', iconColor: '#CA8A04' },
     { key: 'school', label: t('teavit.mod.school', lang), desc: t('teavit.mod.school.desc', lang), icon: <GraduationCap size={16} strokeWidth={1.8} />, iconBg: '#FEE2E2', iconColor: '#DC2626' },
     { key: 'assistant', label: t('teavit.mod.ai', lang), desc: t('teavit.mod.ai.desc', lang), icon: <Sparkles size={16} strokeWidth={1.8} />, iconBg: '#F0FDF4', iconColor: '#16A34A' },
+    { key: 'security', label: t('teavit.mod.security', lang), desc: t('teavit.mod.security.desc', lang), icon: <Shield size={16} strokeWidth={1.8} />, iconBg: '#FEE2E2', iconColor: '#DC2626' },
   ]
 }
 
@@ -175,18 +182,26 @@ export default function TeavitusedPage({ onBack }: Props) {
   const { user } = useAuth()
 
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS)
+  // Snapshot of the last successfully saved (or freshly loaded) state.
+  // Used to detect unsaved changes so the Save button is disabled when nothing has changed.
+  const [savedSettings, setSavedSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS)
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  // Toast for inline feedback (save result, test notification, permission errors)
+  const isDirty = JSON.stringify(settings) !== JSON.stringify(savedSettings)
+
+  // Toast for inline feedback (save result, permission errors)
   const [toast, setToast] = useState<ToastState>(null)
-  const [testSending, setTestSending] = useState(false)
 
   // System notification permission state
   const [sysPermission, setSysPermission] = useState<NotificationPermission>(
     typeof Notification !== 'undefined' ? Notification.permission : 'default',
   )
+
+  // Push notification status
+  type PushStatus = 'checking' | 'unsupported' | 'denied' | 'inactive' | 'subscribing' | 'active'
+  const [pushStatus, setPushStatus] = useState<PushStatus>('checking')
 
   // ── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -196,6 +211,7 @@ export default function TeavitusedPage({ onBack }: Props) {
       .then((s) => {
         if (cancelled) return
         setSettings(s)
+        setSavedSettings(s)
         setLoaded(true)
       })
       .catch(() => {
@@ -205,6 +221,21 @@ export default function TeavitusedPage({ onBack }: Props) {
     return () => {
       cancelled = true
     }
+  }, [user])
+
+  // ── Push status check ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    if (!isPushSupported()) { setPushStatus('unsupported'); return }
+    if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+      setPushStatus('denied')
+      return
+    }
+    getActivePushSubscription()
+      .then((sub) => { if (!cancelled) setPushStatus(sub ? 'active' : 'inactive') })
+      .catch(() => { if (!cancelled) setPushStatus('inactive') })
+    return () => { cancelled = true }
   }, [user])
 
   // ── Update helpers ────────────────────────────────────────────────────────
@@ -250,6 +281,53 @@ export default function TeavitusedPage({ onBack }: Props) {
     }
   }
 
+  // ── Push toggle ───────────────────────────────────────────────────────────
+  const handlePushToggle = async (enabled: boolean) => {
+    if (!user) return
+    if (!enabled) {
+      setPushStatus('subscribing')
+      await disablePush(user.uid)
+      setPushStatus('inactive')
+      return
+    }
+    if (!isPushSupported()) {
+      setToast({
+        type: 'error',
+        text: lang === 'et' ? 'Sinu brauser ei toeta push-teavitusi.' : 'Your browser does not support push notifications.',
+      })
+      return
+    }
+    if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+      setToast({
+        type: 'error',
+        text: lang === 'et' ? 'Teavitused on blokeeritud. Luba need brauseri seadetes.' : 'Notifications are blocked. Enable them in browser settings.',
+      })
+      return
+    }
+    setPushStatus('subscribing')
+    const result = await enablePush(user.uid)
+    if (result === 'active') {
+      setPushStatus('active')
+      setToast({
+        type: 'success',
+        text: lang === 'et' ? 'Push-teavitused on aktiveeritud!' : 'Push notifications activated!',
+      })
+    } else if (result === 'denied') {
+      setPushStatus('denied')
+      setSysPermission('denied')
+      setToast({
+        type: 'error',
+        text: lang === 'et' ? 'Luba keelduti.' : 'Permission was denied.',
+      })
+    } else {
+      setPushStatus('inactive')
+      setToast({
+        type: 'error',
+        text: lang === 'et' ? 'Push-teavituste seadistamine ebaõnnestus.' : 'Failed to set up push notifications.',
+      })
+    }
+  }
+
   // ── Save ──────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!user) return
@@ -257,6 +335,7 @@ export default function TeavitusedPage({ onBack }: Props) {
     setToast(null)
     try {
       await saveNotificationSettings(user.uid, settings)
+      setSavedSettings(settings)
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch {
@@ -264,32 +343,6 @@ export default function TeavitusedPage({ onBack }: Props) {
     } finally {
       setSaving(false)
     }
-  }
-
-  // ── Test notification ─────────────────────────────────────────────────────
-  const handleTestNotification = async () => {
-    setTestSending(true)
-    setToast(null)
-
-    await new Promise((r) => setTimeout(r, 600)) // brief delay for UX
-
-    const isVisible = document.visibilityState === 'visible'
-
-    if (!isVisible && settings.systemNotifications && sysPermission === 'granted') {
-      // App in background → system notification
-      new Notification('Kivora', {
-        body: t('teavit.test.body', lang),
-        icon: '/favicon.ico',
-      })
-      setToast({ type: 'success', text: t('teavit.test.sent', lang) })
-    } else if (settings.inApp) {
-      // App in focus → in-app notification
-      setToast({ type: 'info', text: t('teavit.test.inApp', lang) })
-    } else {
-      setToast({ type: 'error', text: t('teavit.test.noChannel', lang) })
-    }
-
-    setTestSending(false)
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -384,11 +437,11 @@ export default function TeavitusedPage({ onBack }: Props) {
         >
           <div>
             <ToggleRow
-              icon={<Smartphone size={16} strokeWidth={1.8} />}
+              icon={<Bell size={16} strokeWidth={1.8} />}
               iconBg="#EDE9FB"
               iconColor="#6F5AE8"
-              label="Rakendusesisesed teavitused"
-              description="Näita teavitusi otse Kivora sees"
+              label={t('notifSettings.inApp.label', lang)}
+              description={t('notifSettings.inApp.desc', lang)}
               checked={settings.inApp}
               onChange={(v) => update({ inApp: v })}
             />
@@ -401,13 +454,13 @@ export default function TeavitusedPage({ onBack }: Props) {
                   <Monitor size={16} strokeWidth={1.8} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-[#1A1F36]">Süsteemi märguanded</p>
+                  <p className="text-sm font-medium text-[#1A1F36]">{t('notifSettings.system.label', lang)}</p>
                   <p className="text-xs text-[#94A3B8] mt-0.5">
-                    Brauseri / Windowsi märguanded, kui rakendus on taustal
+                    {t('notifSettings.system.desc', lang)}
                   </p>
                   {sysPermission === 'denied' && (
                     <p className="text-xs text-red-500 mt-0.5">
-                      Brauser on märguanded blokeerinud — luba need brauseri seadetes
+                      {t('notifSettings.system.blocked', lang)}
                     </p>
                   )}
                 </div>
@@ -419,6 +472,49 @@ export default function TeavitusedPage({ onBack }: Props) {
               />
             </div>
           </div>
+          {/* Push notifications (Web Push) */}
+          <div className="border-t border-[#F4F4F0] mt-3 pt-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: '#EDE9FB', color: '#6F5AE8' }}
+                >
+                  <Smartphone size={16} strokeWidth={1.8} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-[#1A1F36]">
+                    {lang === 'et' ? 'Push-teavitused' : 'Push notifications'}
+                  </p>
+                  <p className="text-xs text-[#94A3B8] mt-0.5">
+                    {pushStatus === 'active'
+                      ? (lang === 'et' ? 'Aktiivne — teavitused saadetakse sellele seadmele' : 'Active — alerts delivered to this device')
+                      : pushStatus === 'unsupported'
+                      ? (lang === 'et' ? 'Sinu brauser ei toeta push-teavitusi' : 'Not supported by this browser')
+                      : pushStatus === 'denied'
+                      ? (lang === 'et' ? 'Blokeeritud — luba brauseri seadetes' : 'Blocked — enable in browser settings')
+                      : (lang === 'et' ? 'Saa teavitusi ka siis, kui rakendus pole lahti' : 'Receive alerts even when the app is closed')}
+                  </p>
+                  {pushStatus === 'denied' && (
+                    <p className="text-xs text-red-500 mt-0.5">
+                      {lang === 'et'
+                        ? 'Brauseri seaded → Privaatsus → Teavitused'
+                        : 'Browser Settings → Privacy → Notifications'}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {pushStatus === 'checking' || pushStatus === 'subscribing' ? (
+                <Loader2 size={20} className="animate-spin text-[#6F5AE8] flex-shrink-0" />
+              ) : (
+                <Toggle
+                  checked={pushStatus === 'active'}
+                  onChange={handlePushToggle}
+                  disabled={pushStatus === 'unsupported' || pushStatus === 'denied'}
+                />
+              )}
+            </div>
+          </div>
         </SectionCard>
 
         {/* ── 3. Default reminder time ── */}
@@ -426,12 +522,12 @@ export default function TeavitusedPage({ onBack }: Props) {
           icon={<Clock size={20} strokeWidth={1.8} />}
           iconBg="#FEF9C3"
           iconColor="#CA8A04"
-          title="Vaikimisi meeldetuletus"
-          description="Globaalne vaikeväärtus kõigi uute sündmuste ja ülesannete jaoks"
+          title={t('notifSettings.reminder.title', lang)}
+          description={t('notifSettings.reminder.sectionDesc', lang)}
         >
           <div className="flex items-center justify-between gap-4">
             <p className="text-sm text-[#64748B]">
-              Üksikud sündmused saavad seda hiljem alistada.
+              {t('notifSettings.reminder.override', lang)}
             </p>
             <select
               value={settings.defaultReminder}
@@ -455,16 +551,16 @@ export default function TeavitusedPage({ onBack }: Props) {
           icon={<Moon size={20} strokeWidth={1.8} />}
           iconBg="#EDE9FB"
           iconColor="#6F5AE8"
-          title="Vaikne aeg"
-          description="Selle perioodi jooksul teavitusi ei saadeta"
+          title={t('notifSettings.quiet.title', lang)}
+          description={t('notifSettings.quiet.desc', lang)}
         >
           <div className="space-y-4">
             {/* Enable toggle */}
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-[#1A1F36]">Luba vaikne aeg</p>
+                <p className="text-sm font-medium text-[#1A1F36]">{t('notifSettings.quiet.label', lang)}</p>
                 <p className="text-xs text-[#94A3B8] mt-0.5">
-                  Kõik teavitused peatatakse valitud perioodi vältel
+                  {t('notifSettings.quiet.pauseDesc', lang)}
                 </p>
               </div>
               <Toggle
@@ -478,7 +574,7 @@ export default function TeavitusedPage({ onBack }: Props) {
               <div className="grid grid-cols-2 gap-4 pt-1 border-t border-[#F4F4F0]">
                 <div>
                   <label className="block text-xs font-medium text-[#64748B] mb-1.5">
-                    Algusaeg
+                    {t('notifSettings.quiet.from', lang)}
                   </label>
                   <input
                     type="time"
@@ -489,7 +585,7 @@ export default function TeavitusedPage({ onBack }: Props) {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-[#64748B] mb-1.5">
-                    Lõpuaeg
+                    {t('notifSettings.quiet.to', lang)}
                   </label>
                   <input
                     type="time"
@@ -498,38 +594,11 @@ export default function TeavitusedPage({ onBack }: Props) {
                     className="w-full h-10 rounded-xl border border-[#E2E8F0] bg-[#FAFAFA] px-4 text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:bg-white transition-colors"
                   />
                 </div>
-                <p className="col-span-2 text-xs text-[#94A3B8] -mt-2">
-                  Kui lõpuaeg on enne algusaega, kestab vaikne aeg üle südaöö (nt 22:00 – 08:00).
+                <p className="notif-quiet-overnight col-span-2 text-xs text-[#94A3B8] -mt-2">
+                  {t('notifSettings.quiet.overnight', lang)}
                 </p>
               </div>
             )}
-          </div>
-        </SectionCard>
-
-        {/* ── 5. Test notification ── */}
-        <SectionCard
-          icon={<SendHorizonal size={20} strokeWidth={1.8} />}
-          iconBg="#DCFCE7"
-          iconColor="#16A34A"
-          title="Testrip"
-          description="Kontrolli, et teavitused töötavad õigesti"
-        >
-          <div className="flex items-center justify-between gap-4">
-            <p className="text-sm text-[#64748B]">
-              Kui rakendus on fookuses, ilmub rakendusesisene märguanne. Kui rakendus on taustal, saadetakse süsteemi märguanne.
-            </p>
-            <button
-              onClick={handleTestNotification}
-              disabled={testSending || (!settings.inApp && !settings.systemNotifications)}
-              className="h-10 px-4 rounded-xl bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0] text-sm font-medium hover:bg-[#BBF7D0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 flex-shrink-0"
-            >
-              {testSending ? (
-                <Loader2 size={15} className="animate-spin" />
-              ) : (
-                <SendHorizonal size={15} />
-              )}
-              Saada testrip
-            </button>
           </div>
         </SectionCard>
 
@@ -538,16 +607,16 @@ export default function TeavitusedPage({ onBack }: Props) {
           {saved && (
             <div className="flex items-center gap-1.5 text-sm text-green-600">
               <CheckCircle2 size={15} />
-              Salvestatud
+              {t('settings.saved', lang)}
             </div>
           )}
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || !isDirty}
             className="h-10 px-6 rounded-xl bg-[#6F5AE8] text-white text-sm font-medium hover:bg-[#5B4AD5] transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {saving && <Loader2 size={15} className="animate-spin" />}
-            Salvesta
+            {t('settings.save', lang)}
           </button>
         </div>
       </div>

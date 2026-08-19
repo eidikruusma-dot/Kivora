@@ -145,6 +145,12 @@ export function formatTimeRange(startTime: string, endTime: string, timeFormat: 
   return `${to12h(startTime)} – ${to12h(endTime)}`
 }
 
+/** Format a single "HH:MM" string per the user's time-format preference. */
+export function formatEventTime(time: string, fmt: '24h' | '12h'): string {
+  if (fmt === '24h') return time
+  return to12h(time)
+}
+
 function to12h(time: string): string {
   const [h, m] = time.split(':').map(Number)
   const period = h >= 12 ? 'PM' : 'AM'

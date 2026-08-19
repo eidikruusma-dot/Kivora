@@ -9,6 +9,9 @@ import {
 } from '@/lib/profileConstants'
 import type { UserProfile, StartOfWeek, TimeFormat, DateFormat } from '@/types'
 import type { UserPreferencesUpdate } from '@/lib/userProfile'
+import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
+import type { AppLang } from '@/lib/languageStore'
+import { t } from '@/lib/translations'
 
 interface PreferencesEditFormProps {
   profile: UserProfile
@@ -33,6 +36,9 @@ export default function PreferencesEditForm({
   onCancel,
   onDirtyChange,
 }: PreferencesEditFormProps) {
+  const [lang, setLang] = useState<AppLang>(getLocalLanguage)
+  useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
+
   const current = getEffectivePreferences(profile)
   const [startOfWeek, setStartOfWeek] = useState<StartOfWeek>(current.startOfWeek)
   const [timeFormat, setTimeFormat] = useState<TimeFormat>(current.timeFormat)
@@ -65,13 +71,13 @@ export default function PreferencesEditForm({
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
       <div className="px-6 py-5 border-b border-[#F0F0F0]">
-        <h2 className="text-base font-semibold text-[#1A1F36]">Eelistused</h2>
+        <h2 className="text-base font-semibold text-[#1A1F36]">{t('profile.pref.title', lang)}</h2>
       </div>
 
       <div className="px-6 py-5 space-y-5">
         {/* Language */}
         <div>
-          <label className="block text-sm font-medium text-[#1A1F36] mb-1.5">Rakenduse keel</label>
+          <label className="block text-sm font-medium text-[#1A1F36] mb-1.5">{t('profile.pref.language', lang)}</label>
           <select
             value={preferredLanguage}
             onChange={(e) => setPreferredLanguage(e.target.value)}
@@ -85,7 +91,7 @@ export default function PreferencesEditForm({
 
         {/* Timezone */}
         <div>
-          <label className="block text-sm font-medium text-[#1A1F36] mb-1.5">Ajavöönd</label>
+          <label className="block text-sm font-medium text-[#1A1F36] mb-1.5">{t('profile.pref.timezone.label', lang)}</label>
           <input
             type="text"
             value={timezone}
@@ -94,13 +100,13 @@ export default function PreferencesEditForm({
             className={inputClass}
           />
           <p className="text-xs text-[#94A3B8] mt-1">
-            Tuvastatud automaatselt: {detectTimezone()}
+            {t('profile.pref.timezone.detected', lang).replace('{tz}', detectTimezone())}
           </p>
         </div>
 
         {/* Start of week */}
         <div>
-          <label className="block text-sm font-medium text-[#1A1F36] mb-1.5">Nädala algus</label>
+          <label className="block text-sm font-medium text-[#1A1F36] mb-1.5">{t('profile.pref.weekStart', lang)}</label>
           <select
             value={startOfWeek}
             onChange={(e) => setStartOfWeek(e.target.value as StartOfWeek)}
@@ -114,7 +120,7 @@ export default function PreferencesEditForm({
 
         {/* Time format */}
         <div>
-          <label className="block text-sm font-medium text-[#1A1F36] mb-1.5">Kellaaja vorming</label>
+          <label className="block text-sm font-medium text-[#1A1F36] mb-1.5">{t('profile.pref.timeFormat', lang)}</label>
           <select
             value={timeFormat}
             onChange={(e) => setTimeFormat(e.target.value as TimeFormat)}
@@ -128,7 +134,7 @@ export default function PreferencesEditForm({
 
         {/* Date format */}
         <div>
-          <label className="block text-sm font-medium text-[#1A1F36] mb-1.5">Kuupäeva vorming</label>
+          <label className="block text-sm font-medium text-[#1A1F36] mb-1.5">{t('profile.pref.dateFormat', lang)}</label>
           <select
             value={dateFormat}
             onChange={(e) => setDateFormat(e.target.value as DateFormat)}
@@ -148,7 +154,7 @@ export default function PreferencesEditForm({
           disabled={saving}
           className="h-10 px-4 rounded-xl text-sm font-medium text-[#64748B] hover:bg-[#F0F0F0] transition-colors disabled:opacity-50"
         >
-          Loobu
+          {t('profile.cancelBtn', lang)}
         </button>
         <button
           type="submit"
@@ -156,7 +162,7 @@ export default function PreferencesEditForm({
           className="h-10 px-5 rounded-xl bg-[#6F5AE8] text-white text-sm font-medium flex items-center gap-2 hover:bg-[#5B4AD5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving && <Loader2 size={16} className="animate-spin" />}
-          {saving ? 'Salvestan...' : 'Salvesta'}
+          {saving ? t('profile.savingBtn', lang) : t('profile.saveBtn', lang)}
         </button>
       </div>
     </form>

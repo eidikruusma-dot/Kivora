@@ -4,6 +4,7 @@ import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
 import LanguageToggle from '@/components/layout/LanguageToggle'
+import InstallButton from '@/components/landing/InstallButton'
 
 export default function PublicHeader() {
   const navigate = useNavigate()
@@ -31,11 +32,8 @@ export default function PublicHeader() {
     <header className="fixed top-0 left-0 right-0 z-50 bg-[#F4F3EF]/80 backdrop-blur-md border-b border-[#EBEBEB]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         {/* Logo */}
-        <button onClick={handleLogoClick} className="inline-flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-[#6F5AE8] flex items-center justify-center">
-            <span className="text-white font-bold text-sm tracking-tight">K</span>
-          </div>
-          <span className="text-base font-bold text-[#1A1F36] tracking-tight">kivora</span>
+        <button onClick={handleLogoClick} className="inline-flex items-center hover:opacity-80 transition-opacity">
+          <img src="/kivora-logo.png" alt="Kivora" height={28} style={{ height: 28, width: 'auto', objectFit: 'contain' }} draggable={false} />
         </button>
 
         {/* Desktop nav */}
@@ -49,6 +47,7 @@ export default function PublicHeader() {
               {link.label}
             </a>
           ))}
+          <InstallButton lang={lang} />
         </nav>
 
         {/* Desktop actions */}
@@ -105,6 +104,11 @@ export default function PublicHeader() {
           ))}
           <div className="pt-3 border-t border-[#EBEBEB] flex flex-col gap-2">
             <div className="pb-1"><LanguageToggle /></div>
+            <InstallButton
+              lang={lang}
+              onAction={() => setMobileOpen(false)}
+              className="py-2 text-left"
+            />
             <button
               onClick={() => { setMobileOpen(false); navigate('/login') }}
               className="text-sm font-medium text-[#1A1F36] py-2 text-left"

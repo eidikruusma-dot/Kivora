@@ -1,0 +1,106 @@
+Implement the Backup feature end-to-end.
+
+Current state:
+- The Backup page only writes lastBackupAt to users/{uid}/settings/backup.
+- No actual data is copied.
+- No restore exists.
+- Current success messages are misleading.
+
+Goal:
+Create a real backup system for the signed-in user.
+
+Include these collections/data:
+- users/{uid} profile document
+- settings subcollection
+- tasks
+- calendarEvents
+- notes
+- habits
+- goals
+- schoolItems
+- aiConversations
+- aiConversations/{conversationId}/messages
+- notifications
+- entityLinks
+
+Required backup structure:
+- Store backups under:
+  users/{uid}/backups/{backupId}
+- Each backup document must include:
+  - id
+  - createdAt
+  - version
+  - itemCounts
+  - data
+- data must contain all supported collections in a structured object.
+
+Required behavior:
+1. Manual backup:
+   - Read all supported user data.
+   - Build one complete snapshot.
+   - Save it to users/{uid}/backups/{backupId}.
+   - Update users/{uid}/settings/backup.lastBackupAt only after the backup write succeeds.
+   - Show success only after the full backup is stored.
+
+2. Backup history:
+   - Show the latest backups with date, time, size/item count.
+   - Keep a sensible cap, for example the newest 10 backups.
+   - Allow deleting an old backup.
+
+3. Restore:
+   - Add a Restore action for a selected backup.
+   - Show a clear confirmation before restoring.
+   - Restore all supported collections from the selected backup.
+   - Use batches safely.
+   - Do not restore another user’s data.
+   - Preserve authentication fields that must not be overwritten.
+   - After restore, refresh all relevant stores/listeners.
+
+4. Safety:
+   - Before restore, automatically create a safety backup of the current state.
+   - If restore fails, do not show success.
+   - Report exact failure.
+   - Do not partially claim success.
+
+5. Automatic backup settings:
+   - Keep autoBackup and frequency settings.
+   - Do not pretend they run automatically unless there is real scheduled backend logic.
+   - If no Cloud Function/scheduler exists, label them honestly as “planned” or disable them.
+   - Do not simulate automatic backups with setTimeout.
+
+6. Firestore rules:
+   Add owner-only access for:
+   users/{uid}/backups/{backupId}
+
+7. UI:
+   - Reuse the existing Backup settings page design.
+   - Do not redesign unrelated pages.
+   - Update ET and EN strings so every message is truthful.
+   - Replace false copy like “all your data has been backed up” until the real write succeeds.
+
+8. Limits:
+   - Prevent documents from exceeding Firestore document limits.
+   - If one backup document could become too large, store metadata in:
+     users/{uid}/backups/{backupId}
+     and chunk payloads under:
+     users/{uid}/backups/{backupId}/chunks/{chunkId}
+   - Use the chunked approach if needed.
+
+9. Testing before stopping:
+   - Create sample task, note, calendar event, habit, goal, school item, AI conversation, notification, and entity link.
+   - Create backup.
+   - Confirm backup document/chunks exist.
+   - Delete or modify sample data.
+   - Restore backup.
+   - Confirm all data returns.
+   - Confirm current user isolation.
+   - Confirm failed restore does not show success.
+
+After finishing:
+- Run TypeScript typecheck.
+- Check runtime console.
+- List every modified file.
+- Explain exact Firestore backup structure.
+- Explain restore flow.
+- State honestly whether automatic scheduled backups are actually active.
+- Stop for manual testing.

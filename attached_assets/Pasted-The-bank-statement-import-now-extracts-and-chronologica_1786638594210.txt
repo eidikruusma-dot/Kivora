@@ -1,0 +1,88 @@
+The bank statement import now extracts and chronologically orders the transactions correctly.
+
+DO NOT modify:
+- PDF upload
+- pdfjs
+- OpenAI extraction
+- transaction sorting
+- transaction classification
+- pending logic
+- Firestore
+- frontend import loop
+
+Current production result:
+
+41 transactions
+5 income transactions = 1432.00 EUR
+36 expense transactions = 908.29 EUR
+opening balance = 503.61 EUR
+closing balance = 667.53 EUR
+
+The remaining blocker is:
+
+Income total mismatch:
+calculated 1432.00
+printed 937.90
+
+The five extracted income transactions visibly sum to 1432.00, so DO NOT "fix" the transactions to match 937.90.
+
+TASK:
+
+Audit how printedIncomeTotal and printedExpenseTotal are extracted.
+
+Inspect:
+src/lib/extractStructuralControls.ts
+and every place that populates:
+printedIncomeTotal
+printedExpenseTotal
+summaryIncome
+summaryExpenses
+
+The real statement contains multiple control/summary values across pages/days.
+A generic amount near words like "credit", "income", "turnover", etc. must NOT automatically become a statement-wide printedIncomeTotal.
+
+Requirements:
+
+1. A printed statement-wide income/credit total may only be populated when the label unambiguously represents the TOTAL FOR THE WHOLE STATEMENT PERIOD.
+
+2. Daily turnover, page subtotal, daily credit turnover, intermediate balance, reserved/pending total, or other local summary must NOT become statement-wide printedIncomeTotal/printedExpenseTotal.
+
+3. If there is no unambiguous statement-wide printed income or expense total:
+   printedIncomeTotal = null
+   printedExpenseTotal = null
+
+Do NOT invent a control value.
+
+4. Opening balance and closing balance remain independent controls.
+
+5. Reconciliation must treat missing printed totals as "control unavailable", NOT as failure.
+
+6. The strongest validation remains:
+   - running-balance chain when available
+   - opening → posted transactions → closing
+   - only then unambiguous statement-wide printed totals
+
+7. Add tests with multiple daily credit/debit turnover rows proving that none of them is incorrectly selected as the statement-wide total.
+
+8. Add a regression test reproducing:
+   calculated income = 1432.00
+   unrelated/daily printed value = 937.90
+   and prove 937.90 is NOT used as printedIncomeTotal unless its label explicitly identifies it as a whole-statement total.
+
+Run:
+pnpm exec tsc --noEmit
+pnpm run test:extractStructuralControls
+pnpm run test:reconcileStructuralTransactions
+pnpm run test:postProcessBankTransactions
+pnpm run test:extraction
+pnpm run build
+
+Do not deploy automatically.
+
+Final report:
+- where 937.90 was being extracted from
+- its actual label/context
+- why it was incorrectly treated as statement-wide income
+- new rule for statement-wide printed totals
+- all test results
+- build result

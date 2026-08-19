@@ -110,83 +110,680 @@ html, body, #root {
   padding-bottom: 0.875rem !important;
 }
 
-/* ── Dark theme ──────────────────────────────────────────────────────────── */
+/* ── Dark theme ──────────────────────────────────────────────────────────────
+ *
+ *  5-level surface system  (designed-first, not converted)
+ *  ─────────────────────────────────────────────────────────────────────────
+ *  Page     #07101F   page base — deep blue-black outer shell
+ *  Chrome   #0D1825   sidebar + header — slightly above page
+ *  Card     #111B2C   card / panel surface — clearly above page
+ *  Hover    #1A2B40   elevated hover / active highlight
+ *  Modal    #1F2F4E   floating panels / modals  (+3.8% vs card, inputs remain recessed)
+ *  Input    #1C2E44   form inputs — slightly darker than modal (recessed look)
+ *  Border   #1C2D3E   subtle card / divider border
+ *  ─────────────────────────────────────────────────────────────────────────
+ */
 
 [data-theme="dark"] {
   color-scheme: dark;
-  background-color: #0F172A;
+  background-color: #07101F;
 }
 
 [data-theme="dark"] body {
-  background-color: #0F172A;
-  color: #E2E8F0;
+  background-color: #07101F;
+  color: #E8EDF2;
 }
 
-/* White surfaces → slate-800 */
+/* ── Scrollbar tint ────────────────────────────────────────────────────── */
+
+[data-theme="dark"] .scrollbar-thin:hover {
+  scrollbar-color: #2E4060 transparent;
+}
+[data-theme="dark"] .scrollbar-thin:hover::-webkit-scrollbar-thumb {
+  background-color: #2E4060;
+}
+
+/* ── Chrome: sidebar + header ─────────────────────────────────────────── */
+
+[data-theme="dark"] aside {
+  background-color: #111B2C !important;
+  border-color: #1C2D3E !important;
+}
+
+[data-theme="dark"] header {
+  background-color: #0D1825 !important;
+  border-bottom-color: #1C2D3E !important;
+}
+
+/* ── White surfaces → card level ──────────────────────────────────────── */
+
 [data-theme="dark"] .bg-white {
-  background-color: #1E293B !important;
+  background-color: #111B2C !important;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03) !important;
 }
 
-/* Light gray page backgrounds */
+/* ── Page-level backgrounds → base ────────────────────────────────────── */
+
+[data-theme="dark"] .bg-\[\#F4F3EF\] { background-color: #07101F !important; }
+[data-theme="dark"] .bg-\[\#FAFAFA\] { background-color: #07101F !important; }
+[data-theme="dark"] .bg-\[\#FAFAFB\] { background-color: #07101F !important; }
+[data-theme="dark"] .bg-\[\#F9FAFB\] { background-color: #07101F !important; }
+[data-theme="dark"] .bg-\[\#FDFCFF\] { background-color: #07101F !important; }
+[data-theme="dark"] .bg-\[\#FAF9FD\] { background-color: #07101F !important; }
+[data-theme="dark"] .bg-\[\#F5F3FF\] { background-color: #07101F !important; }
+
+/* ── Card-level backgrounds (light grays / off-whites) ─────────────────── */
+
 [data-theme="dark"] .bg-\[\#F8F7F4\],
-[data-theme="dark"] .bg-\[\#F4F3EF\],
-[data-theme="dark"] .bg-\[\#FAFAF9\],
+[data-theme="dark"] .bg-\[\#F8F7FC\],
+[data-theme="dark"] .bg-\[\#F8F9FB\],
 [data-theme="dark"] .bg-\[\#F8FAFC\],
+[data-theme="dark"] .bg-\[\#F7F7F5\],
+[data-theme="dark"] .bg-\[\#F5F5F5\],
+[data-theme="dark"] .bg-\[\#F4F4F8\],
+[data-theme="dark"] .bg-\[\#F4F4F0\],
+[data-theme="dark"] .bg-\[\#F3F1FB\],
+[data-theme="dark"] .bg-\[\#F3F3F8\],
 [data-theme="dark"] .bg-\[\#F1F5F9\],
+[data-theme="dark"] .bg-\[\#F1F0EB\],
+[data-theme="dark"] .bg-\[\#F0ECF9\],
+[data-theme="dark"] .bg-\[\#FAFAF8\],
+[data-theme="dark"] .bg-\[\#FAFAF9\],
 [data-theme="dark"] .bg-\[\#F4F2FF\],
-[data-theme="dark"] .bg-\[\#EDE9FB\] {
-  background-color: #1E293B !important;
-}
+[data-theme="dark"] .bg-\[\#F1F0F8\] { background-color: #0F1B2B !important; }
 
-[data-theme="dark"] .bg-\[\#FAFAFA\] {
-  background-color: #0F172A !important;
-}
+/* ── Purple-tinted surfaces (active states, soft highlights) ─────────── */
 
-/* Primary text */
-[data-theme="dark"] .text-\[\#1A1F36\] {
-  color: #F1F5F9 !important;
-}
+[data-theme="dark"] .bg-\[\#EDE9FB\],
+[data-theme="dark"] .bg-\[\#E0DCFF\],
+[data-theme="dark"] .bg-\[\#E0D9F9\],
+[data-theme="dark"] .bg-\[\#DDD8F8\],
+[data-theme="dark"] .bg-\[\#D4CFF7\],
+[data-theme="dark"] .bg-\[\#C4B8F8\],
+[data-theme="dark"] .bg-\[\#C4B5FD\],
+[data-theme="dark"] .bg-\[\#B48EF5\],
+[data-theme="dark"] .bg-\[\#F2EFFD\],
+[data-theme="dark"] .bg-\[\#F0EEFF\],
+[data-theme="dark"] .bg-\[\#F3E8FF\] { background-color: #1E1B2E !important; }
 
-[data-theme="dark"] .text-\[\#334155\] {
-  color: #CBD5E1 !important;
-}
+/* ── Status: success (green) ──────────────────────────────────────────── */
 
-/* Secondary text */
-[data-theme="dark"] .text-\[\#64748B\] {
-  color: #94A3B8 !important;
-}
+[data-theme="dark"] .bg-\[\#DCFCE7\],
+[data-theme="dark"] .bg-\[\#F0FDF4\],
+[data-theme="dark"] .bg-\[\#BBF7D0\] { background-color: #0D2418 !important; }
 
-/* Muted text */
-[data-theme="dark"] .text-\[\#94A3B8\] {
-  color: #64748B !important;
-}
+/* ── Status: warning (yellow / amber) ────────────────────────────────── */
 
-/* Borders */
+[data-theme="dark"] .bg-\[\#FEF9C3\],
+[data-theme="dark"] .bg-\[\#FEF08A\],
+[data-theme="dark"] .bg-\[\#FDE68A\],
+[data-theme="dark"] .bg-\[\#FEF3C7\] { background-color: #1F1507 !important; }
+
+/* ── Status: danger (red / rose) ──────────────────────────────────────── */
+
+[data-theme="dark"] .bg-\[\#FEE2E2\],
+[data-theme="dark"] .bg-\[\#FEF2F2\],
+[data-theme="dark"] .bg-\[\#FECACA\],
+[data-theme="dark"] .bg-\[\#FFF5F5\],
+[data-theme="dark"] .bg-\[\#FDA4AF\] { background-color: #200A0A !important; }
+
+/* ── Status: info (blue) ──────────────────────────────────────────────── */
+
+[data-theme="dark"] .bg-\[\#EFF6FF\],
+[data-theme="dark"] .bg-\[\#DBEAFE\] { background-color: #0A1628 !important; }
+
+/* ── Status: orange ───────────────────────────────────────────────────── */
+
+[data-theme="dark"] .bg-\[\#FFEDD5\] { background-color: #1F1007 !important; }
+
+/* ── Text: primary hierarchy ─────────────────────────────────────────── */
+
+[data-theme="dark"] .text-\[\#1A1F36\] { color: #EEF3F8 !important; }
+[data-theme="dark"] .text-\[\#334155\] { color: #C8D6E5 !important; }
+[data-theme="dark"] .text-\[\#374151\] { color: #B8C8D8 !important; }
+[data-theme="dark"] .text-\[\#64748B\] { color: #94A3B8 !important; }
+[data-theme="dark"] .text-\[\#475569\] { color: #8099B0 !important; }
+[data-theme="dark"] .text-\[\#6B7280\] { color: #94A3B8 !important; }
+[data-theme="dark"] .text-\[\#94A3B8\] { color: #7A90A8 !important; }
+[data-theme="dark"] .text-\[\#CBD5E1\] { color: #64788F !important; }
+[data-theme="dark"] .text-\[\#9CA3AF\] { color: #64788F !important; }
+[data-theme="dark"] .text-\[\#C4C9D4\] { color: #4A607A !important; }
+
+/* ── Text: status — brighten so they read on dark status bg ─────────── */
+
+[data-theme="dark"] .text-\[\#16A34A\],
+[data-theme="dark"] .text-\[\#15803D\] { color: #4ADE80 !important; }
+
+[data-theme="dark"] .text-\[\#CA8A04\],
+[data-theme="dark"] .text-\[\#854D0E\] { color: #FCD34D !important; }
+
+[data-theme="dark"] .text-\[\#DC2626\],
+[data-theme="dark"] .text-\[\#B91C1C\] { color: #F87171 !important; }
+
+[data-theme="dark"] .text-\[\#E11D48\],
+[data-theme="dark"] .text-\[\#BE123C\] { color: #FB7185 !important; }
+
+[data-theme="dark"] .text-\[\#2563EB\] { color: #60A5FA !important; }
+[data-theme="dark"] .text-\[\#3B82F6\] { color: #93C5FD !important; }
+
+[data-theme="dark"] .text-\[\#F97316\],
+[data-theme="dark"] .text-\[\#F59E0B\],
+[data-theme="dark"] .text-\[\#EA6C09\] { color: #FB923C !important; }
+
+[data-theme="dark"] .text-\[\#10B981\] { color: #34D399 !important; }
+
+/* Purple text shades that are too dark on dark bg */
+[data-theme="dark"] .text-\[\#5D4AD0\] { color: #9B87F5 !important; }
+
+/* Red text (validation errors, destructive labels) */
+[data-theme="dark"] .text-\[\#EF4444\] { color: #F87171 !important; }
+
+/* Dark green text (success confirmations) */
+[data-theme="dark"] .text-\[\#166534\] { color: #4ADE80 !important; }
+
+/* ── Borders ─────────────────────────────────────────────────────────── */
+
 [data-theme="dark"] .border-\[\#EBEBEB\],
 [data-theme="dark"] .border-\[\#ECECF2\],
 [data-theme="dark"] .border-\[\#E2E8F0\],
 [data-theme="dark"] .border-\[\#F0F0F0\],
-[data-theme="dark"] .border-\[\#F3F3F8\] {
-  border-color: #334155 !important;
-}
+[data-theme="dark"] .border-\[\#F3F3F8\],
+[data-theme="dark"] .border-\[\#E8E6E0\],
+[data-theme="dark"] .border-\[\#D1D5DB\],
+[data-theme="dark"] .border-\[\#C4C9D4\],
+[data-theme="dark"] .border-\[\#CBD5E1\],
+[data-theme="dark"] .border-\[\#E8ECF0\],
+[data-theme="dark"] .border-\[\#F8F9FB\],
+[data-theme="dark"] .border-\[\#F0ECF9\],
+[data-theme="dark"] .border-\[\#C4B5FD\],
+[data-theme="dark"] .border-\[\#C4B8F8\],
+[data-theme="dark"] .border-\[\#F1F0F8\] { border-color: rgba(255,255,255,0.09) !important; }
 
-/* Divide utilities */
+/* Status borders */
+[data-theme="dark"] .border-\[\#FECACA\] { border-color: #3D1010 !important; }
+[data-theme="dark"] .border-\[\#BBF7D0\] { border-color: #14472A !important; }
+[data-theme="dark"] .border-\[\#D8D1F8\],
+[data-theme="dark"] .border-\[\#DDD8F8\],
+[data-theme="dark"] .border-\[\#E0D9F9\],
+[data-theme="dark"] .border-\[\#E0DCFF\] { border-color: #2D2456 !important; }
+
+/* ── Divide utilities ─────────────────────────────────────────────────── */
+
 [data-theme="dark"] .divide-\[\#F0F0F0\] > :not([hidden]) ~ :not([hidden]),
-[data-theme="dark"] .divide-\[\#F3F3F8\] > :not([hidden]) ~ :not([hidden]) {
-  border-color: #334155 !important;
+[data-theme="dark"] .divide-\[\#F3F3F8\] > :not([hidden]) ~ :not([hidden]),
+[data-theme="dark"] .divide-\[\#E2E8F0\] > :not([hidden]) ~ :not([hidden]),
+[data-theme="dark"] .divide-\[\#ECECF2\] > :not([hidden]) ~ :not([hidden]),
+[data-theme="dark"] .divide-\[\#EBEBEB\] > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1C2D3E !important;
 }
 
-/* Inputs */
+/* ── Hover: backgrounds ───────────────────────────────────────────────── */
+
+[data-theme="dark"] .hover\:bg-\[\#F8F7F4\]:hover,
+[data-theme="dark"] .hover\:bg-\[\#F4F3EF\]:hover,
+[data-theme="dark"] .hover\:bg-\[\#F1F5F9\]:hover,
+[data-theme="dark"] .hover\:bg-\[\#F8F7FC\]:hover,
+[data-theme="dark"] .hover\:bg-\[\#F8FAFC\]:hover,
+[data-theme="dark"] .hover\:bg-\[\#F8F9FB\]:hover,
+[data-theme="dark"] .hover\:bg-\[\#F4F4F8\]:hover,
+[data-theme="dark"] .hover\:bg-\[\#FAFAF8\]:hover,
+[data-theme="dark"] .hover\:bg-\[\#FAFAF9\]:hover,
+[data-theme="dark"] .hover\:bg-\[\#E8ECF0\]:hover { background-color: #1A2B40 !important; }
+
+[data-theme="dark"] .hover\:bg-\[\#FAFAFA\]:hover,
+[data-theme="dark"] .hover\:bg-\[\#FAFAFB\]:hover { background-color: #0D1825 !important; }
+
+[data-theme="dark"] .hover\:bg-\[\#F4F2FF\]:hover,
+[data-theme="dark"] .hover\:bg-\[\#EDE9FB\]:hover { background-color: #1F1B38 !important; }
+
+[data-theme="dark"] .hover\:bg-\[\#FEF2F2\]:hover,
+[data-theme="dark"] .hover\:bg-\[\#FEE2E2\]:hover { background-color: #2A0A0A !important; }
+
+/* ── Hover: text ─────────────────────────────────────────────────────── */
+
+[data-theme="dark"] .hover\:text-\[\#1A1F36\]:hover  { color: #F0F4F8 !important; }
+[data-theme="dark"] .hover\:text-\[\#64748B\]:hover  { color: #8B9EB5 !important; }
+
+/* ── Hover: borders ──────────────────────────────────────────────────── */
+
+[data-theme="dark"] .hover\:border-\[\#CBD5E1\]:hover { border-color: #334A62 !important; }
+
+/* ── Group-hover helpers ──────────────────────────────────────────────── */
+
+[data-theme="dark"] .group:hover .group-hover\:text-\[\#1A1F36\] { color: #EEF3F8 !important; }
+[data-theme="dark"] .group:hover .group-hover\:bg-\[\#F8F7F4\]   { background-color: #1A2B40 !important; }
+
+/* ── Ring colors ─────────────────────────────────────────────────────── */
+
+[data-theme="dark"] .ring-\[\#ECECF2\],
+[data-theme="dark"] .ring-\[\#E2E8F0\] { --tw-ring-color: #263445; }
+
+/* ── Inputs, selects, textareas — lighter than card surface ──────────── */
+
 [data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 [data-theme="dark"] textarea,
 [data-theme="dark"] select {
-  background-color: #0F172A !important;
-  border-color: #334155 !important;
-  color: #F1F5F9 !important;
+  background-color: #1C2E44 !important;
+  border-color: #1E3050 !important;
+  color: #EEF3F8 !important;
 }
 
-/* Placeholder text */
 [data-theme="dark"] input::placeholder,
-[data-theme="dark"] textarea::placeholder {
-  color: #475569 !important;
+[data-theme="dark"] textarea::placeholder { color: #4E6882 !important; }
+
+/* ── Shadows — deepened for dark backgrounds ─────────────────────────── */
+
+[data-theme="dark"] .shadow-sm {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.35) !important;
+}
+[data-theme="dark"] .shadow {
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5), 0 1px 3px rgba(0,0,0,0.4) !important;
+}
+[data-theme="dark"] .shadow-md {
+  box-shadow: 0 4px 14px rgba(0,0,0,0.6), 0 2px 6px rgba(0,0,0,0.4) !important;
+}
+[data-theme="dark"] .shadow-lg {
+  box-shadow: 0 10px 28px rgba(0,0,0,0.65), 0 4px 10px rgba(0,0,0,0.4) !important;
+}
+[data-theme="dark"] .shadow-xl {
+  box-shadow: 0 20px 44px rgba(0,0,0,0.7), 0 8px 18px rgba(0,0,0,0.5) !important;
+}
+
+/* ── Modal / dropdown panels: elevated treatment ──────────────────────── */
+
+[data-theme="dark"] .bg-white.rounded-xl.shadow-lg,
+[data-theme="dark"] .bg-white.rounded-2xl.shadow-lg,
+[data-theme="dark"] .bg-white.rounded-xl.shadow-xl,
+[data-theme="dark"] .bg-white.rounded-2xl.shadow-xl {
+  background-color: #1F2F4E !important;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.07) !important;
+}
+
+/* ── Modal backdrop: stronger in dark mode ────────────────────────────── */
+
+[data-theme="dark"] .bg-black\/50 { background-color: rgba(0,0,0,0.72) !important; }
+[data-theme="dark"] .bg-black\/30 { background-color: rgba(0,0,0,0.55) !important; }
+
+/* ── Tailwind semantic color backgrounds ──────────────────────────────── */
+/*    Used by HeroCard stat icons, status badges, and notification icons   */
+
+[data-theme="dark"] .bg-blue-50    { background-color: #0C1D35 !important; }
+[data-theme="dark"] .bg-sky-50     { background-color: #0C1E30 !important; }
+[data-theme="dark"] .bg-orange-50  { background-color: #211208 !important; }
+[data-theme="dark"] .bg-amber-50   { background-color: #1C1605 !important; }
+[data-theme="dark"] .bg-yellow-50  { background-color: #1C1605 !important; }
+[data-theme="dark"] .bg-green-50   { background-color: #0A1F12 !important; }
+[data-theme="dark"] .bg-emerald-50 { background-color: #091E12 !important; }
+[data-theme="dark"] .bg-teal-50    { background-color: #091E1E !important; }
+[data-theme="dark"] .bg-cyan-50    { background-color: #081E25 !important; }
+[data-theme="dark"] .bg-indigo-50  { background-color: #0D1235 !important; }
+[data-theme="dark"] .bg-violet-50  { background-color: #141030 !important; }
+[data-theme="dark"] .bg-purple-50  { background-color: #1A1130 !important; }
+[data-theme="dark"] .bg-fuchsia-50 { background-color: #1E0A28 !important; }
+[data-theme="dark"] .bg-pink-50    { background-color: #200B18 !important; }
+[data-theme="dark"] .bg-rose-50    { background-color: #220A0A !important; }
+[data-theme="dark"] .bg-red-50     { background-color: #200A0A !important; }
+[data-theme="dark"] .bg-slate-50   { background-color: #0E1825 !important; }
+[data-theme="dark"] .bg-gray-50    { background-color: #0F1820 !important; }
+[data-theme="dark"] .bg-zinc-50    { background-color: #111820 !important; }
+[data-theme="dark"] .bg-neutral-50 { background-color: #111820 !important; }
+
+[data-theme="dark"] .hover\:bg-red-50:hover  { background-color: #2A0A0A !important; }
+[data-theme="dark"] .hover\:bg-red-100:hover { background-color: #2A0A0A !important; }
+[data-theme="dark"] .hover\:text-red-500:hover { color: #F87171 !important; }
+[data-theme="dark"] .hover\:text-red-600:hover { color: #F87171 !important; }
+[data-theme="dark"] .text-red-500 { color: #F87171 !important; }
+[data-theme="dark"] .text-red-600 { color: #F87171 !important; }
+[data-theme="dark"] .border-red-200 { border-color: #3D1010 !important; }
+
+/* ── Hover: text — update to match brighter text system ─────────────── */
+
+[data-theme="dark"] .hover\:text-\[\#1A1F36\]:hover { color: #EEF3F8 !important; }
+[data-theme="dark"] .hover\:text-\[\#64748B\]:hover  { color: #94A3B8 !important; }
+[data-theme="dark"] .hover\:text-\[\#6F5AE8\]:hover  { color: #9F8FF5 !important; }
+[data-theme="dark"] .group:hover .group-hover\:text-\[\#6F5AE8\] { color: #9F8FF5 !important; }
+
+/* ── Links — brighten in dark mode ────────────────────────────────────── */
+
+[data-theme="dark"] a:not([class*="bg-"]):not([class*="text-white"]):not([class*="text-\[#"]):not([class*="btn"]) {
+  color: #818CF8;
+}
+[data-theme="dark"] .text-\[\#6F5AE8\] { color: #9180F0 !important; }
+
+
+/* ── SVG chart track rings ────────────────────────────────────────────────
+ *  Components that use inline `stroke="#F1F0EB"` or similar on the
+ *  background track circle should add className="kv-chart-track".
+ *  CSS presentation properties override SVG presentation attributes.
+ * ────────────────────────────────────────────────────────────────────────── */
+[data-theme="dark"] .kv-chart-track {
+  stroke: #1C2D3E !important;
+}
+
+/* ── Smooth page content transitions ───────────────────────────────────── */
+
+[data-theme="dark"],
+[data-theme="light"] {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* ── Focus ring — consistent across all interactive elements ─────────── */
+*:focus-visible {
+  outline: 2px solid #6F5AE8;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+[data-theme="dark"] *:focus-visible {
+  outline-color: #818CF8 !important;
+}
+
+/* ── Page fade-in on route change ────────────────────────────────────── */
+@keyframes kvFadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.kv-page-enter {
+  animation: kvFadeIn 150ms ease-out both;
+}
+
+/* ── Modal entrance animation ────────────────────────────────────────── */
+@keyframes kvModalIn {
+  from { opacity: 0; transform: scale(0.96) translateY(4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.kv-modal-enter {
+  animation: kvModalIn 150ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Card hover lift ─────────────────────────────────────────────────── */
+.kv-card {
+  transition: transform 120ms ease-out, box-shadow 120ms ease-out;
+}
+.kv-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
+}
+[data-theme="dark"] .kv-card:hover {
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* ── Task/habit completion flash ─────────────────────────────────────── */
+@keyframes kvFlashComplete {
+  0%   { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); }
+  50%  { box-shadow: 0 0 0 5px rgba(74, 222, 128, 0.25); }
+  100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+}
+.kv-flash-complete {
+  animation: kvFlashComplete 600ms ease-out both;
+}
+
+/* ── AI Assistant: dark-mode polish ─────────────────────────────────────
+ *  Scoped via named classes so nothing bleeds into other modules.
+ *  Light theme: completely unaffected (all rules are [data-theme="dark"]).
+ * ─────────────────────────────────────────────────────────────────────── */
+
+/* Hero card — 5–8 % brighter & more purple than generic #F2EFFD override */
+[data-theme="dark"] .ai-hero-card {
+  background-color: #2E274F !important;
+  border-color: #3A2B6E !important;
+}
+
+/* Hero icon chip — replace translucent white with a dark purple surface */
+[data-theme="dark"] .ai-hero-icon {
+  background-color: #231D42 !important;
+}
+
+/* Input bar — lighter than hero for clear hierarchy; inner input transparent */
+[data-theme="dark"] .ai-input-container {
+  background-color: #1F3048 !important;
+  border-color: #2D3A52 !important;
+}
+[data-theme="dark"] .ai-input-container input {
+  background-color: transparent !important;
+}
+
+/* Quick-action pills — dark Kivora surface; replaces bg-white/80 */
+[data-theme="dark"] .ai-quick-btn {
+  background-color: #1C2A40 !important;
+  border-color: #2D2456 !important;
+}
+[data-theme="dark"] .ai-quick-btn:hover {
+  background-color: #233249 !important;
+}
+
+/* Recommended-actions cards — slight lift above generic card level */
+[data-theme="dark"] .ai-recommended-card {
+  background-color: #162338 !important;
+}
+
+/* ── Goals: dark-mode polish ─────────────────────────────────────────────
+ *  Inactive color-picker circles gain a subtle semi-transparent white ring
+ *  (~2–3% visibility lift) without changing size, spacing, or fill colour.
+ *  Selected state (ring-2 ring-offset-2 ring-[#1A1F36]) is untouched.
+ * ─────────────────────────────────────────────────────────────────────── */
+
+[data-theme="dark"] .goals-color-inactive {
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.22);
+}
+
+/* ── Habits: dark-mode polish ────────────────────────────────────────────
+ *  Inactive icon selector buttons lifted ~3% above the global bg-white
+ *  card token (#111B2C → #162338). Selected state unchanged: purple border
+ *  + colored icon keep it clearly prominent regardless of bg delta.
+ * ─────────────────────────────────────────────────────────────────────── */
+
+[data-theme="dark"] .habit-icon-btn {
+  background-color: #162338 !important;
+}
+
+/* ── Notes: dark-mode polish ─────────────────────────────────────────────
+ *  Inactive category filter buttons lifted ~3% above the global bg-white
+ *  card token (#111B2C) without touching any shared surface. Placed after
+ *  the bg-white override so specificity ties resolve in our favour.
+ * ─────────────────────────────────────────────────────────────────────── */
+
+[data-theme="dark"] .notes-category-btn {
+  background-color: #162338 !important;
+}
+
+/* ── Calendar: dark-mode polish ──────────────────────────────────────────
+ *  Scoped via named classes added in TimeGrid and AgendaView so these
+ *  rules never bleed into borders, mini-calendar, or other surfaces.
+ * ─────────────────────────────────────────────────────────────────────── */
+
+/* Hour grid lines — 5% brighter than the shared border token (#1C2D3E) */
+[data-theme="dark"] .hour-grid-line {
+  border-color: #293A4B !important;
+}
+
+/* Agenda date headers — subtle elevation above page base (#07101F → #0C1827) */
+[data-theme="dark"] .agenda-date-header {
+  background-color: #0C1827 !important;
+}
+
+/* Agenda event rows — 3% surface lift so rows read as distinct tiles */
+[data-theme="dark"] .agenda-event-row {
+  background-color: #0D1A2B;
+}
+[data-theme="dark"] .agenda-event-row:hover {
+  background-color: #142236 !important;
+}
+
+/* ── Reduced-motion overrides ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .kv-page-enter {
+    animation: none;
+  }
+  .kv-modal-enter {
+    animation: none;
+  }
+  .kv-flash-complete {
+    animation: none;
+  }
+  .kv-card {
+    transition: none;
+  }
+  .kv-card:hover {
+    transform: none;
+  }
+}
+
+/* ── School dark mode ────────────────────────────────────────────────── */
+
+/* AI Study Assistant card — ~15% darker than original (5–8% below previous pass) */
+[data-theme="dark"] .school-ai-card {
+  background: linear-gradient(to bottom right, #5D4BC3, #695ACA) !important;
+}
+
+/* Secondary text +10% brighter for dark readability.
+   Selector uses \# because Tailwind JIT escapes # in generated CSS class names.
+   Targets <p> (always text) and text-only <span>s.
+   Excludes .items-center spans (icon+text flex wrappers) and SVG/button elements. */
+[data-theme="dark"] .school-page p.text-\[\#94A3B8\],
+[data-theme="dark"] .school-page span.text-\[\#94A3B8\]:not(.items-center) {
+  color: #A3B3CA !important;
+}
+[data-theme="dark"] .school-page p.text-\[\#64748B\],
+[data-theme="dark"] .school-page span.text-\[\#64748B\]:not(.items-center) {
+  color: #6B7C95 !important;
+}
+
+/* Stat card secondary text — aligns with the broader rule above */
+[data-theme="dark"] .school-page .school-stat-sub {
+  color: #A3B3CA !important;
+}
+
+/* Today's Schedule empty-state text — dedicated class bypasses global dim rule.
+   ~10% brighter than #94A3B8 baseline, still clearly secondary. */
+[data-theme="dark"] .school-today-empty {
+  color: #A3B3CA !important;
+}
+
+/* Input placeholders — ~15% brighter than global dark token (#4E6882) */
+[data-theme="dark"] .school-page input::placeholder,
+[data-theme="dark"] .school-page textarea::placeholder {
+  color: #6483A0 !important;
+}
+
+/* ── Profile avatar — dark mode only ────────────────────────────────── */
+
+/* ~12% avg brightness reduction via radial gradient (lighter at 38% 38%
+   to simulate a top-left light source), soft drop shadow, and a faint
+   purple glow ring. Light theme uses the flat bg-[#6F5AE8] unchanged. */
+[data-theme="dark"] .profile-avatar {
+  background: radial-gradient(circle at 38% 38%, #7A69E8, #5944BE) !important;
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.50),
+    0 0 0 2px rgba(111, 90, 232, 0.22) !important;
+}
+
+/* ── Profile card accent line — dark mode only ───────────────────────── */
+
+/* Replaces the bright lavender (#D8D0FF) with a muted purple at ~35% opacity
+   over the card surface. Light theme is untouched. */
+[data-theme="dark"] .profile-card-accent {
+  background-image: linear-gradient(
+    to right,
+    rgba(111, 90, 232, 0.18),
+    rgba(111, 90, 232, 0.35),
+    rgba(111, 90, 232, 0.18)
+  ) !important;
+}
+
+/* ── Profile completion progress bar — dark mode only ───────────────── */
+
+/* Slightly taller + subtle dark-purple track; fill uses brighter purple.
+   Light theme is completely untouched (no class override without [data-theme="dark"]). */
+[data-theme="dark"] .profile-progress-track {
+  height: 8px !important;
+  background-color: rgba(111, 90, 232, 0.22) !important;
+}
+[data-theme="dark"] .profile-progress-fill {
+  background-image: linear-gradient(to right, #CEC5FF, #9B8AFF) !important;
+}
+
+/* ── Modules page refinements ────────────────────────────────────────── */
+
+/* Banner: softer purple tint in dark mode, matching the dark card surface */
+[data-theme="dark"] .modules-banner {
+  background-color: rgba(111, 90, 232, 0.10) !important;
+  border-color: rgba(111, 90, 232, 0.16) !important;
+  color: #A093F5 !important;
+}
+
+/* Footer note: slightly darker in light, ~10% brighter in dark */
+.modules-footer-note { color: #64748B !important; }
+[data-theme="dark"] .modules-footer-note { color: #94A3B8 !important; }
+
+/* Quiet Hours overnight note: ~12% darker in light, restore full token in dark */
+.notif-quiet-overnight { color: #7A8FA6 !important; }
+[data-theme="dark"] .notif-quiet-overnight { color: #94A3B8 !important; }
+
+/* Notifications page OFF-state toggle: darker track in light only */
+.notif-toggle-off { background-color: #9CA3AF; }
+[data-theme="dark"] .notif-toggle-off { background-color: #D1D5DB; }
+
+/* What's New timeline line — slightly brighter in dark only */
+[data-theme="dark"] .whatsnew-timeline-line { background-color: #FFFFFF !important; }
+
+/* Delete Account warning panels — improved contrast in both themes */
+.delete-warn-panel { background-color: #FEE2E2 !important; }
+.delete-warn-panel svg { color: #DC2626 !important; }
+.delete-warn-panel p { color: #991B1B !important; }
+[data-theme="dark"] .delete-warn-panel { background-color: rgba(220,38,38,0.13) !important; border-color: rgba(220,38,38,0.32) !important; }
+[data-theme="dark"] .delete-warn-panel svg { color: #F87171 !important; }
+[data-theme="dark"] .delete-warn-panel p { color: #FCA5A5 !important; }
+[data-theme="dark"] .delete-warn-panel p.font-bold { color: #FECACA !important; }
+
+/* ── Privacy page — description text contrast ────────────────────────── */
+
+/* Light theme: ~6% darker so secondary text reads more clearly */
+.privacy-page .text-\[\#94A3B8\] { color: #8491A4 !important; }
+.privacy-page .text-\[\#64748B\] { color: #59687C !important; }
+
+/* Dark theme: ~11% brighter than the global dim values */
+[data-theme="dark"] .privacy-page .text-\[\#94A3B8\] { color: #89A1BB !important; }
+[data-theme="dark"] .privacy-page .text-\[\#64748B\] { color: #A5B6CD !important; }
+
+/* ── Privacy page refinements ────────────────────────────────────────── */
+
+/* Light theme: save bar moved ~15px closer to card above (space-y-6 = 24px → 9px) */
+:not([data-theme="dark"]) .privacy-save-bar {
+  margin-top: 0.5625rem !important;
+}
+
+/* Dark theme: info panel ~7% darker than its global-rule value (#0F1B2B) */
+[data-theme="dark"] .privacy-info-panel {
+  background-color: #0C1825 !important;
+}
+
+/* ── Security page — dark mode refinements ───────────────────────────── */
+
+/* 1. Increase section spacing by ~10px (space-y-6=24px → 34px) */
+[data-theme="dark"] .security-section-container > * + * {
+  margin-top: 2.125rem !important;
+}
+
+/* 2. Back link — brighter than the global dim (#4A5E74) for legibility */
+[data-theme="dark"] .security-back-btn {
+  color: #8A9CBD !important;
+}
+[data-theme="dark"] .security-back-btn:hover {
+  color: #6F5AE8 !important;
+}
+
+/* 3. Disabled Change Password button — more clearly disabled in dark mode */
+[data-theme="dark"] .security-pw-submit:disabled {
+  filter: saturate(0.4) brightness(0.55) !important;
+  opacity: 0.65 !important;
+}
+
+/* ── Settings page aside — surface definition ────────────────────────── */
+
+/* Hairline left separator on desktop — defines the right panel as a
+   distinct surface without changing any card, spacing, or border-radius. */
+@media (min-width: 768px) {
+  [data-theme="dark"] .settings-page > aside {
+    border-left: 1px solid rgba(255,255,255,0.08) !important;
+  }
 }

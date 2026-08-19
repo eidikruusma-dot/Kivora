@@ -5,6 +5,7 @@ import { buildSearchIndex, searchItems, SOURCE_META, getSourceLabel, type Search
 import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
+import { useNotes } from '@/lib/quickNotesStore'
 
 const SOURCE_COLORS: Record<string, { bg: string; color: string }> = {
   tasks:    { bg: '#FEF9C3', color: '#CA8A04' },
@@ -29,7 +30,9 @@ export default function SearchModal({ open, onClose }: Props) {
 
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
 
-  const index = useMemo(() => buildSearchIndex(), [])
+  const notes = useNotes()
+  // Rebuild index whenever notes change so create/edit/delete is immediately searchable
+  const index = useMemo(() => buildSearchIndex(), [notes])
 
   useEffect(() => {
     if (open) {

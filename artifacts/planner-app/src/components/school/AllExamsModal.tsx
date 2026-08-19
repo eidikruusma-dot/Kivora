@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useIsDark, darkBg, darkText } from '@/lib/themeColors'
 import {
   X,
   Calendar,
@@ -41,15 +42,31 @@ function daysLeftLabel(days: number, status: string) {
   return `${days} päeva`
 }
 
-function daysLeftColor(days: number, status: string) {
-  if (status === 'tehtud') return { bg: '#DCFCE7', color: '#15803D' }
-  if (days <= 0) return { bg: '#FEE2E2', color: '#B91C1C' }
-  if (days <= 10) return { bg: '#FEF9C3', color: '#854D0E' }
-  if (days <= 20) return { bg: '#DCFCE7', color: '#15803D' }
-  return { bg: '#EDE9FB', color: '#6F5AE8' }
+function daysLeftColor(days: number, status: string, isDark = false) {
+  if (status === 'tehtud') return {
+    bg:    isDark ? '#0D2418' : '#DCFCE7',
+    color: isDark ? '#4ADE80' : '#15803D',
+  }
+  if (days <= 0) return {
+    bg:    isDark ? '#200A0A' : '#FEE2E2',
+    color: isDark ? '#FCA5A5' : '#B91C1C',
+  }
+  if (days <= 10) return {
+    bg:    isDark ? '#1F1507' : '#FEF9C3',
+    color: isDark ? '#FCD34D' : '#854D0E',
+  }
+  if (days <= 20) return {
+    bg:    isDark ? '#0D2418' : '#DCFCE7',
+    color: isDark ? '#4ADE80' : '#15803D',
+  }
+  return {
+    bg:    isDark ? '#1E1B2E' : '#EDE9FB',
+    color: isDark ? '#A78BFA' : '#6F5AE8',
+  }
 }
 
 export default function AllExamsModal({ open, exams, onClose, onUpdate, onDelete }: Props) {
+  const isDark = useIsDark()
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editSubject, setEditSubject] = useState('')
@@ -145,7 +162,7 @@ export default function AllExamsModal({ open, exams, onClose, onUpdate, onDelete
             {sorted.map((exam) => {
               const isExpanded = expandedId === exam.id
               const isEditing = editingId === exam.id
-              const dl = daysLeftColor(exam.daysLeft, exam.status)
+              const dl = daysLeftColor(exam.daysLeft, exam.status, isDark)
               const isConfirmingDelete = confirmDeleteId === exam.id
 
               return (
@@ -162,7 +179,7 @@ export default function AllExamsModal({ open, exams, onClose, onUpdate, onDelete
                   >
                     <div
                       className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ background: exam.iconBg, color: exam.iconColor }}
+                      style={{ background: isDark ? darkBg(exam.iconBg) : exam.iconBg, color: isDark ? darkText(exam.iconColor) : exam.iconColor }}
                     >
                       {exam.type === 'eksam' ? <AlertCircle size={16} strokeWidth={1.8} /> : <Calendar size={16} strokeWidth={1.8} />}
                     </div>
@@ -224,7 +241,7 @@ export default function AllExamsModal({ open, exams, onClose, onUpdate, onDelete
                         </div>
                         <div>
                           <p className="text-[#94A3B8] font-medium mb-0.5">Staatus</p>
-                          <p className="font-medium" style={{ color: exam.status === 'tehtud' ? '#15803D' : '#854D0E' }}>
+                          <p className="font-medium" style={{ color: exam.status === 'tehtud' ? (isDark ? '#4ADE80' : '#15803D') : (isDark ? '#FCD34D' : '#854D0E') }}>
                             {exam.status === 'tehtud' ? 'Tehtud' : 'Ootel'}
                           </p>
                         </div>

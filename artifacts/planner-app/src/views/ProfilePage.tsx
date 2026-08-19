@@ -122,7 +122,8 @@ export default function ProfilePage() {
       } else {
         setMessage({ type: 'success', text: t('profile.saved', lang) })
       }
-    } catch {
+    } catch (err) {
+      console.error('[ProfilePage] profile save failed:', err)
       setMessage({ type: 'error', text: t('profile.saveError', lang) })
     } finally {
       setSavingProfile(false)
@@ -180,7 +181,7 @@ export default function ProfilePage() {
             onClick={() => navigate('/app')}
             className="h-10 px-4 rounded-xl bg-[#6F5AE8] text-white text-sm font-medium hover:bg-[#5B4AD5] transition-colors"
           >
-            Tagasi
+            {t('profile.back', lang)}
           </button>
           </div>
         </div>
@@ -212,7 +213,7 @@ export default function ProfilePage() {
               <span>{message.text}</span>
               <button
                 onClick={() => setMessage(null)}
-                aria-label="Sulge teade"
+                aria-label={t('profile.closeAlert', lang)}
                 className="ml-auto text-current opacity-60 hover:opacity-100 flex items-center justify-center w-6 h-6"
               >
                 ×

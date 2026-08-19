@@ -1,8 +1,8 @@
-import { mockTasks, mockEvents } from '@/data/mockData'
-import { mockCalendarEvents } from '@/data/calendarMockData'
-import { mockNotes } from '@/data/notesData'
-import { mockHabits } from '@/data/habitsData'
-import { mockGoals } from '@/data/goalsData'
+import { getAllTasks } from '@/lib/tasksStore'
+import { getAllEvents } from '@/lib/calendarStore'
+import { getAllNotes } from '@/lib/quickNotesStore'
+import { getAllHabits } from '@/lib/habitsStore'
+import { getAllGoals } from '@/lib/goalsStore'
 import { t } from '@/lib/translations'
 import type { AppLang } from '@/lib/languageStore'
 
@@ -65,36 +65,27 @@ export interface SearchItem {
 export function buildSearchIndex(): SearchItem[] {
   const items: SearchItem[] = []
 
-  for (const task of mockTasks) {
+  for (const task of getAllTasks()) {
     items.push({
       id: `task-${task.id}`,
       source: 'tasks',
       title: task.title,
-      subtitle: task.category ? `${task.category}${task.time ? ' · ' + task.time : ''}` : task.time,
+      subtitle: task.category ? `${task.category}${task.date ? ' · ' + task.date : ''}` : task.date,
       route: '/app/tasks',
     })
   }
 
-  for (const e of mockCalendarEvents) {
+  for (const e of getAllEvents()) {
     items.push({
       id: `event-${e.id}`,
       source: 'calendar',
       title: e.title,
-      subtitle: e.allDay ? 'Kogu päev' : `${e.startTime}${e.endTime ? ' – ' + e.endTime : ''}`,
-      route: '/app/calendar',
-    })
-  }
-  for (const e of mockEvents) {
-    items.push({
-      id: `evt-${e.id}`,
-      source: 'calendar',
-      title: e.title,
-      subtitle: `${e.time}${e.duration ? ' · ' + e.duration : ''}`,
+      subtitle: e.allDay ? 'Kogu päev' : `${e.startTime ?? ''}${e.endTime ? ' – ' + e.endTime : ''}`,
       route: '/app/calendar',
     })
   }
 
-  for (const n of mockNotes) {
+  for (const n of getAllNotes()) {
     items.push({
       id: `note-${n.id}`,
       source: 'notes',
@@ -104,7 +95,7 @@ export function buildSearchIndex(): SearchItem[] {
     })
   }
 
-  for (const h of mockHabits) {
+  for (const h of getAllHabits()) {
     items.push({
       id: `habit-${h.id}`,
       source: 'habits',
@@ -114,7 +105,7 @@ export function buildSearchIndex(): SearchItem[] {
     })
   }
 
-  for (const g of mockGoals) {
+  for (const g of getAllGoals()) {
     items.push({
       id: `goal-${g.id}`,
       source: 'goals',

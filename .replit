@@ -1,4 +1,4 @@
-modules = ["nodejs-24", "python-base-3.13"]
+modules = ["nodejs-24", "python-base-3.13", "java-graalvm22.3"]
 
 [deployment]
 router = "application"
@@ -18,3 +18,17 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+CONTACT_RECIPIENT = "info@kivora.ee"
+SMTP_HOST = "smtp.zone.eu"
+SMTP_PORT = "465"
+SMTP_SECURE = "true"
+SMTP_USER = "support@kivora.ee"
+SUPPORT_RECIPIENT = "support@kivora.ee"
+VAPID_PUBLIC_KEY = "BAdWREY_TBz2YSTxaHKoUQptW3rU9zciYjZ1URmvnQmis7kP9pRjaxeAy6CLLDuOeainWB7V296x-AIrke6s4Iw"
+
+[nix]
+channel = "stable-25_05"

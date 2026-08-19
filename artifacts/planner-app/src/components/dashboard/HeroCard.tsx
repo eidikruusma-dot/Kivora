@@ -71,38 +71,92 @@ export default function HeroCard() {
 
   const hour     = new Date().getHours()
   const greeting = hour < 12 ? t('hero.morning', lang) : hour < 18 ? t('hero.afternoon', lang) : t('hero.evening', lang)
-  const name     = user?.displayName || 'kasutaja'
+  const name     = user?.displayName || t('header.user', lang)
   const dailyMsg = getDailyMessage({ date: new Date(), lang })
 
+  // Shared stat button used in both portrait and landscape layouts
+  const StatButton = ({ icon: Icon, color, bg, value, label, to, compact = false }: {
+    icon: typeof CheckSquare
+    color: string
+    bg: string
+    value: string
+    label: string
+    to: string
+    compact?: boolean
+  }) => (
+    <button
+      onClick={() => navigate(to)}
+      className="flex items-center gap-2 text-left hover:opacity-80 transition-opacity min-w-0"
+    >
+      <div className={`rounded-lg ${bg} flex items-center justify-center flex-shrink-0 ${compact ? 'w-8 h-8' : 'w-8 h-8 lg:w-9 lg:h-9'}`}>
+        <Icon size={15} className={color} />
+      </div>
+      <div className="min-w-0">
+        <p className={`font-bold text-[#1A1F36] leading-none ${compact ? 'text-sm' : 'text-sm lg:text-base'}`}>
+          {value}
+        </p>
+        <p className="text-[10px] lg:text-xs text-[#94A3B8] mt-0.5 lg:mt-1 leading-tight truncate">
+          {label}
+        </p>
+      </div>
+    </button>
+  )
+
   return (
-    <div className="bg-white rounded-2xl flex overflow-hidden h-full" style={{ minHeight: '120px' }}>
-      <div className="flex-1 px-6 py-4 flex items-center gap-6">
-        <div className="flex-shrink-0">
-          <p className="text-lg font-bold text-[#1A1F36] leading-tight">{greeting}, {name} 👋</p>
-          <p className="text-xs text-[#94A3B8] mt-1">{dailyMsg}</p>
+    <div className="bg-white rounded-2xl overflow-hidden">
+
+      {/*
+       * ── PORTRAIT (< sm = 640 px) ──────────────────────────────────────────
+       * Greeting stacked above a 2 × 2 stat grid.
+       * No illustration, no divider, compact spacing.
+       */}
+      <div className="sm:hidden px-4 py-3 flex flex-col gap-3">
+        <div className="min-w-0">
+          <p className="text-base font-bold text-[#1A1F36] leading-tight truncate">
+            {greeting}, {name} 👋
+          </p>
+          <p className="text-xs text-[#94A3B8] mt-0.5 line-clamp-2">{dailyMsg}</p>
         </div>
-        <div className="h-10 w-px bg-[#F0F0F0]" />
-        <div className="grid grid-cols-4 gap-5 flex-1">
-          {stats.map(({ icon: Icon, color, bg, value, label, to }) => (
-            <button
-              key={label}
-              onClick={() => navigate(to)}
-              className="flex items-center gap-2.5 text-left hover:opacity-80 transition-opacity"
-            >
-              <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center flex-shrink-0`}>
-                <Icon size={16} className={color} />
-              </div>
-              <div>
-                <p className="text-base font-bold text-[#1A1F36] leading-none">{value}</p>
-                <p className="text-xs text-[#94A3B8] mt-1">{label}</p>
-              </div>
-            </button>
-          ))}
+        <div className="grid grid-cols-2 gap-2">
+          {stats.map((s) => <StatButton key={s.label} {...s} compact />)}
         </div>
       </div>
-      <div className="w-32 flex-shrink-0 hidden sm:block">
-        <MountainIllustration />
+
+      {/*
+       * ── LANDSCAPE PHONE + TABLET + DESKTOP (sm+) ─────────────────────────
+       * Greeting left | divider | stats row (2-col on sm–md, 4-col on md+).
+       * Illustration visible only on desktop (lg+) where there is enough room.
+       */}
+      <div className="hidden sm:flex items-center overflow-hidden" style={{ minHeight: '120px' }}>
+        <div className="flex-1 min-w-0 flex items-center gap-4 lg:gap-6 px-5 lg:px-6 py-4">
+          {/* Greeting — constrained so it doesn't crowd the stats */}
+          <div className="flex-shrink-0 min-w-0" style={{ maxWidth: 'min(38%, 220px)' }}>
+            <p className="text-base lg:text-lg font-bold text-[#1A1F36] leading-tight truncate">
+              {greeting}, {name} 👋
+            </p>
+            <p className="text-xs text-[#94A3B8] mt-1 truncate">{dailyMsg}</p>
+          </div>
+
+          {/* Divider */}
+          <div className="h-10 w-px bg-[#F0F0F0] flex-shrink-0" />
+
+          {/*
+           * Stats grid:
+           *   sm–md  (640–767 px)  → 2 columns (landscape phone)
+           *   md+    (768 px+)     → 4 columns (tablet / desktop)
+           * flex-1 + min-w-0 prevents overflow beyond the card.
+           */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-5 flex-1 min-w-0">
+            {stats.map((s) => <StatButton key={s.label} {...s} />)}
+          </div>
+        </div>
+
+        {/* Illustration — only where there is plenty of horizontal space */}
+        <div className="w-32 flex-shrink-0 hidden lg:block">
+          <MountainIllustration />
+        </div>
       </div>
+
     </div>
   )
 }

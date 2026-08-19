@@ -1,0 +1,51 @@
+Fix the published WEB authentication based on the confirmed Firebase error:
+
+“Unable to process request due to missing initial state...
+Using signInWithRedirect in a storage-partitioned browser environment.”
+
+The failure occurs on Android Chrome at https://kivora.ee after the user selects a Google or Facebook account.
+
+Strict scope:
+- Fix web authentication only.
+- Do not touch Android native authentication, Capacitor, APK, AAB, manifest, service worker or unrelated UI.
+- Do not change the Firebase project or auth providers.
+
+Required fix:
+
+1. Remove signInWithRedirect from the normal web Google and Facebook login flow.
+2. Use signInWithPopup for Google and Facebook on:
+   - desktop browsers
+   - Android Chrome
+   - Samsung Internet where supported
+3. Do not choose redirect merely because the device is mobile.
+4. Keep native Capacitor authentication separate and unchanged.
+5. Use:
+   - GoogleAuthProvider with signInWithPopup
+   - FacebookAuthProvider with signInWithPopup
+6. Catch and display exact localized Firebase errors.
+7. Handle:
+   - auth/popup-blocked
+   - auth/popup-closed-by-user
+   - auth/cancelled-popup-request
+   - auth/account-exists-with-different-credential
+   - network errors
+8. Never leave the login button loading after cancellation or failure.
+9. If a browser genuinely blocks popup:
+   - show manual guidance that popups must be allowed
+   - do not silently fall back to the currently broken cross-domain redirect flow
+10. Remove obsolete redirect-result initialization if it is no longer needed by any web flow.
+11. Keep the production Firebase authDomain as:
+    kivora-f1281.firebaseapp.com
+12. Test on the published https://kivora.ee domain:
+    - Google login on Android Chrome
+    - Facebook login on Android Chrome
+    - Google login on desktop Chrome
+    - Facebook login on desktop Chrome
+    - logout and returning login
+
+Report:
+- the exact files changed
+- confirmation that no web path still calls signInWithRedirect
+- production build result
+
+Do not modify anything outside authentication.

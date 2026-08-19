@@ -59,16 +59,13 @@ export default function CalendarHeader({
         : formatDaySingle(currentDate, lang)
 
   return (
-    <div
-      className="flex items-center justify-between flex-shrink-0 border-b border-[#EBEBEB]"
-      style={{ height: '58px', paddingLeft: '20px', paddingRight: '20px' }}
-    >
-      {/* Left group */}
-      <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2 flex-shrink-0 border-b border-[#EBEBEB] px-4 py-2.5 lg:px-5 lg:py-0 lg:h-[58px]">
+      {/* Left group: navigation controls + date label */}
+      <div className="flex items-center gap-2 flex-shrink-0">
         <button
           onClick={onToday}
-          className="rounded-md border border-[#D1D5DB] text-sm font-medium text-[#374151] bg-white hover:bg-[#F9FAFB] transition-colors flex-shrink-0"
-          style={{ width: '60px', height: '34px' }}
+          className="rounded-md border border-[#D1D5DB] text-sm font-medium text-[#374151] bg-white hover:bg-[#F9FAFB] transition-colors flex-shrink-0 px-3"
+          style={{ height: '34px' }}
         >
           {t('cal.today', lang)}
         </button>
@@ -86,22 +83,20 @@ export default function CalendarHeader({
         >
           <ChevronRight size={16} />
         </button>
-        <span
-          className="text-[15px] font-semibold text-[#1A1F36] flex-shrink-0"
-          style={{ width: '180px' }}
-        >
+        <span className="text-[15px] font-semibold text-[#1A1F36] flex-shrink-0 min-w-[130px]">
           {dateLabel}
         </span>
       </div>
 
-      {/* Right group */}
-      <div className="flex items-center gap-2">
-        <div className="flex items-center border border-[#D1D5DB] rounded-md" style={{ height: '34px' }}>
+      {/* Right group: view switcher + New button — both push to right on wider screens */}
+      <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+        {/* View switcher — hidden on mobile to save space, shown from sm: */}
+        <div className="hidden sm:flex items-center border border-[#D1D5DB] rounded-md" style={{ height: '34px' }}>
           {VIEW_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               onClick={() => onViewChange(opt.value)}
-              className={`px-3 rounded-md text-sm font-medium transition-colors h-full ${
+              className={`px-2.5 rounded-md text-sm font-medium transition-colors h-full ${
                 viewType === opt.value
                   ? 'bg-[#6F5AE8] text-white'
                   : 'text-[#6B7280] hover:bg-[#F8F7F4] hover:text-[#1A1F36]'
@@ -111,14 +106,31 @@ export default function CalendarHeader({
             </button>
           ))}
         </div>
+
+        {/* On mobile: compact view selector (dropdown-style via the existing menu) */}
+        <div className="sm:hidden relative">
+          <button
+            onClick={() => onViewChange(
+              viewType === 'week' ? 'month'
+              : viewType === 'month' ? 'day'
+              : viewType === 'day' ? 'agenda'
+              : 'week'
+            )}
+            className="rounded-md border border-[#D1D5DB] text-sm font-medium text-[#374151] bg-white hover:bg-[#F9FAFB] transition-colors px-3 flex-shrink-0"
+            style={{ height: '34px' }}
+          >
+            {VIEW_OPTIONS.find(o => o.value === viewType)?.label}
+          </button>
+        </div>
+
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setMenuOpen((v) => !v)}
-            className="rounded-lg bg-[#6F5AE8] text-white text-sm font-medium flex items-center justify-center gap-1.5 hover:bg-[#5B4AD5] transition-colors flex-shrink-0"
-            style={{ width: '106px', height: '36px' }}
+            className="rounded-lg bg-[#6F5AE8] text-white text-sm font-medium flex items-center justify-center gap-1.5 hover:bg-[#5B4AD5] transition-colors flex-shrink-0 px-3"
+            style={{ height: '36px' }}
           >
             <Plus size={14} strokeWidth={2.5} />
-            <span>{t('cal.new', lang)}</span>
+            <span className="hidden xs:inline">{t('cal.new', lang)}</span>
             <ChevronDown size={13} className="opacity-80" />
           </button>
           {menuOpen && (

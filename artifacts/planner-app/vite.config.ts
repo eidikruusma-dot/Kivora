@@ -39,6 +39,18 @@ export default defineConfig({
   plugins: [
     react(),
     runtimeErrorOverlay(),
+    // Serve manifest.json with the correct MIME type so Chrome recognises it.
+    {
+      name: 'manifest-mime',
+      configureServer(server: import('vite').ViteDevServer) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url?.split('?')[0].endsWith('/manifest.json')) {
+            res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8')
+          }
+          next()
+        })
+      },
+    },
     ...(process.env.NODE_ENV !== 'production' &&
     process.env.REPL_ID !== undefined
       ? [

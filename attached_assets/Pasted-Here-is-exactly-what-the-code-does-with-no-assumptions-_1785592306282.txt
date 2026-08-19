@@ -1,0 +1,74 @@
+Here is exactly what the code does, with no assumptions.
+
+1. What does the Synchronization page currently control?
+Two boolean toggles stored in localStorage:
+
+Automatic synchronization (autoSync, default true)
+Sync over mobile data (mobileData, default false)
+Neither toggle is read by anything outside this page. They exist as UI state only.
+
+2. Where are its settings stored?
+localStorage only, under two keys:
+
+Key	Contents
+kivora-sync-settings	{ autoSync: boolean, mobileData: boolean }
+kivora-last-sync-time	ISO timestamp string of the last "Sync now" button press
+No Firestore. No server. The settings never leave the browser.
+
+3. Which Kivora modules actually sync through Firestore?
+Exactly four:
+
+Module	Firestore path	Operations
+User profile (name, photo, phone, birthday)	users/{uid}	getDoc on load, setDoc on save
+User preferences (timeFormat, dateFormat, startOfWeek, timezone, language)	users/{uid}	getDoc on load, setDoc on save
+Appearance settings	users/{uid}.appearance	getDoc on load, updateDoc on save
+Notification settings	users/{uid}.notifications	getDoc on load, updateDoc on save
+Nothing else uses Firestore. Tasks, habits, goals, calendar events, and quick notes are all in-memory arrays initialised from mock data (mockTasks, mockHabits, mockGoals, mockCalendarEvents, mockNotes). They live in module-level variables with a local pub/sub system. They are not persisted anywhere — not to Firestore, not to localStorage. Reloading the page resets them to their initial mock values.
+
+4. Does automatic synchronization happen in real time, only on page load, or not at all?
+There are no onSnapshot calls anywhere in the codebase. Every Firestore read is a one-shot getDoc. This means:
+
+Profile/preferences/appearance/notifications are fetched once when the relevant page mounts.
+No module listens for changes made on another device or tab.
+The autoSync toggle controls nothing — no code in the app reads it.
+5. Does the "Sync now" button perform a real sync?
+No. handleSyncNow in SünkroonimisePage.tsx does exactly this:
+
+function handleSyncNow() {
+  setSyncing(true)
+  setSyncDone(false)
+  setTimeout(() => {
+    const now = new Date()
+    saveLastSyncTime(now)   // writes to localStorage only
+    setLastSync(now)
+    setSyncing(false)
+    setSyncDone(true)
+    setTimeout(() => setSyncDone(false), 3000)
+  }, 1800)                  // 1.8-second artificial delay
+}
+
+It waits 1.8 seconds, writes the current timestamp to localStorage, and displays a success indicator. No network request. No Firestore call.
+
+6. Does "Sync over mobile data" affect any real behavior?
+No. The mobileData value is stored in localStorage via handleSave and read back by loadState when the page re-opens. No other file in the application reads kivora-sync-settings or the mobileData field. It has no effect on any data path.
+
+7. End-to-end test using two devices/profiles
+Setup: Open the app in Browser Profile A (logged in as user X) and Browser Profile B (also logged in as user X, same account).
+
+Test — tasks:
+
+In Profile A, add a new task ("Test task from A").
+Switch to Profile B and navigate to the Tasks page.
+Expected if sync worked: the task appears.
+Actual result: the task does not appear. Profile B shows the original mock tasks because tasks are in-memory only.
+Test — Sync Now button:
+
+In Profile A, click "Sync now" on the Synchronization page.
+Wait for the green "Done" indicator.
+Switch to Profile B. Check the "Last synced" timestamp on the Synchronization page.
+Expected if sync worked: both profiles show the same timestamp.
+Actual result: Profile B shows its own last-sync timestamp (or "Never"), because the timestamp is written to Profile A's localStorage only. The button did not contact any server.
+Conclusion: the Synchronization page is entirely cosmetic. The only data that actually persists across devices or sessions is the four user-profile fields listed in question 3.
+
+
+Worked for 55 seconds

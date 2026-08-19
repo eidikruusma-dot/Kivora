@@ -1,0 +1,207 @@
+Fix the Kivora AI action execution and verification architecture.
+
+A real multi-module stress test exposed a critical issue:
+
+The AI reported:
+- 0 failed actions
+
+But in reality:
+- Calendar events were NOT created
+- Money records were NOT created
+
+This is unacceptable.
+
+The AI must report actual execution results, not intended actions or generated action JSON.
+
+STRICT SCOPE:
+- Do not redesign any UI.
+- Do not modify PDF/OCR extraction.
+- Do not modify authentication.
+- Do not modify document attachment UX.
+- Inspect and fix the central AI action execution layer and the existing module action integrations.
+
+BEFORE CHANGING CODE, REPORT:
+
+1. Every AI action currently supported.
+2. For each action:
+   - action name
+   - handler function
+   - module/store function it calls
+   - whether it awaits the real write
+   - whether success/failure is returned
+3. Identify exactly why calendar creation can be reported successful without creating a calendar event.
+4. Identify exactly why Money actions can be reported successful without creating Money records.
+5. Identify how the current final AI response calculates "successful" and "failed" counts.
+6. List any action that currently has:
+   - no handler
+   - a fake/no-op handler
+   - a handler that does not await persistence
+   - a handler that catches errors and still reports success
+   - a fallback to Notes
+
+DO NOT CLAIM AN ACTION SUCCEEDED UNTIL THE REAL WRITE SUCCEEDS.
+
+CENTRAL EXECUTION CONTRACT:
+
+Every AI action handler must return a real result:
+
+{
+  success: boolean,
+  action: string,
+  entityId?: string,
+  module: string,
+  error?: string
+}
+
+success=true is allowed ONLY after the underlying Firestore/Storage write has resolved successfully.
+
+If no handler exists:
+success=false
+error="ACTION_NOT_IMPLEMENTED"
+
+If the write throws:
+success=false
+error=<actual error>
+
+Never convert a failed action into a Note.
+Never silently ignore unsupported actions.
+
+CALENDAR:
+
+Use the existing Calendar data layer.
+
+Verify that create_calendar_event:
+- calls the same function the Calendar UI uses
+- preserves title
+- date
+- start time
+- end time/duration
+- timezone
+- recurrence if provided
+- awaits the Firestore write
+- returns the created event ID
+
+After execution, verify that the created event exists before reporting success.
+
+MONEY:
+
+Inspect and reuse the existing Money data layer.
+
+The AI must be able to create real:
+- income records
+- expense records
+
+Do not create a parallel finance collection.
+
+For bank transactions:
+- positive/credit = income
+- negative/debit = expense
+- never infer direction from description
+- preserve date, description, amount and currency
+
+CONFIRMATION POLICY:
+
+Do NOT ask for confirmation for every normal action.
+
+The user's explicit imperative is already authorization.
+
+Execute immediately without another confirmation when the user explicitly says:
+- "Lisa kalendrisse..."
+- "Loo ülesanne..."
+- "Tee märge..."
+- "Lisa harjumus..."
+- "Loo eesmärk..."
+- "Pane see dokument Kooli alla..."
+- "Lisa 100 € tuludesse..."
+- "Lisa 25 € kuludesse..."
+
+Require ONE confirmation only for higher-risk/bulk/AI-decided actions, including:
+- importing multiple bank transactions from a statement
+- bulk delete
+- bulk destructive edits
+- AI-selected document sorting
+- actions where the AI must make an important ambiguous decision
+
+If one user request contains normal actions plus a bulk action:
+- execute the normal explicit actions immediately
+- ask only one confirmation for the pending bulk action
+
+Never ask the same confirmation twice.
+
+MULTI-ACTION EXECUTION:
+
+When one user message contains multiple actions:
+
+1. Parse all actions.
+2. Execute every authorized action.
+3. Await every operation.
+4. Collect the real ActionResult objects.
+5. Only then generate the final response.
+
+Final reporting must be based exclusively on ActionResult values.
+
+Example:
+
+Completed:
+✓ Task created
+✓ Note created
+✓ Habit created
+✓ Goal created
+
+Failed:
+✗ Calendar event — FIRESTORE_PERMISSION_DENIED
+✗ Money expense — ACTION_NOT_IMPLEMENTED
+
+Never say "0 failed" if any requested action was not actually persisted.
+
+POST-WRITE VERIFICATION:
+
+For Calendar and Money at minimum:
+- after creation, verify the created record exists
+- if verification fails, mark the action failed
+
+TEST THE EXACT STRESS TEST:
+
+1. Calendar:
+   Create today at 10:30 "Hambaarst", duration 1 hour.
+
+2. Task:
+   "Maksa elektriarve", high priority, due today.
+
+3. Note:
+   "Nädala ostunimekiri"
+   piim, leib, munad, juust, banaanid.
+
+4. Habit:
+   "Joo vett", daily.
+
+5. Goal:
+   "Kogu 500 €", target 500 €, deadline 31.12.2026.
+
+6. Money:
+   +125 € "Testtulu"
+   -24.90 € "Toidupood"
+
+Expected:
+- All six module operations are actually persisted.
+- No extra confirmation for these explicit individual actions.
+- Calendar event is visible in Calendar.
+- Income and expense are visible in Money.
+- Final report reflects actual persisted results.
+
+Then test a bank statement bulk import separately:
+- review transactions
+- ask ONE confirmation
+- after confirmation create all approved transactions
+- report actual created/skipped/failed counts
+
+Before implementation, show me the diagnosis and exact files that need to change.
+
+After implementation, report:
+- files changed
+- action handlers fixed/added
+- exact stress-test results
+- actual created Firestore document IDs
+- any action still unsupported
+
+Do not modify unrelated functionality.

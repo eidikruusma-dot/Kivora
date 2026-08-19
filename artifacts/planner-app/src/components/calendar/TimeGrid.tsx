@@ -17,7 +17,7 @@ const END_HOUR = 22
 export default function TimeGrid({
   date,
   events,
-  timeFormat: _timeFormat,
+  timeFormat,
   onEventClick,
   onSlotClick,
 }: TimeGridProps) {
@@ -45,7 +45,7 @@ export default function TimeGrid({
       {hours.map((hour) => (
         <div
           key={hour}
-          className="absolute left-0 right-0 border-t border-[#F0F0F0]"
+          className="absolute left-0 right-0 border-t border-[#F0F0F0] hour-grid-line"
           style={{ top: `${((hour - START_HOUR) / totalRange) * 100}%` }}
         />
       ))}
@@ -63,7 +63,7 @@ export default function TimeGrid({
             width: `calc(${widthPercent}% - 2px)`,
           }}
         >
-          <EventCard event={event} onClick={onEventClick} />
+          <EventCard event={event} onClick={onEventClick} timeFormat={timeFormat} />
         </div>
       ))}
 

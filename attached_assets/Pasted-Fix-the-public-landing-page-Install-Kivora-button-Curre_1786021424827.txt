@@ -1,0 +1,75 @@
+Fix the public landing page “Install Kivora” button.
+
+Current problems:
+- The button appears only several seconds after page load.
+- Clicking it on Android Chrome does nothing.
+- The user receives no explanation or fallback.
+
+Implement the complete install flow correctly.
+
+Requirements:
+
+1. Button visibility
+- Render the “Install Kivora” button immediately with the rest of the navigation.
+- Do not wait for beforeinstallprompt before rendering the button.
+- Keep its current position and visual design unchanged.
+
+2. Capture the install event globally
+- Register the window.beforeinstallprompt listener as early as possible, outside React page components.
+- Call event.preventDefault().
+- Save the event in a globally accessible install state/store.
+- Preserve the event until the user clicks the install button.
+- Do not lose the event during React rerenders or route changes.
+
+3. Button click behavior
+- The click handler must run directly from the user click.
+- If a deferred beforeinstallprompt event exists:
+  - call deferredPrompt.prompt()
+  - await deferredPrompt.userChoice
+  - clear the stored event after it has been used
+  - update the UI based on accepted or dismissed status
+
+4. Android Chrome fallback
+- If the install event is not ready when the user clicks:
+  - do not silently do nothing
+  - show a localized dialog explaining that installation is still being prepared
+  - provide a “Try again” action
+  - provide manual instructions:
+    Chrome menu → Install app / Add to Home screen
+
+5. Already installed state
+- Detect:
+  - window.matchMedia('(display-mode: standalone)').matches
+  - navigator.standalone where supported
+  - appinstalled event
+- When installed, replace the button with:
+  - ET: “Ava Kivora”
+  - EN: “Open Kivora”
+- Clicking it should navigate to /app.
+
+6. iPhone / iPad
+- Keep the existing iOS instruction dialog:
+  Share → Add to Home Screen.
+- Do not wait for beforeinstallprompt on iOS because it is not supported there.
+
+7. Error handling
+- Never leave the button appearing clickable when the click does nothing.
+- Show a clear localized message for:
+  - prompt not ready
+  - unsupported browser
+  - installation dismissed
+  - already installed
+
+8. Testing
+Test on the published https://kivora.ee domain:
+- Android Chrome fresh visit
+- click immediately after page load
+- click after beforeinstallprompt is available
+- dismiss installation
+- accept installation
+- reopen the installed app
+- already installed state
+- iOS Safari fallback
+
+Do not modify the manifest, service worker, logo, navigation layout, authentication or any unrelated page.
+Report the exact root cause of the current no-op click.

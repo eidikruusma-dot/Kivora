@@ -10,6 +10,7 @@ export interface NotificationModules {
   goals: boolean
   school: boolean
   assistant: boolean
+  security: boolean
 }
 
 export type ReminderOffset = 'at_time' | '5min' | '15min' | '30min' | '1hour' | '1day'
@@ -34,6 +35,7 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
     goals: true,
     school: true,
     assistant: false,
+    security: true,
   },
   inApp: true,
   systemNotifications: false,

@@ -1,0 +1,115 @@
+Fix ONLY the Money dashboard balance data propagation and the remaining old
+monthly-plan "Vabalt kasutada" calculation.
+
+Do NOT change CSV direction parsing, imported transactions, PDF, OpenAI,
+Firestore rules, or transaction classification.
+
+CURRENT PRODUCTION SYMPTOMS:
+
+- CSV bank transactions imported successfully.
+- Monthly income/expenses display correctly.
+- "Kontojääk" shows "— / Väljavõte puudub".
+- The monthly-plan section still shows an old income-expense based
+  "Vabalt kasutada" value.
+
+TASK 1 — TRACE BALANCE PROPAGATION
+
+Inspect the complete path:
+
+parseBankCsv
+→ ParsedBankRow
+→ BankTransaction returned by /api/ai/bank-import
+→ FinancePage BankImportModal
+→ runImport()
+→ addTransaction()
+→ Firestore Transaction
+→ deriveCurrentAccountBalance()
+
+Determine exactly where the CSV balance value is lost.
+
+Do not assume it is present.
+
+Check:
+- which CSV header is recognised as balance
+- whether ParsedBankRow contains balance
+- whether BankTransaction contains balance
+- whether API JSON contains balance
+- whether runImport passes balance to addTransaction
+- whether moneyStore/Firestore preserves balance
+
+Fix the FIRST actual broken propagation point and any required downstream type
+propagation.
+
+Do NOT fabricate a balance.
+
+TASK 2 — CSV WITHOUT BALANCE
+
+If the source CSV genuinely has no running-balance column, report that clearly.
+
+Do NOT try to calculate the current bank balance from monthly income-expense.
+
+In that case propose the smallest safe UX fallback, but do not implement a
+manual fake balance unless explicitly requested.
+
+TASK 3 — EXISTING IMPORTED TRANSACTIONS
+
+Important: existing Firestore transactions may have been imported before balance
+propagation was fixed.
+
+Do NOT modify or invent balance values on existing records.
+
+Report whether a fresh re-import would be required for balance metadata to exist.
+
+Do not automatically duplicate existing transactions.
+
+TASK 4 — MONTHLY PLAN
+
+The bottom monthly-plan section is still using the old formula.
+
+Replace its "Vabalt kasutada" value with the SAME canonical availableMoney used
+by the dashboard.
+
+There must be exactly one calculation source for available money.
+
+If currentAccountBalance is null:
+- display "—"
+- do not show income-expense as available money
+- do not show a misleading progress percentage derived from fabricated available
+  money.
+
+Monthly net cash flow may still be displayed separately if desired.
+
+TASK 5 — TESTS
+
+Use SYNTHETIC DATA ONLY.
+
+Test:
+
+1. CSV balance survives parser → API transaction → client transaction shape.
+2. Imported transaction with balance is preserved by addTransaction.
+3. newest posted balance becomes currentAccountBalance.
+4. pending transaction balance does not override current posted balance.
+5. no balance metadata => currentAccountBalance=null.
+6. no balance => monthly-plan availableMoney also displays unavailable/null,
+   NOT income-expense.
+7. dashboard and monthly-plan use the same availableMoney value.
+
+Run:
+pnpm exec tsc --noEmit
+pnpm run test:parseBankCsv
+pnpm run test:computeMoneyMetrics
+pnpm run build
+
+Do not deploy automatically.
+
+FINAL REPORT:
+- exact point where balance was lost
+- whether the CSV format actually contains a balance column
+- whether a fresh CSV re-import is required
+- dashboard available-money source
+- monthly-plan available-money source
+- test results
+- TypeScript result
+- build result
+
+Use no real user bank data anywhere.

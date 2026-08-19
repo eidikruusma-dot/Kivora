@@ -1,0 +1,62 @@
+Stop before implementation.
+
+The audit has interpreted the attached reference incorrectly.
+
+The latest attached image is NOT the dedicated Finance page.
+
+It is the Kivora Home Dashboard with Finance integrated into the daily overview.
+
+Evidence from the reference:
+
+- “Avaleht” is the active sidebar item.
+- The header says “Tere, Martin!”
+- It contains Today’s Tasks and Today’s Calendar.
+- Finance summary, monthly plan, savings goals, transactions, bills, and AI recommendations are dashboard widgets.
+- The page is the user’s daily control center, not the full Finance module.
+
+The dedicated Finance page is a separate view and will use the earlier reference with:
+
+- “Raha” active in the sidebar;
+- Finance navigation tabs:
+  - Overview
+  - Transactions
+  - Bills
+  - Monthly Plan
+  - Savings Goals
+  - Categories
+
+Therefore, do not create FinancePage.tsx from the latest attached image.
+
+Perform a corrected audit for two separate scopes:
+
+A. Home Dashboard update
+
+The latest attached image is the exact desktop reference for the Home Dashboard.
+
+Audit the existing Home page and report:
+
+1. Which current Dashboard components already exist.
+2. Which files must be modified.
+3. Which widgets can be reused.
+4. How the Finance widgets will be added without rewriting the existing Dashboard.
+5. How Today’s Tasks, Today’s Calendar, Goals, and AI will use their existing real stores.
+6. How all visible content will support Estonian and English.
+
+B. Dedicated Finance module
+
+Audit separately what must later be created for the dedicated Finance route based on the earlier Finance reference.
+
+Do not build the dedicated Finance page during the Dashboard task unless I approve it separately.
+
+Important corrections:
+
+- Add “Raha” to the sidebar between “Harjumused” and “Kool”, matching the reference.
+- Do not use static AI recommendations as the final implementation.
+- Do not create duplicate task, calendar, or goal data.
+- Dashboard widgets must read the existing real data.
+- Finance information must have one source of truth.
+- Do not call any widget complete if it only displays hardcoded demo values.
+- All visible text must use the existing Estonian and English translation system.
+- Do not modify code yet.
+
+Provide the corrected audit and wait for approval.

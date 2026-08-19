@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { X, Play, Pause, Square, CheckCircle2 } from 'lucide-react'
 import { useFocusTimer, formatTime } from '@/context/FocusTimerContext'
-import { mockTasks } from '@/data/mockData'
+import { useTasks } from '@/lib/tasksStore'
 
 const DURATIONS = [15, 25, 45, 60]
 
 export default function FocusTimerModal() {
   const { state, modalOpen, closeModal, start, pause, resume, stop } = useFocusTimer()
+  const allTasks = useTasks()
+  const pendingTasks = allTasks.filter((t) => !t.completed)
   const [duration, setDuration] = useState(25)
   const [taskIdx, setTaskIdx] = useState(-1)
 
@@ -94,7 +96,7 @@ export default function FocusTimerModal() {
                   className="w-full h-10 px-3 text-sm bg-[#F8F7F4] border border-[#EBEBEB] rounded-lg text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] transition-colors"
                 >
                   <option value={-1}>— ülesandeta —</option>
-                  {mockTasks.map((t, i) => (
+                  {pendingTasks.map((t, i) => (
                     <option key={t.id} value={i}>{t.title}</option>
                   ))}
                 </select>
@@ -121,7 +123,7 @@ export default function FocusTimerModal() {
               </div>
 
               <button
-                onClick={() => start(duration, taskIdx >= 0 ? mockTasks[taskIdx].title : undefined)}
+                onClick={() => start(duration, taskIdx >= 0 ? pendingTasks[taskIdx]?.title : undefined)}
                 className="w-full h-11 flex items-center justify-center gap-2 text-sm font-semibold text-white rounded-lg transition-colors"
                 style={{ backgroundColor: '#6F5AE8' }}
               >

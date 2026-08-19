@@ -1,11 +1,14 @@
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
+import type { TimeFormat } from '@/types'
+import { formatEventTime } from '@/lib/calendar/dateUtils'
 
 interface EventCardProps {
   event: MockCalendarEvent
   onClick?: (id: string) => void
+  timeFormat?: TimeFormat
 }
 
-export default function EventCard({ event, onClick }: EventCardProps) {
+export default function EventCard({ event, onClick, timeFormat = '24h' }: EventCardProps) {
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     onClick?.(event.id)
@@ -19,7 +22,7 @@ export default function EventCard({ event, onClick }: EventCardProps) {
     >
       <div className="h-full flex flex-col justify-start px-2 py-1">
         <p className="text-[10px] font-medium text-[#4B5563] leading-none">
-          {event.startTime}
+          {formatEventTime(event.startTime, timeFormat)}
         </p>
 
         <p className="mt-0.5 text-[12px] font-semibold text-[#1A1F36] leading-[1.15] line-clamp-2">

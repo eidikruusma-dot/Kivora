@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
+import { Toaster } from '@/components/ui/sonner'
 import { ProtectedRoute, PublicOnlyRoute } from '@/components/auth/ProtectedRoute'
 import AppLayout from '@/components/layout/AppLayout'
 import Dashboard from '@/views/Dashboard'
@@ -21,15 +23,29 @@ import HabitsPage from '@/views/HabitsPage'
 import GoalsPage from '@/views/GoalsPage'
 import AIAssistantPage from '@/views/AIAssistantPage'
 import SchoolPage from '@/views/SchoolPage'
+import FinancePage from '@/views/finance/FinancePage'
 import SettingsPage from '@/views/SettingsPage'
 import HelpPage from '@/views/HelpPage'
 import NotificationsPage from '@/views/NotificationsPage'
+import ModuleSelectionPage from '@/views/onboarding/ModuleSelectionPage'
+import { useNotificationGenerators } from '@/lib/notificationGenerators'
 import { CheckSquare, Calendar, StickyNote, Repeat, Target, Sparkles, Settings } from 'lucide-react'
+
+function NotificationBootstrap() {
+  useNotificationGenerators()
+
+  // SW is already registered in main.tsx before React renders.
+  // Nothing to do here — push subscription is handled by pushNotifications.ts.
+
+  return null
+}
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <Toaster position="bottom-right" richColors />
+        <NotificationBootstrap />
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/contact" element={<Contact />} />
@@ -47,11 +63,13 @@ export default function App() {
           <Route path="/app/habits" element={<ProtectedRoute><AppLayout><HabitsPage /></AppLayout></ProtectedRoute>} />
           <Route path="/app/goals" element={<ProtectedRoute><AppLayout><GoalsPage /></AppLayout></ProtectedRoute>} />
           <Route path="/app/assistant" element={<ProtectedRoute><AppLayout><AIAssistantPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/app/finance" element={<ProtectedRoute><AppLayout><FinancePage /></AppLayout></ProtectedRoute>} />
           <Route path="/app/school" element={<ProtectedRoute><AppLayout><SchoolPage /></AppLayout></ProtectedRoute>} />
           <Route path="/app/help" element={<ProtectedRoute><AppLayout><HelpPage /></AppLayout></ProtectedRoute>} />
           <Route path="/app/settings" element={<ProtectedRoute><AppLayout><SettingsPage /></AppLayout></ProtectedRoute>} />
           <Route path="/app/notifications" element={<ProtectedRoute><AppLayout><NotificationsPage /></AppLayout></ProtectedRoute>} />
           <Route path="/app/profile" element={<ProtectedRoute><AppLayout><ProfilePage /></AppLayout></ProtectedRoute>} />
+          <Route path="/onboarding" element={<ProtectedRoute skipOnboarding><ModuleSelectionPage /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
