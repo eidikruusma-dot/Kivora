@@ -114,33 +114,21 @@ export function buildBankMeta(
 async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
   const b64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
 
-  const prompt = `Analüüsi lisatud pangaväljavõtte PDF-faili.
+  const prompt = `Loe pangaväljavõtte PDF-ist KÕIK tehingud algusest lõpuni (kõik lehed).
 
-KRIITILISELT TÄHTSAD JUHISED:
-1. LOE LÄBI KÕIK LEHEKÜLJED: PDF-is on mitu lehekülge ja kümneid tehinguid (kokku 50–100+ tehingut). ÄRA KATKESTA ega piirdu esimese lehega! Väljasta absoluutselt iga viimane kui tehing esimesest lehest kuni viimaseni.
-2. MÄRKIDE JA SUUNDADE REEGEL:
-   - Miinusmärgiga (-) või Deebet-veeru summad -> VÄLJAMINEK (direction: "expense", debit: number, credit: null).
-   - Plusmärgiga (+) või Kreedit-veeru summad -> SISSETULEK (direction: "income", credit: number, debit: null).
-   - Digikassa / ümardused / kogumishoiuse kanded on VÄLJAMINEKUD (direction: "expense").
-3. KRONOLOOGILINE JÄRJEKORD:
-   - Pane tehingud järjekorda vanimast uusimani (algsaldost alates kuni lõppsaldoni).
+Reeglid:
+1. Digikassa/ümardus/kogumishoius või miinus (-) = "expense"
+2. Plus (+) või laekumine = "income"
+3. Järjesta vanimast uuimani.
 
-Tagasta AINULT JSON:
+Väljasta ülilühike ja kompaktne JSON:
 {
-  "bankName": "string või null",
-  "accountNumber": "string või null",
   "openingBalance": 0.00,
   "closingBalance": 0.00,
-  "transactions": [
-    {
-      "date": "YYYY-MM-DD",
-      "description": "täpne selgitus / saaja",
-      "debit": 12.34,
-      "credit": null,
-      "direction": "expense",
-      "balance": 500.00,
-      "currency": "EUR"
-    }
+  "bankName": "SEB",
+  "accountNumber": "IBAN",
+  "tx": [
+    ["2026-08-01", "Selgitus/Saaja", 12.34, "expense", 500.00]
   ]
 }`;
 
@@ -164,11 +152,12 @@ Tagasta AINULT JSON:
 
     const raw = response.output_text?.trim() || "{}";
     const parsed = safeJsonParse(raw);
-    console.log(`[DIRECT PDF AI] Leitud tehinguid: ${(parsed.transactions || []).length}`);
-    return parsed;
+    const txList = Array.isArray(parsed.tx) ? parsed.tx : (parsed.transactions || []);
+    console.log(`[DIRECT PDF AI] Leitud tehinguid: ${txList.length}`);
+    return { ...parsed, txList };
   } catch (err) {
     console.error("[DIRECT PDF AI ERROR]", err);
-    return { transactions: [] };
+    return { txList: [] };
   }
 }
 
@@ -187,43 +176,42 @@ router.post("/ai/bank-import", upload.single("file"), async (req, res) => {
     if (isPdf) {
       const parsed = await extractBankPdfDirectly(file.buffer, file.originalname);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rawTxns: BankTransaction[] = (parsed.transactions || []).map((t: any, idx: number) => {
-        const desc = (t.description || "").toLowerCase();
-        const isDigikassa = desc.includes("digikassa") || desc.includes("ümardus") || desc.includes("kogumispenn");
+      const rawTxns: BankTransaction[] = (parsed.txList || []).map((item: any, idx: number) => {
+        let date = "";
+        let desc = "";
+        let amount = 0;
+        let dir: "income" | "expense" = "expense";
+        let bal: number | null = null;
 
-        let isCredit = typeof t.credit === "number" && t.credit > 0;
-        let isDebit = typeof t.debit === "number" && t.debit > 0;
-
-        if (isDigikassa) {
-          isDebit = true;
-          isCredit = false;
+        if (Array.isArray(item)) {
+          date = item[0] || "";
+          desc = item[1] || "";
+          amount = typeof item[2] === "number" ? Math.abs(item[2]) : 0;
+          dir = item[3] === "income" ? "income" : "expense";
+          bal = typeof item[4] === "number" ? item[4] : null;
+        } else if (typeof item === "object" && item !== null) {
+          date = item.date || "";
+          desc = item.description || "";
+          amount = typeof item.amount === "number" ? Math.abs(item.amount) : (item.credit || item.debit || 0);
+          dir = item.direction === "income" || (item.credit && !item.debit) ? "income" : "expense";
+          bal = typeof item.balance === "number" ? item.balance : null;
         }
 
-        let direction: "income" | "expense" = "expense";
-        if (t.direction === "income" && !isDigikassa) {
-          direction = "income";
-        } else if (t.direction === "expense" || isDigikassa) {
-          direction = "expense";
-        } else if (isCredit && !isDebit) {
-          direction = "income";
-        } else {
-          direction = "expense";
-        }
-
-        const amount = isCredit ? t.credit : isDebit ? t.debit : (typeof t.amount === "number" ? Math.abs(t.amount) : 0);
+        const isDigikassa = desc.toLowerCase().includes("digikassa") || desc.toLowerCase().includes("ümardus");
+        if (isDigikassa) dir = "expense";
 
         return {
           id: makeTransactionId(),
           page: 1,
           rowIndex: idx,
-          date: parseDDMMYYYY(t.date) || t.date || new Date().toISOString().slice(0, 10),
-          description: t.description || "(kirjeldus puudub)",
-          debit: direction === "expense" ? amount : null,
-          credit: direction === "income" ? amount : null,
-          balance: typeof t.balance === "number" ? t.balance : null,
+          date: parseDDMMYYYY(date) || date || new Date().toISOString().slice(0, 10),
+          description: desc || "(kirjeldus puudub)",
+          debit: dir === "expense" ? amount : null,
+          credit: dir === "income" ? amount : null,
+          balance: bal,
           amount,
-          direction,
-          currency: t.currency || "EUR",
+          direction: dir,
+          currency: "EUR",
         };
       });
 
