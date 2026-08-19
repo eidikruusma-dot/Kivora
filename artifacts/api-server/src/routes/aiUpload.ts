@@ -1,12 +1,11 @@
 import { Router } from "express";
 import multer from "multer";
 import OpenAI from "openai";
+import pdfParse from "pdf-parse";
 import { postProcessBankTransactions } from "../lib/postProcessBankTransactions";
 import type { BankPostProcessResult } from "../lib/postProcessBankTransactions";
 import { parseBankFile } from "../lib/parseBankCsv";
-import {
-  extractStructuralPdfBuffer,
-} from "../lib/extractStructuralPdfBuffer";
+import { extractStructuralPdfBuffer } from "../lib/extractStructuralPdfBuffer";
 import type { RawTransactionRow } from "../lib/classifyTransactionRows";
 
 const router = Router();
@@ -70,7 +69,7 @@ function makeTransactionId(): string {
 }
 
 function sanitizePdfText(raw: string): string {
-  return raw
+  return (raw || "")
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F\uFFFD\uFFFE\uFFFF\uE000-\uF8FF\u2500-\u25FF]/g, "")
     .replace(/--\s*\d+\s*of\s*\d+\s*--/g, "")
     .replace(/\n{3,}/g, "\n\n")
@@ -81,9 +80,9 @@ function sanitizePdfText(raw: string): string {
 async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pdf = (globalThis as any).require("pdf-parse");
-    const data = await pdf(buffer);
-    return sanitizePdfText(data.text || "");
+    const parserFn: any = (pdfParse as any).default || pdfParse;
+    const data = await parserFn(buffer);
+    return sanitizePdfText(data?.text || "");
   } catch (e) {
     console.error("[PDF PARSE ERROR]", e);
     return "";
@@ -172,13 +171,13 @@ export function buildBankMeta(
 }
 
 async function extractBankStatementViaAI(text: string): Promise<BankPdfResult> {
-  const prompt = `Analüüsi seda pangaväljavõtte teksti. 
+  const prompt = `Analüüsi seda pangaväljavõtte teksti.
 Ülesanded:
 1. Tuvasta algsaldo (openingBalance) ja lõppsaldo (closingBalance).
 2. Tuvasta KÕIK tehingud ja pane need rangelt KRONOLOOGILISSE järjekorda (alt üles: algsaldost alates kuni lõppsaldoni).
 3. Eralda tehingul kuupäev, selgitus/saaja, deebet (kulu), kreedit (tulu) ja jooksev saldo.
 
-Tagasta AINULT JSON:
+Tagasta AINULT puhas JSON järgmises struktuuris:
 {
   "bankName": "string või null",
   "accountNumber": "string või null",
@@ -195,13 +194,14 @@ Tagasta AINULT JSON:
     }
   ]
 }
-Tekst:
+
+Dokumendi tekst:
 ${text.slice(0, 60000)}`;
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
-      { role: "system", content: "Oled professionaalne finantsdokumentide lugeja. Tagastad alati puhta JSON-i." },
+      { role: "system", content: "Oled professionaalne pangaväljavõtete analüüsija. Tagastad alati puhta JSON-objekti." },
       { role: "user", content: prompt },
     ],
     response_format: { type: "json_object" },
@@ -209,6 +209,7 @@ ${text.slice(0, 60000)}`;
   });
 
   const parsed = JSON.parse(response.choices[0]?.message?.content || "{}");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rawTxns: BankTransaction[] = (parsed.transactions || []).map((t: any, idx: number) => {
     const isCredit = typeof t.credit === "number" && t.credit > 0;
     const isDebit = typeof t.debit === "number" && t.debit > 0;
@@ -254,7 +255,7 @@ ${text.slice(0, 60000)}`;
 async function processBankPdfBuffer(buffer: Buffer, filename: string): Promise<BankPdfResult> {
   const text = await extractPdfText(buffer);
 
-  // 1. Proovi esmalt kiiret struktuurset analüüsi
+  // 1. Struktuurne analüüs
   try {
     const structural = await extractStructuralPdfBuffer(buffer);
     if (structural && structural.transactions && structural.transactions.length > 0) {
@@ -285,7 +286,7 @@ async function processBankPdfBuffer(buffer: Buffer, filename: string): Promise<B
     console.warn(`[STRUCTURAL FAILED] ${filename}, minnakse AI peale:`, e);
   }
 
-  // 2. Kui struktuurne lugemine ei leidnud tehinguid, kasuta AI mudelit
+  // 2. AI analüüs
   if (text && text.trim().length > 0) {
     return await extractBankStatementViaAI(text);
   }
