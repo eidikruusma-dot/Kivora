@@ -24,6 +24,7 @@
     "test:pdfMultiPageImportPipeline": "npx esbuild --bundle --platform=node --format=esm --packages=external src/lib/pdfMultiPageImportPipeline.test.ts --outfile=.tmp-pdfMultiPageImportPipeline.mjs && node .tmp-pdfMultiPageImportPipeline.mjs",
     "test:pdfModelOutputTruncation": "npx esbuild --bundle --platform=node --format=cjs src/lib/pdfModelOutputTruncation.test.ts | node",
     "test:pdfBatchedExtraction": "npx esbuild --bundle --platform=node --format=esm --packages=external src/lib/pdfBatchedExtraction.test.ts --outfile=.tmp-pdfBatchedExtraction.mjs && node .tmp-pdfBatchedExtraction.mjs",
+    "test:bankImportRevalidate": "npx esbuild --bundle --platform=node --format=esm --packages=external src/lib/bankImportRevalidate.test.ts --outfile=.tmp-bankImportRevalidate.mjs && node .tmp-bankImportRevalidate.mjs",
   "test": "pnpm run test:parseEuropeanNumber && pnpm run test:groupIntoRows && pnpm run test:extraction"
   },
   "dependencies": {

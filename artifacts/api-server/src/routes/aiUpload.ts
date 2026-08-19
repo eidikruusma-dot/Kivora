@@ -1709,9 +1709,14 @@ function rawRowToBankTransaction(
 
 // ── Build BankMeta from post-processing result ────────────────────────────────
 
-function buildBankMeta(
+export function buildBankMeta(
   post: BankPostProcessResult<BankTransaction>,
-  controls: { openingBalance: number | null; closingBalance: number | null },
+  controls: {
+    openingBalance: number | null;
+    closingBalance: number | null;
+    printedIncomeTotal?: number | null;
+    printedExpenseTotal?: number | null;
+  },
   pagesTotal: number,
   docMeta?: {
     bank?: string;
@@ -1728,6 +1733,8 @@ function buildBankMeta(
     }),
     openingBalance: controls.openingBalance ?? undefined,
     closingBalance: controls.closingBalance ?? undefined,
+    summaryIncome: controls.printedIncomeTotal ?? undefined,
+    summaryExpenses: controls.printedExpenseTotal ?? undefined,
     // The structural and AI-model pipelines both read every page unconditionally
     // (no partial-page skip logic exists anywhere in the extraction pipeline),
     // so pagesProcessed always equals the observed page count.
@@ -1780,6 +1787,8 @@ function buildBankResultFromStructural(
     {
       openingBalance: structural.controls.openingBalance,
       closingBalance: structural.controls.closingBalance,
+      printedIncomeTotal: structural.controls.printedIncomeTotal,
+      printedExpenseTotal: structural.controls.printedExpenseTotal,
     },
     structural.pagesTotal,
   );
@@ -1823,6 +1832,8 @@ function buildBankResultFromModel(
     {
       openingBalance: model.document.openingBalance,
       closingBalance: model.document.closingBalance,
+      printedIncomeTotal: model.document.printedIncomeTotal,
+      printedExpenseTotal: model.document.printedExpenseTotal,
     },
     pagesTotal,
     {
@@ -2449,6 +2460,109 @@ router.post("/ai/bank-import", upload.single("file"), async (req, res) => {
     );
     res.status(422).json({ error: message });
   }
+});
+
+// ── POST /api/ai/bank-import/revalidate ────────────────────────────────────────
+//
+// Lets the user manually correct a flagged row (currently: flip its
+// income/expense direction, which is a common OCR misread — the amount is
+// read correctly but assigned to the wrong debit/credit column) in the Money
+// module review screen, then re-runs the SAME canonical reconciliation used
+// at import time against the edited transaction list. This is the only place
+// allowed to turn a blocked (review_required) import into an importable one —
+// it never happens silently; the user must explicitly edit a row first.
+//
+// Never touches Firestore. Takes the full transaction list + bankMeta the
+// client currently holds (from the initial /ai/bank-import response, with
+// zero or more rows edited) and returns freshly recomputed transactions +
+// bankMeta, exactly like the original extraction endpoints.
+
+function isPlainNumberOrNull(v: unknown): v is number | null {
+  return v === null || (typeof v === "number" && Number.isFinite(v));
+}
+
+function isRevalidatableTransaction(t: unknown): t is BankTransaction {
+  if (typeof t !== "object" || t === null) return false;
+  const row = t as Record<string, unknown>;
+  return (
+    typeof row.id === "string" &&
+    typeof row.page === "number" &&
+    typeof row.rowIndex === "number" &&
+    typeof row.date === "string" &&
+    typeof row.description === "string" &&
+    isPlainNumberOrNull(row.debit) &&
+    isPlainNumberOrNull(row.credit) &&
+    isPlainNumberOrNull(row.balance) &&
+    typeof row.amount === "number" &&
+    (row.direction === "income" || row.direction === "expense") &&
+    typeof row.currency === "string"
+  );
+}
+
+router.post("/ai/bank-import/revalidate", (req, res) => {
+  const body = req.body as
+    | { transactions?: unknown; bankMeta?: unknown }
+    | undefined;
+  const transactions = body?.transactions;
+  const bankMeta = body?.bankMeta as Partial<BankMeta> | undefined;
+
+  if (!Array.isArray(transactions) || transactions.length === 0) {
+    res.status(400).json({ error: "transactions[] is required." });
+    return;
+  }
+  if (!bankMeta || typeof bankMeta !== "object") {
+    res.status(400).json({ error: "bankMeta is required." });
+    return;
+  }
+  if (!transactions.every(isRevalidatableTransaction)) {
+    res.status(400).json({ error: "Invalid transaction shape." });
+    return;
+  }
+
+  // Strip any stale needsReview/reviewReason from the incoming rows —
+  // reconciliation below is the single source of truth for these flags, and
+  // a stale needsReview:true would otherwise survive unchanged for rows that
+  // the mismatch set no longer includes (postProcessBankTransactions only
+  // ever ADDS flags, it never clears one already present on the input).
+  const cleaned: BankTransaction[] = transactions.map((t) => {
+    const { needsReview: _needsReview, reviewReason: _reviewReason, ...rest } = t;
+    return rest;
+  });
+
+  // Input rows are the previous run's already-sorted/-reordered output, with
+  // zero or more rows edited in place (not reordered) — must NOT be re-sorted
+  // (see the alreadyChronological doc comment on PostProcessOptions).
+  const post = postProcessBankTransactions(
+    cleaned,
+    {
+      openingBalance: bankMeta.openingBalance ?? null,
+      closingBalance: bankMeta.closingBalance ?? null,
+      printedIncomeTotal: bankMeta.summaryIncome ?? null,
+      printedExpenseTotal: bankMeta.summaryExpenses ?? null,
+    },
+    { alreadyChronological: true },
+  );
+
+  const newBankMeta = buildBankMeta(
+    post,
+    {
+      openingBalance: bankMeta.openingBalance ?? null,
+      closingBalance: bankMeta.closingBalance ?? null,
+      printedIncomeTotal: bankMeta.summaryIncome ?? null,
+      printedExpenseTotal: bankMeta.summaryExpenses ?? null,
+    },
+    bankMeta.pagesTotal ?? cleaned.reduce((max, t) => Math.max(max, t.page), 1),
+    {
+      bank: bankMeta.bank,
+      period: bankMeta.period,
+      accountNumber: bankMeta.accountNumber,
+    },
+  );
+
+  console.log(
+    `[BANK IMPORT REVALIDATE] ${cleaned.length} txn(s) -> validationStatus=${post.validationStatus}`,
+  );
+  res.json({ transactions: post.transactions, bankMeta: newBankMeta });
 });
 
 // ── POST /api/ai/upload-direct-test ──────────────────────────────────────────

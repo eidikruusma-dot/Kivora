@@ -21,6 +21,16 @@ export interface MoneyImportReviewCardProps {
   lang: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Manually correct a flagged row's income/expense direction (e.g. a
+   *  common OCR misread where the amount lands in the wrong debit/credit
+   *  column) and re-run reconciliation server-side. Only wired up by the
+   *  Money-module import flow — omit to keep review rows read-only
+   *  (e.g. the legacy AI-chat import path). */
+  onEditTransaction?: (id: string, direction: "income" | "expense") => void;
+  /** True while a re-check request triggered by onEditTransaction is in flight. */
+  isRevalidating?: boolean;
+  /** Non-fatal error from the last re-check attempt, shown inline. */
+  revalidateError?: string | null;
 }
 
 export default function MoneyImportReviewCard({
@@ -29,6 +39,9 @@ export default function MoneyImportReviewCard({
   lang,
   onConfirm,
   onCancel,
+  onEditTransaction,
+  isRevalidating,
+  revalidateError,
 }: MoneyImportReviewCardProps) {
   const et = lang === "et";
 
@@ -73,29 +86,59 @@ export default function MoneyImportReviewCard({
     rows,
     color,
     showReason,
+    editable,
   }: {
     rows: BankTransaction[];
     color: string;
     showReason?: boolean;
+    editable?: boolean;
   }) => (
     <div className="rounded-lg border border-[#ECECF2] bg-white overflow-hidden mb-3">
       <table className="w-full text-xs">
         <tbody>
           {rows.map((t, i) => (
             <tr key={i} className={i > 0 ? "border-t border-[#F2F2F2]" : ""}>
-              <td className="px-2.5 py-1.5 text-[#64748B] whitespace-nowrap w-[76px]">
+              <td className="px-2.5 py-1.5 text-[#64748B] whitespace-nowrap w-[76px] align-top">
                 {t.date || "—"}
               </td>
-              <td className="px-2.5 py-1.5 text-[#1A1F36] min-w-0">
+              <td className="px-2.5 py-1.5 text-[#1A1F36] min-w-0 align-top">
                 <div className="truncate max-w-[180px]">{t.description}</div>
                 {showReason && t.reviewReason && (
                   <div className="text-[9px] text-[#F59E0B] truncate mt-0.5">
                     {t.reviewReason}
                   </div>
                 )}
+                {editable && t.id && onEditTransaction && (
+                  <div className="flex gap-1 mt-1">
+                    <button
+                      type="button"
+                      disabled={isRevalidating}
+                      onClick={() => onEditTransaction(t.id as string, "income")}
+                      className={`text-[9px] px-1.5 py-0.5 rounded border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                        t.direction === "income"
+                          ? "bg-[#DCFCE7] border-[#16A34A] text-[#16A34A] font-semibold"
+                          : "bg-white border-[#ECECF2] text-[#64748B] hover:border-[#16A34A] hover:text-[#16A34A]"
+                      }`}
+                    >
+                      {et ? "Sissetulek" : "Income"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isRevalidating}
+                      onClick={() => onEditTransaction(t.id as string, "expense")}
+                      className={`text-[9px] px-1.5 py-0.5 rounded border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                        t.direction === "expense"
+                          ? "bg-[#FEE2E2] border-[#DC2626] text-[#DC2626] font-semibold"
+                          : "bg-white border-[#ECECF2] text-[#64748B] hover:border-[#DC2626] hover:text-[#DC2626]"
+                      }`}
+                    >
+                      {et ? "Väljaminek" : "Expense"}
+                    </button>
+                  </div>
+                )}
               </td>
               <td
-                className={`px-2.5 py-1.5 text-right font-medium whitespace-nowrap ${color}`}
+                className={`px-2.5 py-1.5 text-right font-medium whitespace-nowrap align-top ${color}`}
               >
                 {t.direction === "income" ? "+" : "−"}
                 {t.amount.toFixed(2)} {t.currency}
@@ -236,7 +279,22 @@ export default function MoneyImportReviewCard({
             <p className="text-[11px] font-semibold text-[#F59E0B] mb-1 uppercase tracking-wide">
               {et ? "Vajab kontrolli" : "Needs review"} ({needsReview.length})
             </p>
-            <TxTable rows={needsReview} color="text-[#F59E0B]" showReason />
+            {onEditTransaction && (
+              <p className="text-[10px] text-[#64748B] mb-1.5 leading-snug">
+                {et
+                  ? "Kui tehing on siin valesti liigitatud (nt sissetulek märgitud väljaminekuks), vajuta õigele nupule allpool."
+                  : "If a transaction is misclassified here (e.g. income marked as an expense), click the correct button below it."}
+              </p>
+            )}
+            {revalidateError && (
+              <p className="text-[10px] text-[#DC2626] mb-1.5">{revalidateError}</p>
+            )}
+            <TxTable
+              rows={needsReview}
+              color="text-[#F59E0B]"
+              showReason
+              editable={Boolean(onEditTransaction)}
+            />
           </>
         )}
       </div>
