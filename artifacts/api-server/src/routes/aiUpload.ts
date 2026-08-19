@@ -1,11 +1,9 @@
 import { Router } from "express";
 import multer from "multer";
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import { postProcessBankTransactions } from "../lib/postProcessBankTransactions";
 import type { BankPostProcessResult } from "../lib/postProcessBankTransactions";
 import { parseBankFile } from "../lib/parseBankCsv";
-import { extractStructuralPdfBuffer } from "../lib/extractStructuralPdfBuffer";
-import type { RawTransactionRow } from "../lib/classifyTransactionRows";
 
 const router = Router();
 const openai = new OpenAI({ apiKey: process.env["OPENAI_API_KEY"] });
@@ -52,55 +50,11 @@ export interface BankMeta {
   validationErrors: string[];
 }
 
-interface BankPdfResult {
-  isBankStatement: boolean;
-  transactions?: BankTransaction[];
-  bankMeta?: BankMeta;
-  plainText: string;
-  usedOCR: boolean;
-}
-
 function makeTransactionId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function sanitizePdfText(raw: string): string {
-  return (raw || "")
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F\uFFFD\uFFFE\uFFFF\uE000-\uF8FF\u2500-\u25FF]/g, "")
-    .replace(/--\s*\d+\s*of\s*\d+\s*--/g, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/[ \t]{2,}/g, " ")
-    .trim();
-}
-
-async function extractPdfText(buffer: Buffer): Promise<string> {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const req = (globalThis as any).require || eval("require");
-    const mod = req("pdf-parse");
-    const Target = mod?.PDFParse || mod?.default || mod;
-
-    if (typeof Target === "function") {
-      try {
-        const instance = new Target({ data: buffer, verbosity: 0 });
-        if (instance && typeof instance.getText === "function") {
-          const res = await instance.getText();
-          if (typeof instance.destroy === "function") await instance.destroy();
-          return sanitizePdfText(res?.text || "");
-        }
-      } catch {
-        const res = await Target(buffer);
-        return sanitizePdfText(res?.text || "");
-      }
-    }
-    return "";
-  } catch (e) {
-    console.error("[PDF PARSE ERROR]", e);
-    return "";
-  }
 }
 
 function parseDDMMYYYY(raw: string): string | null {
@@ -118,48 +72,9 @@ function parseDDMMYYYY(raw: string): string | null {
   return null;
 }
 
-function rawRowToBankTransaction(row: RawTransactionRow, idx: number): BankTransaction {
-  const debitAmt = row.debit !== null && row.debit > 0 ? row.debit : null;
-  const creditAmt = row.credit !== null && row.credit > 0 ? row.credit : null;
-
-  let amount = 0;
-  let direction: "income" | "expense" = "expense";
-  const reasons: string[] = [];
-
-  if (debitAmt !== null && creditAmt === null) {
-    amount = debitAmt;
-    direction = "expense";
-  } else if (creditAmt !== null && debitAmt === null) {
-    amount = creditAmt;
-    direction = "income";
-  } else if (debitAmt !== null && creditAmt !== null) {
-    amount = Math.max(debitAmt, creditAmt);
-    direction = debitAmt >= creditAmt ? "expense" : "income";
-    reasons.push("Mõlemad veerud täidetud");
-  } else {
-    reasons.push("Summa puudub");
-  }
-
-  return {
-    id: makeTransactionId(),
-    page: row.pageNumber || 1,
-    rowIndex: row.rowIndex ?? idx,
-    date: parseDDMMYYYY(row.date) ?? row.date,
-    description: row.description || "(kirjeldus puudub)",
-    debit: debitAmt,
-    credit: creditAmt,
-    balance: row.balance,
-    amount,
-    direction,
-    currency: "EUR",
-    ...(row.pending && { pending: true }),
-    ...(reasons.length > 0 && { needsReview: true, reviewReason: reasons.join("; ") }),
-  };
-}
-
 export function buildBankMeta(
   post: BankPostProcessResult<BankTransaction>,
-  controls: { openingBalance: number | null; closingBalance: number | null; printedIncomeTotal?: number | null; printedExpenseTotal?: number | null },
+  controls: { openingBalance: number | null; closingBalance: number | null },
   pagesTotal: number,
   docMeta?: { bank?: string; period?: { from: string; to: string }; accountNumber?: string },
 ): BankMeta {
@@ -170,8 +85,6 @@ export function buildBankMeta(
     ...(docMeta?.accountNumber != null && { accountNumber: docMeta.accountNumber }),
     openingBalance: controls.openingBalance ?? undefined,
     closingBalance: controls.closingBalance ?? undefined,
-    summaryIncome: controls.printedIncomeTotal ?? undefined,
-    summaryExpenses: controls.printedExpenseTotal ?? undefined,
     pagesTotal,
     pagesProcessed: pagesTotal,
     incomeCount: post.incomeCount,
@@ -179,137 +92,99 @@ export function buildBankMeta(
     calculatedIncomeTotal: post.calculatedIncomeTotal,
     calculatedExpenseTotal: post.calculatedExpenseTotal,
     validationStatus: post.validationStatus,
-    importAllowed: true, // Lubame kasutajal tehinguid vaadata ja kinnitada
+    importAllowed: true,
     validationErrors: post.validationErrors,
   };
 }
 
-async function extractBankStatementViaAI(text: string): Promise<BankPdfResult> {
-  const prompt = `Analüüsi seda pangaväljavõtte teksti ja eralda KÕIK tehingud.
-Ülesanded:
-1. Tuvasta algsaldo (openingBalance) ja lõppsaldo (closingBalance).
-2. Tuvasta iga tehingu kohta: kuupäev (YYYY-MM-DD), selgitus/saaja, deebet (väljaminek), kreedit (sissetulek), jooksev saldo.
-3. Pane tehingud rangelt KRONOLOOGILISSE järjekorda (alt üles: algsaldost kuni lõppsaldoni).
+async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
+  const uploaded = await openai.files.create({
+    file: await toFile(buffer, filename, { type: "application/pdf" }),
+    purpose: "user_data",
+  });
 
-Tagasta AINULT JSON kujul:
+  try {
+    const prompt = `Loe lisatud pangaväljavõtte PDF-faili.
+Tuvasta KÕIK tehingud ja pane need rangelt KRONOLOOGILISSE järjekorda (alt üles: algsaldost kuni lõppsaldoni).
+
+Vasta AINULT JSON-formaadis:
 {
-  "bankName": "string või null",
-  "accountNumber": "string või null",
+  "bankName": "panga nimi või null",
+  "accountNumber": "IBAN või null",
   "openingBalance": 0.00,
   "closingBalance": 0.00,
   "transactions": [
     {
       "date": "YYYY-MM-DD",
-      "description": "Makse selgitus või saaja",
+      "description": "Makse selgitus või saaja/maksja nimi",
       "debit": 12.34,
       "credit": null,
       "balance": 100.00,
       "currency": "EUR"
     }
   ]
-}
+}`;
 
-Tekst:
-${text.slice(0, 60000)}`;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response = await (openai.chat.completions.create as any)({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            {
+              type: "file",
+              file: uploaded.id,
+            },
+          ],
+        },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0,
+    });
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      { role: "system", content: "Oled finantsdokumentide lugeja. Vasta ainult puhtas JSON formaadis." },
-      { role: "user", content: prompt },
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0,
-  });
+    const content = response.choices[0]?.message?.content || "{}";
+    const parsed = JSON.parse(content);
+    console.log(`[DIRECT PDF AI] Leitud tehinguid: ${(parsed.transactions || []).length}`);
+    return parsed;
+  } catch (err) {
+    // Tagavara: Assistants API kaudu lugemine
+    console.warn("[DIRECT PDF ASSISTANT FALLBACK]", err);
+    const assistant = await openai.beta.assistants.create({
+      model: "gpt-4o",
+      tools: [{ type: "file_search" }],
+      instructions: "Finantsdokumentide lugeja. Vasta ainult puhtas JSON formaadis.",
+    });
 
-  const parsed = JSON.parse(response.choices[0]?.message?.content || "{}");
-  console.log(`[AI EXTRACT RESULT] Leitud tehinguid: ${(parsed.transactions || []).length}`);
+    const thread = await openai.beta.threads.create({
+      messages: [
+        {
+          role: "user",
+          content: "Loe lisatud pangaväljavõtet. Tuvasta algsaldo, lõppsaldo ja kõik tehingud kronoloogilises järjekorras (alt üles). Vasta JSON-ina: { bankName, accountNumber, openingBalance, closingBalance, transactions: [{ date, description, debit, credit, balance, currency }] }",
+          attachments: [{ file_id: uploaded.id, tools: [{ type: "file_search" }] }],
+        },
+      ],
+    });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rawTxns: BankTransaction[] = (parsed.transactions || []).map((t: any, idx: number) => {
-    const isCredit = typeof t.credit === "number" && t.credit > 0;
-    const isDebit = typeof t.debit === "number" && t.debit > 0;
-    const amount = isCredit ? t.credit : isDebit ? t.debit : (typeof t.amount === "number" ? Math.abs(t.amount) : 0);
-    const direction: "income" | "expense" = isCredit ? "income" : (t.direction === "income" ? "income" : "expense");
+    const run = await openai.beta.threads.runs.createAndPoll(thread.id, {
+      assistant_id: assistant.id,
+    });
 
-    return {
-      id: makeTransactionId(),
-      page: 1,
-      rowIndex: idx,
-      date: parseDDMMYYYY(t.date) || t.date || new Date().toISOString().slice(0, 10),
-      description: t.description || "(kirjeldus puudub)",
-      debit: isDebit ? t.debit : (direction === "expense" ? amount : null),
-      credit: isCredit ? t.credit : (direction === "income" ? amount : null),
-      balance: typeof t.balance === "number" ? t.balance : null,
-      amount,
-      direction,
-      currency: t.currency || "EUR",
-    };
-  });
-
-  const post = postProcessBankTransactions(rawTxns, {
-    openingBalance: parsed.openingBalance ?? null,
-    closingBalance: parsed.closingBalance ?? null,
-    printedIncomeTotal: null,
-    printedExpenseTotal: null,
-  }, { alreadyChronological: true });
-
-  const bankMeta = buildBankMeta(
-    post,
-    { openingBalance: parsed.openingBalance ?? null, closingBalance: parsed.closingBalance ?? null },
-    1,
-    { bank: parsed.bankName ?? undefined, accountNumber: parsed.accountNumber ?? undefined }
-  );
-
-  return {
-    isBankStatement: true,
-    transactions: post.transactions.length > 0 ? post.transactions : rawTxns,
-    bankMeta,
-    plainText: text,
-    usedOCR: true,
-  };
-}
-
-async function processBankPdfBuffer(buffer: Buffer, filename: string): Promise<BankPdfResult> {
-  const text = await extractPdfText(buffer);
-
-  // 1. Struktuurne analüüs
-  try {
-    const structural = await extractStructuralPdfBuffer(buffer);
-    if (structural && structural.transactions && structural.transactions.length > 0) {
-      const rawTxns = structural.transactions.map((r, i) => rawRowToBankTransaction(r, i));
-      const post = postProcessBankTransactions(rawTxns, {
-        openingBalance: structural.controls.openingBalance,
-        closingBalance: structural.controls.closingBalance,
-        printedIncomeTotal: structural.controls.printedIncomeTotal,
-        printedExpenseTotal: structural.controls.printedExpenseTotal,
-      }, { alreadyChronological: true });
-
-      const bankMeta = buildBankMeta(post, {
-        openingBalance: structural.controls.openingBalance,
-        closingBalance: structural.controls.closingBalance,
-        printedIncomeTotal: structural.controls.printedIncomeTotal,
-        printedExpenseTotal: structural.controls.printedExpenseTotal,
-      }, structural.pagesTotal);
-
-      return {
-        isBankStatement: true,
-        transactions: post.transactions,
-        bankMeta,
-        plainText: text || "pdf",
-        usedOCR: false,
-      };
+    if (run.status === "completed") {
+      const messages = await openai.beta.threads.messages.list(thread.id);
+      const firstMsg = messages.data[0]?.content[0];
+      if (firstMsg && firstMsg.type === "text") {
+        const cleaned = firstMsg.text.value.replace(/```json|```/g, "").trim();
+        return JSON.parse(cleaned);
+      }
     }
-  } catch (e) {
-    console.warn(`[STRUCTURAL FAILED] ${filename}, minnakse AI peale:`, e);
+    return { transactions: [] };
+  } finally {
+    try {
+      await openai.files.delete(uploaded.id);
+    } catch {}
   }
-
-  // 2. AI analüüs
-  if (text && text.trim().length > 0) {
-    return await extractBankStatementViaAI(text);
-  }
-
-  return { isBankStatement: false, plainText: text, usedOCR: false };
 }
 
 router.post("/ai/bank-import", upload.single("file"), async (req, res) => {
@@ -325,12 +200,49 @@ router.post("/ai/bank-import", upload.single("file"), async (req, res) => {
 
   try {
     if (isPdf) {
-      const result = await processBankPdfBuffer(file.buffer, file.originalname);
-      if (!result.isBankStatement || !result.transactions || result.transactions.length === 0) {
+      const parsed = await extractBankPdfDirectly(file.buffer, file.originalname);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rawTxns: BankTransaction[] = (parsed.transactions || []).map((t: any, idx: number) => {
+        const isCredit = typeof t.credit === "number" && t.credit > 0;
+        const isDebit = typeof t.debit === "number" && t.debit > 0;
+        const amount = isCredit ? t.credit : isDebit ? t.debit : (typeof t.amount === "number" ? Math.abs(t.amount) : 0);
+        const direction: "income" | "expense" = isCredit ? "income" : "expense";
+
+        return {
+          id: makeTransactionId(),
+          page: 1,
+          rowIndex: idx,
+          date: parseDDMMYYYY(t.date) || t.date || new Date().toISOString().slice(0, 10),
+          description: t.description || "(kirjeldus puudub)",
+          debit: isDebit ? t.debit : (direction === "expense" ? amount : null),
+          credit: isCredit ? t.credit : (direction === "income" ? amount : null),
+          balance: typeof t.balance === "number" ? t.balance : null,
+          amount,
+          direction,
+          currency: t.currency || "EUR",
+        };
+      });
+
+      if (rawTxns.length === 0) {
         res.status(422).json({ error: "Tehinguid ei leitud." });
         return;
       }
-      res.json({ transactions: result.transactions, bankMeta: result.bankMeta });
+
+      const post = postProcessBankTransactions(rawTxns, {
+        openingBalance: parsed.openingBalance ?? null,
+        closingBalance: parsed.closingBalance ?? null,
+        printedIncomeTotal: null,
+        printedExpenseTotal: null,
+      }, { alreadyChronological: true });
+
+      const bankMeta = buildBankMeta(
+        post,
+        { openingBalance: parsed.openingBalance ?? null, closingBalance: parsed.closingBalance ?? null },
+        1,
+        { bank: parsed.bankName ?? undefined, accountNumber: parsed.accountNumber ?? undefined }
+      );
+
+      res.json({ transactions: post.transactions.length > 0 ? post.transactions : rawTxns, bankMeta });
       return;
     }
 
@@ -393,24 +305,17 @@ router.post("/ai/upload", upload.single("file"), async (req, res) => {
 
   try {
     const isPdf = file.originalname.toLowerCase().endsWith(".pdf") || file.mimetype === "application/pdf";
-    let text = "";
-
     if (isPdf) {
-      const bankRes = await processBankPdfBuffer(file.buffer, file.originalname);
-      if (bankRes.isBankStatement && bankRes.transactions && bankRes.transactions.length > 0) {
-        res.json({
-          content: bankRes.plainText.slice(0, 30000),
-          fileName: file.originalname,
-          transactions: bankRes.transactions,
-          bankMeta: bankRes.bankMeta,
-        });
-        return;
-      }
-      text = bankRes.plainText;
-    } else {
-      text = file.buffer.toString("utf-8");
+      const parsed = await extractBankPdfDirectly(file.buffer, file.originalname);
+      res.json({
+        content: JSON.stringify(parsed, null, 2),
+        fileName: file.originalname,
+        transactions: parsed.transactions || [],
+      });
+      return;
     }
 
+    const text = file.buffer.toString("utf-8");
     res.json({
       content: text.slice(0, 30000),
       fileName: file.originalname,
