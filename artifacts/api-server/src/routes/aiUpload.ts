@@ -1788,6 +1788,62 @@ function buildBankResultFromModel(
   };
 }
 
+// ── AI extraction with bounded retry ─────────────────────────────────────────
+//
+// The AI/OCR extraction path is not perfectly repeatable: the identical PDF
+// can produce a different same-day transaction sequence between separate
+// upload attempts (confirmed in production — same file, same size, two
+// uploads, two different transaction counts and two different reconciliation
+// failures). reorderSameDayGroupsByBalanceChain() in postProcessBankTransactions
+// resolves the common case (rows present but mis-ordered) deterministically
+// and for free, with no extra API cost. It cannot help when the extraction
+// itself is genuinely incomplete or wrong for that attempt — for that
+// residual case, retry the WHOLE extraction (all batches) once more before
+// giving up. Each attempt is independently subject to every existing
+// check (per-batch truncation detection, merge, dedup, reordering,
+// reconciliation); attempts are never mixed — the returned result is always
+// one complete, self-consistent attempt, never a partial combination.
+
+const AI_EXTRACTION_MAX_ATTEMPTS = 2;
+
+async function extractBankStatementWithRetry(
+  buffer: Buffer,
+  filename: string,
+  plainText: string,
+  usedOCR: boolean,
+): Promise<BankPdfResult> {
+  let lastResult: BankPdfResult | null = null;
+
+  for (let attempt = 1; attempt <= AI_EXTRACTION_MAX_ATTEMPTS; attempt++) {
+    const model = await extractBankStatementViaOpenAI(buffer, filename);
+
+    if (!model.document.isBankStatement) {
+      return { isBankStatement: false, plainText, usedOCR };
+    }
+
+    const result = buildBankResultFromModel(model, plainText, usedOCR);
+    lastResult = result;
+
+    if (result.bankMeta?.importAllowed) {
+      console.log(
+        `[BANK IMPORT AI] ${filename}: attempt ${attempt}/${AI_EXTRACTION_MAX_ATTEMPTS} reconciled successfully`,
+      );
+      return result;
+    }
+
+    console.warn(
+      `[BANK IMPORT AI] ${filename}: attempt ${attempt}/${AI_EXTRACTION_MAX_ATTEMPTS} did not reconcile ` +
+        `(importAllowed=false)${attempt < AI_EXTRACTION_MAX_ATTEMPTS ? " — retrying" : " — giving up"}`,
+    );
+  }
+
+  // All attempts failed to reconcile — return the last attempt's result
+  // as-is (never a mix of attempts). Its own importAllowed=false already
+  // blocks the caller from importing it; this is a diagnosable failure,
+  // never a silently-accepted partial result.
+  return lastResult as BankPdfResult;
+}
+
 // ── Shared PDF bank-statement detection + extraction ───────────────────────────
 //
 // Used by both /ai/upload (returns bank result OR plain text to AI chat) and
@@ -1835,11 +1891,7 @@ async function processBankPdfBuffer(
 
     // ── Step 2b: OCR text IS a bank statement → AI extraction ─────────────────
     console.log(`[PDF BANK] OCR result looks like bank statement: ${filename}`);
-    const model = await extractBankStatementViaOpenAI(buffer, filename);
-    if (!model.document.isBankStatement) {
-      return { isBankStatement: false, plainText: text, usedOCR: true };
-    }
-    return buildBankResultFromModel(model, text, true);
+    return extractBankStatementWithRetry(buffer, filename, text, true);
   }
 
   // ── Step 3: readable text — is this a bank statement? ────────────────────────
@@ -1861,11 +1913,7 @@ async function processBankPdfBuffer(
   console.warn(
     `[PDF BANK] structural returned no data, falling back to AI: ${filename}`,
   );
-  const model = await extractBankStatementViaOpenAI(buffer, filename);
-  if (!model.document.isBankStatement) {
-    return { isBankStatement: false, plainText: text, usedOCR: false };
-  }
-  return buildBankResultFromModel(model, text, false);
+  return extractBankStatementWithRetry(buffer, filename, text, false);
 }
 
 // ── Helper: parse file buffer to plain text (non-PDF types) ─────────────────

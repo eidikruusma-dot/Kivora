@@ -20,6 +20,8 @@
 
 import {
   reconcileStructuralTransactions,
+  roundMoney,
+  differs,
   type StructuralReconciliationControls,
   type StructuralReconciliationResult,
 } from "./reconcileStructuralTransactions";
@@ -90,6 +92,111 @@ function sortChronologically<T extends NormalizedTransaction>(txs: T[]): T[] {
   });
 }
 
+// ── Same-day balance-chain reordering ──────────────────────────────────────────
+//
+// sortChronologically() orders by DATE correctly, but when several
+// transactions share the same date, their relative (same-day) order comes
+// straight from whatever order the extraction pipeline produced them in.
+// For structural (position-based) extraction that's reliably correct — but
+// for the AI/OCR fallback path, the model's row order for a same-day group
+// is not always faithfully preserved between extraction attempts (confirmed
+// in production: the identical PDF produced different same-day sequencing —
+// and therefore different reconciliation results — on separate uploads).
+// Because the running-balance chain is sequential, ONE swapped same-day pair
+// early in the list makes every later transaction in the chain look wrong
+// too, even though only that one pair was actually mis-ordered.
+//
+// Every transaction with a non-null balance already carries independent,
+// printed ground truth for its own position in the sequence: the running
+// balance after it. This step uses that evidence — never invented data,
+// only the model's own reported balance values — to re-derive the correct
+// order within each same-date group, whenever that evidence unambiguously
+// supports a specific order. It is a no-op whenever the existing order
+// already satisfies the balance chain (the structural path, in practice,
+// never changes), so it is safe to run unconditionally on every path.
+function solveGroupOrderByBalanceChain<T extends NormalizedTransaction>(
+  group: T[],
+  startBalance: number,
+): T[] | null {
+  if (group.some((t) => t.balance === null || t.pending)) return null;
+
+  const remaining = [...group];
+  const ordered: T[] = [];
+  let previousBalance = startBalance;
+
+  while (remaining.length > 0) {
+    const matchIndexes: number[] = [];
+    for (let i = 0; i < remaining.length; i++) {
+      const t = remaining[i];
+      const expected = roundMoney(
+        previousBalance + (t.credit ?? 0) - (t.debit ?? 0),
+      );
+      if (!differs(expected, t.balance as number)) matchIndexes.push(i);
+    }
+    // Only commit to a step when exactly one candidate matches — an
+    // ambiguous (0 or 2+) match means the evidence doesn't unambiguously
+    // support a specific order, so we must not guess.
+    if (matchIndexes.length !== 1) return null;
+
+    const [chosenIndex] = matchIndexes;
+    const [chosen] = remaining.splice(chosenIndex, 1);
+    ordered.push(chosen);
+    previousBalance = chosen.balance as number;
+  }
+
+  return ordered;
+}
+
+/**
+ * Re-derives same-day transaction order from each transaction's own printed
+ * running balance, whenever that evidence unambiguously supports a specific
+ * order. Never reorders across different dates (date order from the
+ * chronological sort is trusted as-is), never reorders pending transactions,
+ * and never forces an order when the balance evidence is ambiguous or
+ * incomplete — in that case the group is left exactly as given, and
+ * reconcileStructuralTransactions() will report the mismatch as before.
+ */
+export function reorderSameDayGroupsByBalanceChain<T extends NormalizedTransaction>(
+  transactions: T[],
+  openingBalance: number | null,
+): T[] {
+  const result: T[] = [];
+  let previousBalance = openingBalance;
+  let i = 0;
+
+  while (i < transactions.length) {
+    let j = i + 1;
+    while (j < transactions.length && transactions[j].date === transactions[i].date) j++;
+    const group = transactions.slice(i, j);
+
+    const canAttempt =
+      group.length > 1 &&
+      previousBalance !== null &&
+      !group.some((t) => t.pending);
+
+    const solved = canAttempt
+      ? solveGroupOrderByBalanceChain(group, previousBalance as number)
+      : null;
+
+    const finalGroup = solved ?? group;
+    result.push(...finalGroup);
+
+    for (const t of finalGroup) {
+      if (t.balance !== null) {
+        previousBalance = t.balance;
+      } else if (previousBalance !== null) {
+        previousBalance = roundMoney(
+          previousBalance + (t.credit ?? 0) - (t.debit ?? 0),
+        );
+      }
+    }
+
+    i = j;
+  }
+
+  return result;
+}
+
 // ── Main export ──────────────────────────────────────────────────────────────
 
 export interface PostProcessOptions {
@@ -115,9 +222,18 @@ export function postProcessBankTransactions<T extends NormalizedTransaction>(
   options: PostProcessOptions = {},
 ): BankPostProcessResult<T> {
   // ── 1. Chronological sort ─────────────────────────────────────────────────
-  const sorted = options.alreadyChronological
+  const dateSorted = options.alreadyChronological
     ? transactions
     : sortChronologically(transactions);
+
+  // ── 1b. Same-day balance-chain reordering ─────────────────────────────────
+  // Re-derives same-day sub-order from each row's own printed running
+  // balance when the evidence unambiguously supports it; a no-op when the
+  // existing order already satisfies the chain.
+  const sorted = reorderSameDayGroupsByBalanceChain(
+    dateSorted,
+    typeof controls.openingBalance === "number" ? controls.openingBalance : null,
+  );
 
   // ── 2. Canonical reconciliation ───────────────────────────────────────────
   // Adapt to RawTransactionRow shape — reconciliation only uses the numeric

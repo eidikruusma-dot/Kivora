@@ -277,23 +277,32 @@ async function run(): Promise<void> {
     passed++;
   }
 
-  // ── 3. Regression proof: the pre-fix call pattern reproduces the reported
-  //       symptom on this exact multi-page extraction ───────────────────────
+  // ── 3. Defense in depth: same-day balance-chain reordering self-heals the
+  //       pre-fix (double-sort) call pattern on this exact multi-page
+  //       extraction ─────────────────────────────────────────────────────────
+  // Historically (before reorderSameDayGroupsByBalanceChain existed) calling
+  // postProcessBankTransactions without alreadyChronological on already-
+  // sorted structural output corrupted the same-day pair and broke
+  // reconciliation for every later transaction. That direct defect is still
+  // fixed the efficient way (alreadyChronological: true, test 2 above /
+  // runProductionPipeline). This test proves the *symptom* is now also
+  // independently caught and corrected: even the old, redundant-sort call
+  // pattern reconciles correctly, because the same-day pair's true order is
+  // unambiguously re-derivable from each row's own printed balance.
   {
-    const buggyPost = runPreFixPipeline(structural);
+    const healedPost = runPreFixPipeline(structural);
 
     assert(
-      buggyPost.reconciliation.ok === false,
-      "Pre-fix pipeline must reproduce the reported reconciliation failure " +
-        "on a valid multi-page statement (double-sort defect)",
+      healedPost.reconciliation.ok === true,
+      `Same-day balance-chain reordering must self-heal the double-sort call pattern; errors: ${healedPost.reconciliation.errors.join("; ")}`,
     );
     assert(
-      buggyPost.reviewCount > 0,
-      "Pre-fix pipeline must flag transactions needsReview that are actually valid",
+      healedPost.reviewCount === 0,
+      "No transaction should be wrongly flagged once the chain self-heals",
     );
     assert(
-      buggyPost.importAllowed === false,
-      "Pre-fix pipeline blocks import of a perfectly valid statement",
+      healedPost.importAllowed === true,
+      "A perfectly valid statement must be importable even via the old call pattern",
     );
 
     passed++;
