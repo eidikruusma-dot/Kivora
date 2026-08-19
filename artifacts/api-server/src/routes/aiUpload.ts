@@ -114,12 +114,15 @@ export function buildBankMeta(
 async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
   const b64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
 
-  const prompt = `Loe pangaväljavõtte PDF-ist KÕIK tehingud (kõik lehed).
+  const prompt = `Analüüsi pangaväljavõtte PDF-i ja loe KÕIK tehingud.
 
-Reeglid:
-1. Digikassa/ümardus/kogumishoius või miinus (-) = "expense"
-2. Plus (+) või laekumine = "income"
-3. Järjesta vanimast uusimani.
+PÕHIREEGLID:
+1. SUUND:
+   - Kui summa ees on MIINUS (-) või veerus Deebet/Väljamakse -> "expense"
+   - Kui summa ees on PLUS (+) või veerus Kreedit/Sissemakse -> "income"
+   - ÄRA pane tehingut sissetulekuks (income) pelgalt seetõttu, et saajaks on konto omaniku nimi (nt oma kontode vaheline kanne, digikassa, ümardus on EXPENSE).
+2. KRONOLOOGIA:
+   - Järjesta tehingud rangelt vanimast uusimani (algsaldost lõppsaldoni).
 
 Väljasta ülilühike JSON:
 {
@@ -128,14 +131,14 @@ Väljasta ülilühike JSON:
   "bankName": "SEB",
   "accountNumber": "IBAN",
   "tx": [
-    ["2026-08-01", "Selgitus/Saaja", 12.34, "expense", 500.00]
+    ["2026-08-01", "Selgitus / Saaja", 0.87, "expense", 502.74]
   ]
 }`;
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response: any = await (openai as any).responses.create({
-      model: "gpt-4o-mini", // Ülikiire mudel, välistab timeouti
+      model: "gpt-4o-mini",
       input: [
         {
           role: "user",
@@ -175,8 +178,12 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
   try {
     if (isPdf) {
       const parsed = await extractBankPdfDirectly(file.buffer, file.originalname);
+      const rawList = parsed.txList || [];
+
+      let runningBal = typeof parsed.openingBalance === "number" ? parsed.openingBalance : null;
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rawTxns: BankTransaction[] = (parsed.txList || []).map((item: any, idx: number) => {
+      const rawTxns: BankTransaction[] = rawList.map((item: any, idx: number) => {
         let date = "";
         let desc = "";
         let amount = 0;
@@ -193,12 +200,31 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
           date = item.date || "";
           desc = item.description || "";
           amount = typeof item.amount === "number" ? Math.abs(item.amount) : (item.credit || item.debit || 0);
-          dir = item.direction === "income" || (item.credit && !item.debit) ? "income" : "expense";
+          dir = item.direction === "income" ? "income" : "expense";
           bal = typeof item.balance === "number" ? item.balance : null;
         }
 
-        const isDigikassa = desc.toLowerCase().includes("digikassa") || desc.toLowerCase().includes("ümardus");
-        if (isDigikassa) dir = "expense";
+        // Matemaatiline kontroll: kui eelmine saldo ja praegune saldo on teada
+        if (runningBal !== null && bal !== null) {
+          const diff = Math.round((bal - runningBal) * 100) / 100;
+          if (diff < 0) {
+            dir = "expense";
+          } else if (diff > 0) {
+            dir = "income";
+          }
+        }
+
+        // Märksõnade kontroll
+        const lowerDesc = desc.toLowerCase();
+        if (lowerDesc.includes("digikassa") || lowerDesc.includes("ümardus") || lowerDesc.includes("kogumishoius")) {
+          dir = "expense";
+        }
+
+        if (bal !== null) {
+          runningBal = bal;
+        } else if (runningBal !== null) {
+          runningBal = dir === "income" ? runningBal + amount : runningBal - amount;
+        }
 
         return {
           id: makeTransactionId(),
@@ -288,7 +314,6 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
   }
 });
 
-// Lisame ka ilma /api prefiksita marsruudi kindluse mõttes
 router.post("/ai/bank-import", (req, res, next) => {
   req.url = "/api/ai/bank-import";
   router.handle(req, res, next);
