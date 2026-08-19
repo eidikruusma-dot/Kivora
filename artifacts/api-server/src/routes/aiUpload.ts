@@ -116,17 +116,16 @@ async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
 
   const prompt = `Analüüsi lisatud pangaväljavõtte PDF-faili.
 
-VÄGA OLULISED REEGLID SUUNDADE JA KASUTAJATE JAOKS:
-1. MÄRKIDE REEGEL:
-   - Kui summa ees on MIINUS (-) või see on Deebet veerus -> see on VÄLJAPANEK (expense).
-   - Kui summa ees on PLUS (+) või see on Kreedit veerus -> see on SISSETULEK (income).
-2. DIGIKASSA / OMA KONTODE VAHELISED KANDED:
-   - Kui tegemist on Digikassa ümardusega või oma kontode vahelise ülekandega (nt raha liigub põhikontolt kogumiskontole / digikassasse), on see põhikonto väljavõttes VÄLJAPANEK (debit / expense), MITTE sissetulek!
-   - Ära määra tehingut sissetulekuks pelgalt sellepärast, et selgituses või saajas on konto omaniku nimi. Vaata rangelt veeru asukohta (Deebet/Kreedit) või summat (+/-).
-3. KRONOLOOGIA (ALT ÜLES):
-   - Järjesta tehingud KRONOLOOGILISELT (vanim enne, alt üles suunas algsaldost lõppsaldoni).
+KRIITILISELT TÄHTSAD JUHISED:
+1. LOE LÄBI KÕIK LEHEKÜLJED: PDF-is on mitu lehekülge ja kümneid tehinguid (kokku 50–100+ tehingut). ÄRA KATKESTA ega piirdu esimese lehega! Väljasta absoluutselt iga viimane kui tehing esimesest lehest kuni viimaseni.
+2. MÄRKIDE JA SUUNDADE REEGEL:
+   - Miinusmärgiga (-) või Deebet-veeru summad -> VÄLJAMINEK (direction: "expense", debit: number, credit: null).
+   - Plusmärgiga (+) või Kreedit-veeru summad -> SISSETULEK (direction: "income", credit: number, debit: null).
+   - Digikassa / ümardused / kogumishoiuse kanded on VÄLJAMINEKUD (direction: "expense").
+3. KRONOLOOGILINE JÄRJEKORD:
+   - Pane tehingud järjekorda vanimast uusimani (algsaldost alates kuni lõppsaldoni).
 
-Tagasta AINULT kehtiv JSON-formaat:
+Tagasta AINULT JSON:
 {
   "bankName": "string või null",
   "accountNumber": "string või null",
@@ -136,10 +135,10 @@ Tagasta AINULT kehtiv JSON-formaat:
     {
       "date": "YYYY-MM-DD",
       "description": "täpne selgitus / saaja",
-      "debit": 0.87,
+      "debit": 12.34,
       "credit": null,
       "direction": "expense",
-      "balance": 503.61,
+      "balance": 500.00,
       "currency": "EUR"
     }
   ]
@@ -298,36 +297,6 @@ router.post("/ai/bank-import", upload.single("file"), async (req, res) => {
   } catch (err: any) {
     console.error("[BANK IMPORT ERROR]", err);
     res.status(500).json({ error: err.message || "Faili töötlemine ebaõnnestus." });
-  }
-});
-
-router.post("/ai/upload", upload.single("file"), async (req, res) => {
-  const file = req.file;
-  if (!file) {
-    res.status(400).json({ error: "Fail puudub." });
-    return;
-  }
-
-  try {
-    const isPdf = file.originalname.toLowerCase().endsWith(".pdf") || file.mimetype === "application/pdf";
-    if (isPdf) {
-      const parsed = await extractBankPdfDirectly(file.buffer, file.originalname);
-      res.json({
-        content: JSON.stringify(parsed, null, 2),
-        fileName: file.originalname,
-        transactions: parsed.transactions || [],
-      });
-      return;
-    }
-
-    const text = file.buffer.toString("utf-8");
-    res.json({
-      content: text.slice(0, 30000),
-      fileName: file.originalname,
-      chars: text.length,
-    });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message || "Töötlemise viga" });
   }
 });
 
