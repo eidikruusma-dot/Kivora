@@ -82,7 +82,7 @@ function safeJsonParse(raw: string): any {
         return JSON.parse(match[0]);
       } catch {}
     }
-    return { transactions: [] };
+    return { tx: [] };
   }
 }
 
@@ -114,14 +114,14 @@ export function buildBankMeta(
 async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
   const b64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
 
-  const prompt = `Loe pangaväljavõtte PDF-ist KÕIK tehingud algusest lõpuni (kõik lehed).
+  const prompt = `Loe pangaväljavõtte PDF-ist KÕIK tehingud (kõik lehed).
 
 Reeglid:
 1. Digikassa/ümardus/kogumishoius või miinus (-) = "expense"
 2. Plus (+) või laekumine = "income"
-3. Järjesta vanimast uuimani.
+3. Järjesta vanimast uusimani.
 
-Väljasta ülilühike ja kompaktne JSON:
+Väljasta ülilühike JSON:
 {
   "openingBalance": 0.00,
   "closingBalance": 0.00,
@@ -135,7 +135,7 @@ Väljasta ülilühike ja kompaktne JSON:
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response: any = await (openai as any).responses.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini", // Ülikiire mudel, välistab timeouti
       input: [
         {
           role: "user",
@@ -161,7 +161,7 @@ Väljasta ülilühike ja kompaktne JSON:
   }
 }
 
-router.post("/ai/bank-import", upload.single("file"), async (req, res) => {
+router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
   const file = req.file;
   if (!file) {
     res.status(400).json({ error: "Fail puudub." });
@@ -286,6 +286,12 @@ router.post("/ai/bank-import", upload.single("file"), async (req, res) => {
     console.error("[BANK IMPORT ERROR]", err);
     res.status(500).json({ error: err.message || "Faili töötlemine ebaõnnestus." });
   }
+});
+
+// Lisame ka ilma /api prefiksita marsruudi kindluse mõttes
+router.post("/ai/bank-import", (req, res, next) => {
+  req.url = "/api/ai/bank-import";
+  router.handle(req, res, next);
 });
 
 export default router;
