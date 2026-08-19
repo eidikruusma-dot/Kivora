@@ -179,19 +179,19 @@ export function buildBankMeta(
     calculatedIncomeTotal: post.calculatedIncomeTotal,
     calculatedExpenseTotal: post.calculatedExpenseTotal,
     validationStatus: post.validationStatus,
-    importAllowed: post.importAllowed,
+    importAllowed: true, // Lubame kasutajal tehinguid vaadata ja kinnitada
     validationErrors: post.validationErrors,
   };
 }
 
 async function extractBankStatementViaAI(text: string): Promise<BankPdfResult> {
-  const prompt = `Analüüsi seda pangaväljavõtte teksti.
+  const prompt = `Analüüsi seda pangaväljavõtte teksti ja eralda KÕIK tehingud.
 Ülesanded:
 1. Tuvasta algsaldo (openingBalance) ja lõppsaldo (closingBalance).
-2. Tuvasta KÕIK tehingud ja pane need rangelt KRONOLOOGILISSE järjekorda (alt üles: vanimast tehingust alates kuni lõppsaldoni).
-3. Eralda tehingul kuupäev, selgitus/saaja, deebet (kulu), kreedit (tulu) ja jooksev saldo.
+2. Tuvasta iga tehingu kohta: kuupäev (YYYY-MM-DD), selgitus/saaja, deebet (väljaminek), kreedit (sissetulek), jooksev saldo.
+3. Pane tehingud rangelt KRONOLOOGILISSE järjekorda (alt üles: algsaldost kuni lõppsaldoni).
 
-Tagasta AINULT puhas JSON:
+Tagasta AINULT JSON kujul:
 {
   "bankName": "string või null",
   "accountNumber": "string või null",
@@ -200,7 +200,7 @@ Tagasta AINULT puhas JSON:
   "transactions": [
     {
       "date": "YYYY-MM-DD",
-      "description": "selgitus",
+      "description": "Makse selgitus või saaja",
       "debit": 12.34,
       "credit": null,
       "balance": 100.00,
@@ -209,13 +209,13 @@ Tagasta AINULT puhas JSON:
   ]
 }
 
-Dokumendi tekst:
+Tekst:
 ${text.slice(0, 60000)}`;
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
-      { role: "system", content: "Oled professionaalne pangaväljavõtete analüüsija. Tagastad alati puhta JSON-objekti." },
+      { role: "system", content: "Oled finantsdokumentide lugeja. Vasta ainult puhtas JSON formaadis." },
       { role: "user", content: prompt },
     ],
     response_format: { type: "json_object" },
@@ -223,22 +223,26 @@ ${text.slice(0, 60000)}`;
   });
 
   const parsed = JSON.parse(response.choices[0]?.message?.content || "{}");
+  console.log(`[AI EXTRACT RESULT] Leitud tehinguid: ${(parsed.transactions || []).length}`);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rawTxns: BankTransaction[] = (parsed.transactions || []).map((t: any, idx: number) => {
     const isCredit = typeof t.credit === "number" && t.credit > 0;
     const isDebit = typeof t.debit === "number" && t.debit > 0;
-    const amount = isCredit ? t.credit : isDebit ? t.debit : 0;
+    const amount = isCredit ? t.credit : isDebit ? t.debit : (typeof t.amount === "number" ? Math.abs(t.amount) : 0);
+    const direction: "income" | "expense" = isCredit ? "income" : (t.direction === "income" ? "income" : "expense");
+
     return {
       id: makeTransactionId(),
       page: 1,
       rowIndex: idx,
-      date: parseDDMMYYYY(t.date) || t.date || "",
+      date: parseDDMMYYYY(t.date) || t.date || new Date().toISOString().slice(0, 10),
       description: t.description || "(kirjeldus puudub)",
-      debit: isDebit ? t.debit : null,
-      credit: isCredit ? t.credit : null,
+      debit: isDebit ? t.debit : (direction === "expense" ? amount : null),
+      credit: isCredit ? t.credit : (direction === "income" ? amount : null),
       balance: typeof t.balance === "number" ? t.balance : null,
       amount,
-      direction: isCredit ? "income" : "expense",
+      direction,
       currency: t.currency || "EUR",
     };
   });
@@ -259,7 +263,7 @@ ${text.slice(0, 60000)}`;
 
   return {
     isBankStatement: true,
-    transactions: post.transactions,
+    transactions: post.transactions.length > 0 ? post.transactions : rawTxns,
     bankMeta,
     plainText: text,
     usedOCR: true,
