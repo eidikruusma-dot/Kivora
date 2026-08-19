@@ -1270,6 +1270,24 @@ async function callModelForPdfBatch(
       throw new Error("PDF_INVALID_JSON");
     }
 
+    // Safe diagnostic logging: per-page transaction COUNTS only (absolute
+    // page numbers, row counts) — never dates, descriptions, amounts, or
+    // balances. Used to localize which page(s) within a batch are the
+    // source of run-to-run extraction instability.
+    const pageCounts = new Map<number, number>();
+    for (const row of parsed.transactions ?? []) {
+      const relativePage = row.sourcePage ?? 1;
+      const absolutePage = batch.startPage + relativePage - 1;
+      pageCounts.set(absolutePage, (pageCounts.get(absolutePage) ?? 0) + 1);
+    }
+    const pageCountsSummary = [...pageCounts.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([page, count]) => `page${page}=${count}`)
+      .join(" ");
+    console.log(
+      `[BANK IMPORT AI] ${filename}: batch ${batchLabel} rows per page: ${pageCountsSummary || "(none)"}`,
+    );
+
     return parsed;
   } finally {
     try {
