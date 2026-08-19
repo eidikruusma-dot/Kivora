@@ -1847,7 +1847,7 @@ function buildBankResultFromModel(
 // reconciliation); attempts are never mixed — the returned result is always
 // one complete, self-consistent attempt, never a partial combination.
 
-const AI_EXTRACTION_MAX_ATTEMPTS = 2;
+const AI_EXTRACTION_MAX_ATTEMPTS = 4;
 
 async function extractBankStatementWithRetry(
   buffer: Buffer,
