@@ -114,25 +114,32 @@ export function buildBankMeta(
 async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
   const b64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
 
-  const prompt = `Analüüsi lisatud pangaväljavõtte PDF-i.
-Ülesanded:
-1. Tuvasta algsaldo (openingBalance) ja lõppsaldo (closingBalance).
-2. Tuvasta KÕIK tehingud ja paiguta need rangelt KRONOLOOGILISSE järjekorda (alt üles: algsaldost alates kuni lõppsaldoni).
-3. Iga tehingu kohta märgi kuupäev (YYYY-MM-DD), selgitus/saaja, deebet (kulu), kreedit (tulu) ja jooksev saldo.
+  const prompt = `Analüüsi lisatud pangaväljavõtte PDF-faili.
 
-Tagasta AINULT JSON:
+VÄGA OLULISED REEGLID SUUNDADE JA KASUTAJATE JAOKS:
+1. MÄRKIDE REEGEL:
+   - Kui summa ees on MIINUS (-) või see on Deebet veerus -> see on VÄLJAPANEK (expense).
+   - Kui summa ees on PLUS (+) või see on Kreedit veerus -> see on SISSETULEK (income).
+2. DIGIKASSA / OMA KONTODE VAHELISED KANDED:
+   - Kui tegemist on Digikassa ümardusega või oma kontode vahelise ülekandega (nt raha liigub põhikontolt kogumiskontole / digikassasse), on see põhikonto väljavõttes VÄLJAPANEK (debit / expense), MITTE sissetulek!
+   - Ära määra tehingut sissetulekuks pelgalt sellepärast, et selgituses või saajas on konto omaniku nimi. Vaata rangelt veeru asukohta (Deebet/Kreedit) või summat (+/-).
+3. KRONOLOOGIA (ALT ÜLES):
+   - Järjesta tehingud KRONOLOOGILISELT (vanim enne, alt üles suunas algsaldost lõppsaldoni).
+
+Tagasta AINULT kehtiv JSON-formaat:
 {
-  "bankName": null,
-  "accountNumber": null,
-  "openingBalance": null,
-  "closingBalance": null,
+  "bankName": "string või null",
+  "accountNumber": "string või null",
+  "openingBalance": 0.00,
+  "closingBalance": 0.00,
   "transactions": [
     {
       "date": "YYYY-MM-DD",
-      "description": "Makse selgitus",
-      "debit": 12.34,
+      "description": "täpne selgitus / saaja",
+      "debit": 0.87,
       "credit": null,
-      "balance": 100.00,
+      "direction": "expense",
+      "balance": 503.61,
       "currency": "EUR"
     }
   ]
@@ -182,10 +189,29 @@ router.post("/ai/bank-import", upload.single("file"), async (req, res) => {
       const parsed = await extractBankPdfDirectly(file.buffer, file.originalname);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawTxns: BankTransaction[] = (parsed.transactions || []).map((t: any, idx: number) => {
-        const isCredit = typeof t.credit === "number" && t.credit > 0;
-        const isDebit = typeof t.debit === "number" && t.debit > 0;
+        const desc = (t.description || "").toLowerCase();
+        const isDigikassa = desc.includes("digikassa") || desc.includes("ümardus") || desc.includes("kogumispenn");
+
+        let isCredit = typeof t.credit === "number" && t.credit > 0;
+        let isDebit = typeof t.debit === "number" && t.debit > 0;
+
+        if (isDigikassa) {
+          isDebit = true;
+          isCredit = false;
+        }
+
+        let direction: "income" | "expense" = "expense";
+        if (t.direction === "income" && !isDigikassa) {
+          direction = "income";
+        } else if (t.direction === "expense" || isDigikassa) {
+          direction = "expense";
+        } else if (isCredit && !isDebit) {
+          direction = "income";
+        } else {
+          direction = "expense";
+        }
+
         const amount = isCredit ? t.credit : isDebit ? t.debit : (typeof t.amount === "number" ? Math.abs(t.amount) : 0);
-        const direction: "income" | "expense" = isCredit ? "income" : "expense";
 
         return {
           id: makeTransactionId(),
@@ -193,8 +219,8 @@ router.post("/ai/bank-import", upload.single("file"), async (req, res) => {
           rowIndex: idx,
           date: parseDDMMYYYY(t.date) || t.date || new Date().toISOString().slice(0, 10),
           description: t.description || "(kirjeldus puudub)",
-          debit: isDebit ? t.debit : (direction === "expense" ? amount : null),
-          credit: isCredit ? t.credit : (direction === "income" ? amount : null),
+          debit: direction === "expense" ? amount : null,
+          credit: direction === "income" ? amount : null,
           balance: typeof t.balance === "number" ? t.balance : null,
           amount,
           direction,
