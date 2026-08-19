@@ -80,11 +80,21 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const req = (globalThis as any).require || eval("require");
-    const pdf = req("pdf-parse");
-    const parserFn = typeof pdf === "function" ? pdf : pdf.default || pdf.PDFParse;
-    if (typeof parserFn === "function") {
-      const data = await parserFn(buffer);
-      return sanitizePdfText(data?.text || "");
+    const mod = req("pdf-parse");
+    const Target = mod?.PDFParse || mod?.default || mod;
+
+    if (typeof Target === "function") {
+      try {
+        const instance = new Target({ data: buffer, verbosity: 0 });
+        if (instance && typeof instance.getText === "function") {
+          const res = await instance.getText();
+          if (typeof instance.destroy === "function") await instance.destroy();
+          return sanitizePdfText(res?.text || "");
+        }
+      } catch {
+        const res = await Target(buffer);
+        return sanitizePdfText(res?.text || "");
+      }
     }
     return "";
   } catch (e) {
@@ -178,10 +188,10 @@ async function extractBankStatementViaAI(text: string): Promise<BankPdfResult> {
   const prompt = `Analüüsi seda pangaväljavõtte teksti.
 Ülesanded:
 1. Tuvasta algsaldo (openingBalance) ja lõppsaldo (closingBalance).
-2. Tuvasta KÕIK tehingud ja pane need rangelt KRONOLOOGILISSE järjekorda (alt üles: algsaldost alates kuni lõppsaldoni).
+2. Tuvasta KÕIK tehingud ja pane need rangelt KRONOLOOGILISSE järjekorda (alt üles: vanimast tehingust alates kuni lõppsaldoni).
 3. Eralda tehingul kuupäev, selgitus/saaja, deebet (kulu), kreedit (tulu) ja jooksev saldo.
 
-Tagasta AINULT puhas JSON järgmises struktuuris:
+Tagasta AINULT puhas JSON:
 {
   "bankName": "string või null",
   "accountNumber": "string või null",
@@ -282,7 +292,7 @@ async function processBankPdfBuffer(buffer: Buffer, filename: string): Promise<B
         isBankStatement: true,
         transactions: post.transactions,
         bankMeta,
-        plainText: text,
+        plainText: text || "pdf",
         usedOCR: false,
       };
     }
