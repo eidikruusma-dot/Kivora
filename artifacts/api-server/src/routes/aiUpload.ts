@@ -131,7 +131,7 @@ function sanitizePdfText(raw: string): string {
  * broken character mapping, etc.) and should trigger the OCR fallback.
  *
  * The previous approach counted "ASCII printable" characters as meaningful, which
- * silently accepted SEB Estonia PDFs whose broken font mapping produces
+ * silently accepted PDFs from banks whose broken font mapping produces
  * readable-looking ASCII symbols such as  !" #$% ABB.0? C=DEA  — these are 100%
  * ASCII printable but carry zero semantic content.
  *
@@ -143,17 +143,32 @@ function sanitizePdfText(raw: string): string {
  *   5. Bank-statement anchor check (fires only for already-suspicious encoding)
  *   6. Final safety floor on readable words and letter density
  */
-function isGarbledText(text: string): boolean {
-  if (!text) return true;
+function isGarbledText(text: string, filename: string): boolean {
+  // Safe diagnostic logging: only the numeric metrics that drove the
+  // decision (word/character counts, ratios) — never the extracted text
+  // itself. Logged on every call (garbled or not) so the actual gate
+  // between the deterministic and OCR/AI extraction paths is visible in
+  // production without ever exposing statement content.
+  const reject = (rule: string, extra: Record<string, number> = {}): boolean => {
+    const parts = Object.entries(extra)
+      .map(([k, v]) => `${k}=${typeof v === "number" ? v.toFixed(2) : v}`)
+      .join(" ");
+    console.log(
+      `[PDF BANK] ${filename}: garbled-text check — rule=${rule}${parts ? " " + parts : ""}`,
+    );
+    return true;
+  };
+
+  if (!text) return reject("emptyText");
 
   const noSpace = text.replace(/\s/g, "");
-  if (noSpace.length < 10) return true;
+  if (noSpace.length < 10) return reject("tooShort", { noSpaceLength: noSpace.length });
 
   // ── 1. Real word count ────────────────────────────────────────────────────
   // A "word" is ≥2 consecutive Latin or Estonian letters.
   // Garbled encodings produce symbol clusters, not letter sequences.
   const wordMatches = text.match(/[a-zA-ZäöõüšžÄÖÕÜŠŽ]{2,}/g) ?? [];
-  if (wordMatches.length < 10) return true;
+  if (wordMatches.length < 10) return reject("wordCount", { words: wordMatches.length });
 
   // ── 2. Character class ratios ─────────────────────────────────────────────
   const letters = (text.match(/[a-zA-ZäöõüšžÄÖÕÜŠŽ]/g) ?? []).length;
@@ -165,21 +180,22 @@ function isGarbledText(text: string): boolean {
   const punctDensity = noSpace.length > 0 ? puncts / noSpace.length : 1;
   const readableRatio =
     noSpace.length > 0 ? (letters + digits) / noSpace.length : 0;
-  const letterRatio = noSpace.length > 0 ? letters / noSpace.length : 0;
 
   // ── 3. Punctuation density > 35 % ────────────────────────────────────────
-  // SEB garbled text: ~50 % punctuation (!" #$% ABB.0? C=DEA …).
+  // Observed garbled bank-PDF text: ~50 % punctuation (!" #$% ABB.0? C=DEA …).
   // Clean bank statement: ~10–15 % (date separators, decimal commas).
-  if (punctDensity > 0.35) return true;
+  if (punctDensity > 0.35) return reject("punctDensity", { punctDensity });
 
   // ── 4. Alphanumeric ratio < 40 % ─────────────────────────────────────────
-  if (readableRatio < 0.4) return true;
+  if (readableRatio < 0.4) return reject("readableRatio", { readableRatio });
 
   // ── 5. Long symbol runs ───────────────────────────────────────────────────
   // 4+ consecutive non-alphanumeric chars appear when glyph indices are
   // mapped to punctuation blocks.
   const longSymbolRuns = text.match(/[^a-zA-Z0-9äöõüšžÄÖÕÜŠŽ\s]{4,}/g) ?? [];
-  if (longSymbolRuns.length > 3) return true;
+  if (longSymbolRuns.length > 3) {
+    return reject("longSymbolRuns", { longSymbolRuns: longSymbolRuns.length });
+  }
 
   // ── 6. Word-to-token ratio ────────────────────────────────────────────────
   // In garbled text, most whitespace-separated "tokens" are symbol clusters.
@@ -187,14 +203,21 @@ function isGarbledText(text: string): boolean {
   const tokens = text.split(/\s+/).filter(Boolean);
   if (tokens.length > 15) {
     const wordRatio = wordMatches.length / tokens.length;
-    if (wordRatio < 0.3) return true;
+    if (wordRatio < 0.3) return reject("wordRatio", { wordRatio, tokens: tokens.length });
   }
 
   // ── 7. Final safety floor ────────────────────────────────────────────────
   // After all heuristics, reject if the absolute readable word count is still
   // very low relative to the text length.
-  if (noSpace.length > 200 && wordMatches.length < 5) return true;
+  if (noSpace.length > 200 && wordMatches.length < 5) {
+    return reject("finalFloor", { words: wordMatches.length, noSpaceLength: noSpace.length });
+  }
 
+  console.log(
+    `[PDF BANK] ${filename}: garbled-text check — passed ` +
+      `words=${wordMatches.length} punctDensity=${punctDensity.toFixed(2)} ` +
+      `readableRatio=${readableRatio.toFixed(2)} longSymbolRuns=${longSymbolRuns.length}`,
+  );
   return false;
 }
 
@@ -1951,7 +1974,7 @@ async function processBankPdfBuffer(
     // fall through — isGarbledText("") = true → OCR path
   }
 
-  if (isGarbledText(text)) {
+  if (isGarbledText(text, filename)) {
     // ── Step 2a: garbled / image-only → generic OCR ───────────────────────────
     console.log(`[PDF BANK] garbled text → OCR: ${filename}`);
     const scanned = await extractScannedPdf(buffer, filename);
