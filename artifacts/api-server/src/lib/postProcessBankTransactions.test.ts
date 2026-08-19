@@ -340,13 +340,24 @@ function run(): void {
     ];
     const controls = { openingBalance: 1000, closingBalance: 1375 };
 
-    // ── 9a. WITHOUT the flag: default sort corrupts already-sorted input ────
-    // This documents the exact defect mechanism this fix addresses.
-    const buggy = postProcessBankTransactions(alreadySorted, controls);
+    // ── 9a. WITHOUT the flag: reorderSameDayGroupsByBalanceChain self-heals ──
+    // the double-sort corruption. This is a defense-in-depth side effect of a
+    // later, independent fix: same-day order is now re-derived from each
+    // row's own printed balance whenever that evidence is unambiguous, which
+    // is exactly the case for this simple 2-row same-day pair. This does NOT
+    // make `alreadyChronological: true` (9b) redundant — that remains the
+    // direct, efficient fix (skip the pointless second sort entirely) — but
+    // it does mean the historical symptom (reconciliation breaking) is now
+    // caught and corrected even if the redundant sort were reintroduced
+    // elsewhere by mistake.
+    const healed = postProcessBankTransactions(alreadySorted, controls);
     assert(
-      buggy.reconciliation.ok === false,
-      "Documents the double-sort defect: re-sorting already-sorted same-day " +
-        "transactions must (incorrectly) break the running-balance chain",
+      healed.reconciliation.ok === true,
+      `Same-day balance-chain reordering must self-heal the double-sort corruption; errors: ${healed.reconciliation.errors.join("; ")}`,
+    );
+    assert(
+      healed.transactions.map((t) => t.balance).join(",") === "950,1150,1075,1375",
+      `Order must be corrected back to the true sequence; got ${healed.transactions.map((t) => t.balance).join(",")}`,
     );
 
     // ── 9b. WITH the flag: already-sorted input is preserved, chain is clean ─
@@ -403,6 +414,92 @@ function run(): void {
     assert(
       result.importAllowed === false,
       "Import must be blocked when extraction is incomplete",
+    );
+
+    passed++;
+  }
+
+  // ── 11. Same-day balance-chain reordering: 3 scrambled rows, unambiguously
+  //        resolvable → correctly reordered and reconciles ─────────────────
+  // True chronological order for 2031-04-01 (opening balance 2000):
+  //   A: -30 → 1970   B: +80 → 2050   C: -10 → 2040
+  // Given to postProcessBankTransactions in scrambled order [C, A, B].
+  {
+    const rowC = tx(1, 0, "2031-04-01", 10, null, 2040);
+    const rowA = tx(1, 1, "2031-04-01", 30, null, 1970);
+    const rowB = tx(1, 2, "2031-04-01", null, 80, 2050);
+
+    const result = postProcessBankTransactions([rowC, rowA, rowB], {
+      openingBalance: 2000,
+      closingBalance: 2040,
+    }, { alreadyChronological: true });
+
+    assert(
+      result.transactions.map((t) => t.balance).join(",") === "1970,2050,2040",
+      `Scrambled same-day rows must be reordered to the true sequence; got ${result.transactions.map((t) => t.balance).join(",")}`,
+    );
+    assert(
+      result.reconciliation.ok === true,
+      `Chain must validate after reordering; errors: ${result.reconciliation.errors.join("; ")}`,
+    );
+    assert(result.importAllowed === true, "Import must be allowed once reordering resolves the chain");
+
+    passed++;
+  }
+
+  // ── 12. Ambiguous/wrong same-day balances must NOT be force-reordered ─────
+  // Neither possible order satisfies the chain — the function must decline
+  // to guess, leave the original order, and let reconciliation report the
+  // mismatch exactly as before (never silently "fixed" with invented data).
+  {
+    const rowX = tx(1, 0, "2031-04-05", 10, null, 999); // 500-10=490 ≠ 999
+    const rowY = tx(1, 1, "2031-04-05", null, 20, 999); // 500+20=520 ≠ 999
+
+    const result = postProcessBankTransactions([rowX, rowY], {
+      openingBalance: 500,
+    }, { alreadyChronological: true });
+
+    assert(
+      result.transactions.map((t) => t.rowIndex).join(",") === "0,1",
+      "Original order must be preserved when no valid reordering exists",
+    );
+    assert(
+      result.reconciliation.ok === false,
+      "Genuinely mismatched balances must still be reported, never masked",
+    );
+
+    passed++;
+  }
+
+  // ── 13. Pending transactions in a same-day group are never reordered ──────
+  {
+    const posted = tx(1, 0, "2031-04-06", 10, null, 990);
+    const pending = tx(1, 1, "2031-04-06", null, 50, null, { pending: true });
+
+    const result = postProcessBankTransactions([pending, posted], {
+      openingBalance: 1000,
+    }, { alreadyChronological: true });
+
+    assert(
+      result.transactions[0] === pending && result.transactions[1] === posted,
+      "A same-day group containing a pending transaction must be left untouched",
+    );
+
+    passed++;
+  }
+
+  // ── 14. Missing balance in a same-day group disables reordering for it ────
+  {
+    const rowNoBalance = tx(1, 0, "2031-04-07", 10, null, null);
+    const rowWithBalance = tx(1, 1, "2031-04-07", null, 40, 1030);
+
+    const result = postProcessBankTransactions([rowNoBalance, rowWithBalance], {
+      openingBalance: 1000,
+    }, { alreadyChronological: true });
+
+    assert(
+      result.transactions[0] === rowNoBalance && result.transactions[1] === rowWithBalance,
+      "A same-day group with a missing balance must be left in its given order",
     );
 
     passed++;

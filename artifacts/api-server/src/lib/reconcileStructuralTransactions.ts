@@ -24,13 +24,13 @@ export interface StructuralReconciliationResult {
 /** Maximum absolute difference (in currency units) that is still considered
  *  a match.  Amounts that differ by more than this are flagged as errors.
  *  0.01 EUR covers rounding differences in bank statement arithmetic. */
-const TOLERANCE = 0.01;
+export const TOLERANCE = 0.01;
 
-function roundMoney(value: number): number {
+export function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function differs(a: number, b: number): boolean {
+export function differs(a: number, b: number): boolean {
   // Round the absolute difference to the cent before comparing so that
   // floating-point noise (e.g. 100.01 − 100 = 0.01000…0051 in IEEE 754)
   // does not cause a 0.01 difference to be treated as > 0.01.
