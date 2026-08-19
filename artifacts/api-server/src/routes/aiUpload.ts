@@ -5,6 +5,7 @@ import { PDFDocument } from "pdf-lib";
 import { postProcessBankTransactions } from "../lib/postProcessBankTransactions";
 import type { BankPostProcessResult } from "../lib/postProcessBankTransactions";
 import { parseBankFile } from "../lib/parseBankCsv";
+import { roundMoney } from "../lib/reconcileStructuralTransactions";
 import {
   extractStructuralPdfBuffer,
   type StructuralPdfBufferResult,
@@ -1287,41 +1288,83 @@ export interface ModelBankStatementBatch {
   endPage: number;
 }
 
-function transactionFingerprint(t: ModelTransaction): string {
-  return [t.date ?? "", t.description ?? "", t.debit ?? "", t.credit ?? "", t.balance ?? "", t.currency ?? ""].join(
-    "|",
-  );
+// Number of leading characters of the NORMALIZED description used for
+// duplicate matching. Long enough to include distinguishing detail that
+// typically appears early in a bank-statement description (merchant name,
+// and — for the specific real-world case this was tuned against — an
+// embedded date/time or reference right after it), so two genuinely
+// different same-day, same-amount, same-merchant transactions (e.g. a
+// payment retried after a decline) still produce different keys. Short
+// enough to tolerate OCR noise in the TAIL of a description (truncated
+// reference numbers, currency-conversion parentheticals read slightly
+// differently on a second pass).
+const DUPLICATE_DESCRIPTION_PREFIX_LENGTH = 40;
+
+function normalizeDescriptionKey(description: string): string {
+  return description
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ") // collapse all punctuation/whitespace to single spaces
+    .trim()
+    .slice(0, DUPLICATE_DESCRIPTION_PREFIX_LENGTH);
 }
 
 /**
- * Removes exact-duplicate rows introduced at a batch boundary — the only
+ * A fuzzy duplicate key: date + direction + rounded amount + a normalized
+ * description prefix. Deliberately excludes the exact description tail and
+ * the balance value — those are the two fields most likely to be read
+ * slightly differently between two separate looks at the same physical
+ * table row (e.g. a row that sits exactly on a batch boundary and gets
+ * captured by both the batch ending there and the batch beginning there,
+ * or a vision model occasionally "seeing" the same row twice within one
+ * response). An exact-match key would silently miss that case whenever the
+ * two reads differ by even a trailing space or a mis-OCR'd digit — which is
+ * common, not rare, for scanned statements — leaving true duplicates in the
+ * merged result and inflating the transaction count.
+ */
+function fuzzyDuplicateKey(t: ModelTransaction): string {
+  const amount = t.credit ?? t.debit ?? 0;
+  const direction = t.credit !== null ? "credit" : "debit";
+  return [
+    t.date ?? "",
+    direction,
+    roundMoney(amount).toFixed(2),
+    normalizeDescriptionKey(t.description ?? ""),
+  ].join("|");
+}
+
+/**
+ * Removes near-duplicate rows introduced at a batch boundary — the
  * realistic source of duplication once the PDF is split into non-overlapping
  * page batches: a transaction row whose visual position sits exactly on the
  * boundary can occasionally be read by both the batch ending there and the
- * batch beginning there. A row is dropped only when an EARLIER row (by
- * absolute page) has an identical date + description + debit + credit +
- * balance + currency AND sits on the same or an adjacent absolute page.
+ * batch beginning there, and — because it's a separate OCR/vision read each
+ * time — rarely comes back byte-for-byte identical. A row is dropped only
+ * when an EARLIER row (by absolute page) has the same date, direction,
+ * rounded amount, and a matching normalized description prefix, AND sits on
+ * the same or an adjacent absolute page.
  *
  * Does NOT collapse genuinely repeated transactions (e.g. two identical
- * coffee purchases on the same day) that are not page-adjacent — those are
- * real, distinct rows and are preserved.
+ * coffee purchases on the same day) that are not page-adjacent, or that are
+ * page-adjacent but have a distinguishably different description (e.g. a
+ * different embedded reference/time) — those are real, distinct rows and
+ * are preserved.
  */
 export function dedupeAdjacentDuplicateTransactions(
   transactions: ModelTransaction[],
 ): ModelTransaction[] {
   const result: ModelTransaction[] = [];
-  const lastKeptPageByFingerprint = new Map<string, number>();
+  const lastKeptPageByKey = new Map<string, number>();
 
   for (const t of transactions) {
-    const fingerprint = transactionFingerprint(t);
+    const key = fuzzyDuplicateKey(t);
     const page = t.sourcePage ?? -1;
-    const lastPage = lastKeptPageByFingerprint.get(fingerprint);
+    const lastPage = lastKeptPageByKey.get(key);
 
     if (lastPage !== undefined && Math.abs(page - lastPage) <= 1) {
       continue; // duplicate at/adjacent to a batch boundary — drop
     }
 
-    lastKeptPageByFingerprint.set(fingerprint, page);
+    lastKeptPageByKey.set(key, page);
     result.push(t);
   }
 
