@@ -2453,6 +2453,10 @@ interface BankImportModalState {
   bankMeta: BankMeta | null;
   errorMessage: string | null;
   resultSummary: string | null;
+  /** True while a manual row-edit re-check (see editTransactionDirection) is in flight. */
+  isRevalidating: boolean;
+  /** Non-fatal error from the last manual row-edit re-check, shown inline in the review card. */
+  revalidateError: string | null;
 }
 
 const INITIAL_BANK_IMPORT: BankImportModalState = {
@@ -2461,6 +2465,8 @@ const INITIAL_BANK_IMPORT: BankImportModalState = {
   bankMeta: null,
   errorMessage: null,
   resultSummary: null,
+  isRevalidating: false,
+  revalidateError: null,
 };
 
 function BankImportModal({
@@ -2573,6 +2579,76 @@ function BankImportModal({
             ? "Viga faili lugemisel."
             : "Error reading file.";
       setState((s) => ({ ...s, phase: "error", errorMessage: msg }));
+    }
+  }
+
+  // Manual per-row correction for the "Needs review" list: the user marks a
+  // flagged transaction as income or expense (the most common OCR misread —
+  // amount read correctly, assigned to the wrong debit/credit column), and
+  // the server re-runs the SAME canonical reconciliation used at import time
+  // on the edited list. Never re-implements reconciliation client-side.
+  async function editTransactionDirection(
+    id: string,
+    newDirection: "income" | "expense",
+  ) {
+    const { transactions, bankMeta } = state;
+    if (!transactions || !bankMeta || state.isRevalidating) return;
+
+    const edited = transactions.map((t) =>
+      t.id === id
+        ? {
+            ...t,
+            direction: newDirection,
+            debit: newDirection === "expense" ? t.amount : null,
+            credit: newDirection === "income" ? t.amount : null,
+          }
+        : t,
+    );
+
+    setState((s) => ({
+      ...s,
+      transactions: edited,
+      isRevalidating: true,
+      revalidateError: null,
+    }));
+
+    try {
+      const res = await fetch("/api/ai/bank-import/revalidate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transactions: edited, bankMeta }),
+      });
+      if (!res.ok) {
+        throw new Error(
+          et
+            ? "Tehingu ümberhindamine ebaõnnestus."
+            : "Failed to re-check the transaction.",
+        );
+      }
+      const data = (await res.json()) as {
+        transactions: BankTransaction[];
+        bankMeta: BankMeta;
+      };
+      setState((s) => ({
+        ...s,
+        transactions: data.transactions,
+        bankMeta: data.bankMeta,
+        isRevalidating: false,
+      }));
+    } catch (err) {
+      // Revert the optimistic edit on failure — never leave the UI showing
+      // a change the server hasn't actually re-validated.
+      setState((s) => ({
+        ...s,
+        transactions,
+        isRevalidating: false,
+        revalidateError:
+          err instanceof Error
+            ? err.message
+            : et
+              ? "Tehingu ümberhindamine ebaõnnestus."
+              : "Failed to re-check the transaction.",
+      }));
     }
   }
 
@@ -2733,6 +2809,9 @@ function BankImportModal({
             lang={lang}
             onConfirm={runImport}
             onCancel={onClose}
+            onEditTransaction={editTransactionDirection}
+            isRevalidating={state.isRevalidating}
+            revalidateError={state.revalidateError}
           />
         )}
 
