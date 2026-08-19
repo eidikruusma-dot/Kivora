@@ -785,7 +785,7 @@ function validateRawTransactions(
 
 // ── Model output shape (from json_schema structured output) ───────────────────
 
-interface ModelTransaction {
+export interface ModelTransaction {
   date: string;
   description: string;
   debit: number | null;
@@ -796,7 +796,7 @@ interface ModelTransaction {
   confidence: "high" | "medium" | "low";
 }
 
-interface ModelDocument {
+export interface ModelDocument {
   isBankStatement: boolean;
   bankName: string | null;
   accountNumber: string | null;
@@ -809,7 +809,7 @@ interface ModelDocument {
   printedExpenseTotal: number | null;
 }
 
-interface ModelBankStatement {
+export interface ModelBankStatement {
   document: ModelDocument;
   transactions: ModelTransaction[];
   warnings: Array<{ code: string; message: string }>;
@@ -820,9 +820,28 @@ interface ModelBankStatement {
 // No bank names, no specific labels, no user amounts are hard-coded.
 // Semantic examples are provided to illustrate intent, not to constrain format.
 
-const BANK_STATEMENT_EXTRACTION_PROMPT = `\
-You are a financial document reader.  Analyze the attached PDF.
+export interface PageBatchContext {
+  /** 1-based, absolute page number (within the full original document) of this batch's first page. */
+  startPage: number;
+  /** 1-based, absolute page number of this batch's last page. */
+  endPage: number;
+  /** Total page count of the full original document. */
+  totalPages: number;
+}
 
+export function buildBankStatementExtractionPrompt(batch: PageBatchContext): string {
+  const pagesInBatch = batch.endPage - batch.startPage + 1;
+  const isExcerpt = batch.totalPages > pagesInBatch;
+
+  const excerptNote = isExcerpt
+    ? `\nThis PDF is an EXCERPT: pages ${batch.startPage}-${batch.endPage} of a longer ${batch.totalPages}-page bank statement. Extract only what is visible on THESE pages.
+Number sourcePage starting at 1 for the first page of THIS excerpt (application code converts it to the absolute page number) — do not try to guess the absolute page number yourself.
+Document-level fields (bank name, account number, currency, period, openingBalance, closingBalance, printedIncomeTotal, printedExpenseTotal) may not all be visible on these specific pages. Return null for any field that is not explicitly visible here — never infer, estimate, or carry over a value from outside this excerpt.\n`
+    : "";
+
+  return `\
+You are a financial document reader.  Analyze the attached PDF.
+${excerptNote}
 Return a JSON object with EXACTLY this structure:
 {
   "document": {
@@ -961,6 +980,7 @@ Add a warning for each of the following:
 
 Each warning has a short code (e.g. "AMBIGUOUS_ROW", "PAGE_UNREADABLE") and a brief message.
 Do not add warnings for normal, clearly-readable transactions.`;
+}
 
 // ── Normalize one model transaction row → canonical BankTransaction ───────────
 // Direction is derived ONLY from debit/credit column values.
@@ -1077,17 +1097,70 @@ export function normalizeBankTransaction(
 
 // ── AI bank-statement extraction — production fallback ─────────────────────────
 //
-// Uploads the PDF via the Files API (purpose: "user_data"), then calls the
-// Responses API with json_object format.
+// Splits the PDF into bounded page batches (AI_EXTRACTION_PAGES_PER_BATCH pages
+// each), extracts every batch with its own OpenAI Responses API call, then
+// deterministically merges the results. This replaces sending the entire PDF
+// as a single call: a long, multi-page scanned statement could exceed the
+// model's ability to enumerate every row in one pass (either a hard cutoff —
+// response.status === "incomplete" — or the model simply under-reading a very
+// long document while still reporting status "completed"). Splitting into
+// small page batches keeps each individual call's input and expected output
+// far below any limit, and every batch is independently verified before the
+// merged result is trusted.
 //
+// A short statement (the overwhelming majority in practice) still fits in a
+// single batch, so it makes exactly one API call — identical cost to before.
+//
+// Reconciliation runs only ONCE, downstream, on the fully merged result
+// (buildBankResultFromModel -> postProcessBankTransactions) — never per batch.
+// If any batch fails for any reason, the whole extraction fails: no partial
+// merged result is ever assembled or returned.
+
+const AI_EXTRACTION_PAGES_PER_BATCH = 5;
+
+export interface PdfPageBatch {
+  buffer: Buffer;
+  startPage: number; // 1-based, inclusive
+  endPage: number; // 1-based, inclusive
+}
+
+/** Splits a PDF buffer into contiguous, non-overlapping page-range buffers. */
+export async function splitPdfIntoPageBatches(
+  buffer: Buffer,
+  pagesPerBatch: number = AI_EXTRACTION_PAGES_PER_BATCH,
+): Promise<PdfPageBatch[]> {
+  const source = await PDFDocument.load(buffer);
+  const totalPages = source.getPageCount();
+  const batches: PdfPageBatch[] = [];
+
+  for (let start = 0; start < totalPages; start += pagesPerBatch) {
+    const end = Math.min(start + pagesPerBatch, totalPages);
+    const indices = Array.from({ length: end - start }, (_, i) => start + i);
+
+    const batchDoc = await PDFDocument.create();
+    const copiedPages = await batchDoc.copyPages(source, indices);
+    for (const page of copiedPages) batchDoc.addPage(page);
+    const bytes = await batchDoc.save();
+
+    batches.push({
+      buffer: Buffer.from(bytes),
+      startPage: start + 1,
+      endPage: end,
+    });
+  }
+
+  return batches;
+}
+
 // Why json_object instead of json_schema strict:
 //   With strict schema, a token-truncated response returns EMPTY output
 //   (the response is dropped because truncated JSON fails schema validation).
 //   With json_object the model returns whatever JSON it produced and we can
-//   parse it, even when the document is large enough to approach the token limit.
+//   parse it, even when a batch is large enough to approach the token limit.
 //
-// max_output_tokens is set high (16 384) to handle multi-page statements
-// without truncation.
+// max_output_tokens is set high (16 384) per batch; with bounded page batches
+// this ceiling is reached only in pathological cases (e.g. an unusually dense
+// single page), and status is still checked explicitly below.
 //
 // Throws:
 //   - Any OpenAI SDK error verbatim — never wraps in PDF_NO_TEXT
@@ -1096,16 +1169,15 @@ export function normalizeBankTransaction(
 //     generating. output_text is populated regardless of status (it is built by
 //     concatenating whatever output_text content parts exist), so an incomplete
 //     response can still contain a syntactically valid JSON object with a SHORT
-//     transactions[] array and otherwise-correct document metadata. That combination
-//     is what makes a truncated response look like "a small subset of transactions
-//     plus a totals mismatch" once postProcessBankTransactions reconciles it — so
-//     status must be checked explicitly, before trusting a successful JSON.parse.
+//     transactions[] array. status must be checked explicitly, before trusting
+//     a successful JSON.parse.
 //   - Error("PDF_EMPTY_MODEL_OUTPUT")  when the model returns no text at all
 //   - Error("PDF_INVALID_JSON")        when the response cannot be parsed as JSON
 
-async function extractBankStatementViaOpenAI(
+async function callModelForPdfBatch(
   buffer: Buffer,
   filename: string,
+  batch: PageBatchContext,
 ): Promise<ModelBankStatement> {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
     // Empty or non-Buffer input is a server-side programming error, not a
@@ -1114,13 +1186,15 @@ async function extractBankStatementViaOpenAI(
     throw new Error("BANK_IMPORT_SERVICE_ERROR");
   }
 
+  const batchLabel = `pages ${batch.startPage}-${batch.endPage}/${batch.totalPages}`;
+
   const uploaded = await openai.files.create({
     file: await toFile(buffer, filename, { type: "application/pdf" }),
     purpose: "user_data",
   });
 
   console.log(
-    `[BANK IMPORT AI] ${filename}: file uploaded (${buffer.length} bytes)`,
+    `[BANK IMPORT AI] ${filename}: batch ${batchLabel} file uploaded (${buffer.length} bytes)`,
   );
 
   try {
@@ -1132,7 +1206,10 @@ async function extractBankStatementViaOpenAI(
           role: "user",
           content: [
             { type: "input_file", file_id: uploaded.id },
-            { type: "input_text", text: BANK_STATEMENT_EXTRACTION_PROMPT },
+            {
+              type: "input_text",
+              text: buildBankStatementExtractionPrompt(batch),
+            },
           ],
         },
       ],
@@ -1166,14 +1243,14 @@ async function extractBankStatementViaOpenAI(
     // Safe diagnostic logging: counts and status only — never transaction
     // contents, names, balances, or account identifiers.
     console.log(
-      `[BANK IMPORT AI] ${filename}: status=${status} incomplete_reason=${incompleteReason ?? "none"} ` +
+      `[BANK IMPORT AI] ${filename}: batch ${batchLabel} status=${status} incomplete_reason=${incompleteReason ?? "none"} ` +
         `output_tokens=${usage?.output_tokens ?? "unknown"} input_tokens=${usage?.input_tokens ?? "unknown"} ` +
         `output_text length=${outputText.length}`,
     );
 
     if (status === "incomplete") {
       console.error(
-        `[BANK IMPORT AI] ${filename}: MODEL OUTPUT TRUNCATED — status=incomplete reason=${incompleteReason ?? "unknown"}`,
+        `[BANK IMPORT AI] ${filename}: batch ${batchLabel} MODEL OUTPUT TRUNCATED — status=incomplete reason=${incompleteReason ?? "unknown"}`,
       );
       throw new Error("PDF_MODEL_OUTPUT_TRUNCATED");
     }
@@ -1187,7 +1264,7 @@ async function extractBankStatementViaOpenAI(
       parsed = JSON.parse(outputText) as ModelBankStatement;
     } catch {
       console.error(
-        `[BANK IMPORT AI] JSON parse failed for ${filename}: ${outputText.slice(0, 120)}`,
+        `[BANK IMPORT AI] JSON parse failed for ${filename} batch ${batchLabel}: ${outputText.slice(0, 120)}`,
       );
       throw new Error("PDF_INVALID_JSON");
     }
@@ -1202,6 +1279,174 @@ async function extractBankStatementViaOpenAI(
       console.warn(`[BANK IMPORT AI] File cleanup failed: ${msg}`);
     }
   }
+}
+
+export interface ModelBankStatementBatch {
+  result: ModelBankStatement;
+  startPage: number;
+  endPage: number;
+}
+
+function transactionFingerprint(t: ModelTransaction): string {
+  return [t.date ?? "", t.description ?? "", t.debit ?? "", t.credit ?? "", t.balance ?? "", t.currency ?? ""].join(
+    "|",
+  );
+}
+
+/**
+ * Removes exact-duplicate rows introduced at a batch boundary — the only
+ * realistic source of duplication once the PDF is split into non-overlapping
+ * page batches: a transaction row whose visual position sits exactly on the
+ * boundary can occasionally be read by both the batch ending there and the
+ * batch beginning there. A row is dropped only when an EARLIER row (by
+ * absolute page) has an identical date + description + debit + credit +
+ * balance + currency AND sits on the same or an adjacent absolute page.
+ *
+ * Does NOT collapse genuinely repeated transactions (e.g. two identical
+ * coffee purchases on the same day) that are not page-adjacent — those are
+ * real, distinct rows and are preserved.
+ */
+export function dedupeAdjacentDuplicateTransactions(
+  transactions: ModelTransaction[],
+): ModelTransaction[] {
+  const result: ModelTransaction[] = [];
+  const lastKeptPageByFingerprint = new Map<string, number>();
+
+  for (const t of transactions) {
+    const fingerprint = transactionFingerprint(t);
+    const page = t.sourcePage ?? -1;
+    const lastPage = lastKeptPageByFingerprint.get(fingerprint);
+
+    if (lastPage !== undefined && Math.abs(page - lastPage) <= 1) {
+      continue; // duplicate at/adjacent to a batch boundary — drop
+    }
+
+    lastKeptPageByFingerprint.set(fingerprint, page);
+    result.push(t);
+  }
+
+  return result;
+}
+
+/**
+ * Deterministically merges per-batch extraction results into one statement.
+ *
+ * - transactions: concatenated in batch (ascending absolute page) order, with
+ *   each row's sourcePage remapped from excerpt-relative to absolute. Batches
+ *   are non-overlapping and already in ascending page order, and each batch's
+ *   own row order is preserved, so the merged array is in the same overall
+ *   visual document order a single non-batched call over the whole PDF would
+ *   have produced. This is intentional: downstream (postProcessBankTransactions)
+ *   applies its chronological sort exactly once, exactly as it always has for
+ *   the AI path — merging must not pre-sort or reorder anything itself.
+ * - document metadata: openingBalance/bankName/accountNumber/currency/periodFrom
+ *   take the first non-null value found across batches (earliest page order);
+ *   closingBalance/periodTo take the last non-null value found (latest page
+ *   order). printedIncomeTotal/printedExpenseTotal take the first non-null
+ *   value (a statement-wide total is normally printed once).
+ * - isBankStatement: true if ANY batch's excerpt was recognised as bank
+ *   statement content (a batch that happens to be a cover/disclaimer page must
+ *   not veto an otherwise valid statement).
+ */
+export function mergeModelBankStatements(
+  batches: ModelBankStatementBatch[],
+): ModelBankStatement {
+  const isBankStatement = batches.some((b) => b.result.document.isBankStatement);
+
+  const firstNonNull = <K extends keyof ModelDocument>(
+    key: K,
+  ): ModelDocument[K] => {
+    for (const b of batches) {
+      const value = b.result.document[key];
+      if (value !== null && value !== undefined) return value;
+    }
+    return null as ModelDocument[K];
+  };
+
+  const lastNonNull = <K extends keyof ModelDocument>(
+    key: K,
+  ): ModelDocument[K] => {
+    for (let i = batches.length - 1; i >= 0; i--) {
+      const value = batches[i].result.document[key];
+      if (value !== null && value !== undefined) return value;
+    }
+    return null as ModelDocument[K];
+  };
+
+  const mergedDocument: ModelDocument = {
+    isBankStatement,
+    bankName: firstNonNull("bankName"),
+    accountNumber: firstNonNull("accountNumber"),
+    currency: firstNonNull("currency"),
+    periodFrom: firstNonNull("periodFrom"),
+    periodTo: lastNonNull("periodTo"),
+    openingBalance: firstNonNull("openingBalance"),
+    closingBalance: lastNonNull("closingBalance"),
+    printedIncomeTotal: firstNonNull("printedIncomeTotal"),
+    printedExpenseTotal: firstNonNull("printedExpenseTotal"),
+  };
+
+  const transactions: ModelTransaction[] = [];
+  for (const batch of batches) {
+    for (const row of batch.result.transactions) {
+      const relativePage = row.sourcePage ?? 1;
+      transactions.push({
+        ...row,
+        sourcePage: batch.startPage + relativePage - 1,
+      });
+    }
+  }
+
+  const warnings = batches.flatMap((b) => b.result.warnings ?? []);
+
+  return {
+    document: mergedDocument,
+    transactions: dedupeAdjacentDuplicateTransactions(transactions),
+    warnings,
+  };
+}
+
+async function extractBankStatementViaOpenAI(
+  buffer: Buffer,
+  filename: string,
+): Promise<ModelBankStatement> {
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+    throw new Error("BANK_IMPORT_SERVICE_ERROR");
+  }
+
+  const pageBatches = await splitPdfIntoPageBatches(buffer);
+  if (pageBatches.length === 0) {
+    throw new Error("BANK_IMPORT_SERVICE_ERROR");
+  }
+  const totalPages = pageBatches[pageBatches.length - 1].endPage;
+
+  console.log(
+    `[BANK IMPORT AI] ${filename}: split into ${pageBatches.length} batch(es) of up to ` +
+      `${AI_EXTRACTION_PAGES_PER_BATCH} page(s) each (${totalPages} page(s) total)`,
+  );
+
+  // Sequential, not parallel: deterministic order, bounded concurrent OpenAI
+  // usage. Any single batch failure aborts the whole extraction immediately —
+  // a partial merged result is never assembled or returned.
+  const batchResults: ModelBankStatementBatch[] = [];
+  for (const pageBatch of pageBatches) {
+    const result = await callModelForPdfBatch(pageBatch.buffer, filename, {
+      startPage: pageBatch.startPage,
+      endPage: pageBatch.endPage,
+      totalPages,
+    });
+    batchResults.push({
+      result,
+      startPage: pageBatch.startPage,
+      endPage: pageBatch.endPage,
+    });
+  }
+
+  const merged = mergeModelBankStatements(batchResults);
+  console.log(
+    `[BANK IMPORT AI] ${filename}: merged ${batchResults.length} batch(es) into ${merged.transactions.length} transaction(s)`,
+  );
+  return merged;
 }
 
 
