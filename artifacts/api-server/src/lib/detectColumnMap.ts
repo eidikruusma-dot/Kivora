@@ -11,7 +11,14 @@ export interface ColumnMap {
 type ColumnKey = keyof ColumnMap;
 
 const HEADER_PATTERNS: Record<ColumnKey, RegExp[]> = {
-  date: [/\bkuupäev\b/i, /\bdate\b/i, /\bdatum\b/i],
+  date: [
+    /\bkuupäev\b/i,
+    /\bdate\b/i,
+    /\bdatum\b/i,
+    /\bkp\b/i,
+    /\btehingu\s*kuupäev\b/i,
+    /\bväärtuspäev\b/i,
+  ],
   description: [
     /\bselgitus\b/i,
     /\bkirjeldus\b/i,
@@ -19,10 +26,36 @@ const HEADER_PATTERNS: Record<ColumnKey, RegExp[]> = {
     /\bdetails\b/i,
     /\bsaaja\b/i,
     /\bmaksja\b/i,
+    /\bsaaja\s*\/\s*maksja\b/i,
+    /\bpartner\b/i,
+    /\bnimi\b/i,
+    /\btehingu\s*kirjeldus\b/i,
   ],
-  debit: [/\bdeebet\b/i, /\bdebit\b/i],
-  credit: [/\bkreedit\b/i, /\bcredit\b/i],
-  balance: [/\bjääk\b/i, /\bsaldo\b/i, /\bbalance\b/i],
+  debit: [
+    /\bdeebet\b/i,
+    /\bdebit\b/i,
+    /\bväljamakse\b/i,
+    /\bväljaminek\b/i,
+    /\bmaha\b/i,
+    /\bdebiteeritud\b/i,
+    /\bdebet\b/i,
+  ],
+  credit: [
+    /\bkreedit\b/i,
+    /\bcredit\b/i,
+    /\bsissemakse\b/i,
+    /\bsissetulek\b/i,
+    /\bjuurde\b/i,
+    /\bkrediteeritud\b/i,
+    /\bkredit\b/i,
+  ],
+  balance: [
+    /\bjääk\b/i,
+    /\bsaldo\b/i,
+    /\bbalance\b/i,
+    /\blõppjääk\b/i,
+    /\brunning\s*balance\b/i,
+  ],
 };
 
 function itemCenterX(item: PdfRow["items"][number]): number {
@@ -69,7 +102,7 @@ function isSaneColumnOrder(map: ColumnMap): boolean {
     .sort((a, b) => a.x - b.x);
 
   for (let i = 1; i < entries.length; i++) {
-    if (entries[i].x - entries[i - 1].x < 8) {
+    if (entries[i].x - entries[i - 1].x < 5) {
       return false;
     }
   }
@@ -104,7 +137,7 @@ function mapsAreCompatible(a: ColumnMap, b: ColumnMap): boolean {
 
     compared++;
 
-    if (Math.abs(ax - bx) > 20) {
+    if (Math.abs(ax - bx) > 30) {
       return false;
     }
   }
@@ -135,13 +168,14 @@ export function detectColumnMap(rows: PdfRow[]): ColumnMap | null {
         }
         return b.rowY - a.rowY;
       })
-      .slice(0, 30);
+      .slice(0, 50);
 
     for (const row of ordered) {
       const matches = detectHeaderMatches(row);
       const count = countDefinedColumns(matches);
 
-      if (count < 3) continue;
+      // Lubame ka 2 veeruga tabamused (nt kuupäev + selgitus)
+      if (count < 2) continue;
 
       const candidate: ColumnMap = {
         ...matches,
@@ -177,7 +211,6 @@ export function detectColumnMap(rows: PdfRow[]): ColumnMap | null {
   }
 
   const result: ColumnMap = {};
-
   const keys: ColumnKey[] = [
     "date",
     "description",
