@@ -6,7 +6,6 @@ import type { BankPostProcessResult } from "../lib/postProcessBankTransactions";
 import { parseBankFile } from "../lib/parseBankCsv";
 import {
   extractStructuralPdfBuffer,
-  type StructuralPdfBufferResult,
 } from "../lib/extractStructuralPdfBuffer";
 import type { RawTransactionRow } from "../lib/classifyTransactionRows";
 
@@ -15,7 +14,7 @@ const openai = new OpenAI({ apiKey: process.env["OPENAI_API_KEY"] });
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+  limits: { fileSize: 20 * 1024 * 1024 },
 });
 
 export interface BankTransaction {
@@ -89,22 +88,6 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
     console.error("[PDF PARSE ERROR]", e);
     return "";
   }
-}
-
-function isGarbledText(text: string): boolean {
-  if (!text || text.trim().length < 20) return true;
-  const letters = (text.match(/[a-zA-ZäöõüšžÄÖÕÜŠŽ0-9]/g) ?? []).length;
-  return letters / text.length < 0.4;
-}
-
-function looksLikeBankStatement(text: string): boolean {
-  const t = text.toLowerCase();
-  const kw = ["saldo", "algsaldo", "lõppsaldo", "konto", "deebet", "kreedit", "tehing", "väljavõte", "iban", "statement", "balance"];
-  let matched = 0;
-  for (const k of kw) {
-    if (t.includes(k)) matched++;
-  }
-  return matched >= 2;
 }
 
 function parseDDMMYYYY(raw: string): string | null {
@@ -189,31 +172,36 @@ export function buildBankMeta(
 }
 
 async function extractBankStatementViaAI(text: string): Promise<BankPdfResult> {
-  const prompt = `Loe see pangaväljavõte. Tuvasta tehingud ja pane need rangelt KRONOLOOGILISSE järjekorda (vanim enne, alt üles suunas algsaldost lõppsaldoni).
-Vasta AINULT JSON-formaadis järgmise struktuuriga:
+  const prompt = `Analüüsi seda pangaväljavõtte teksti. 
+Ülesanded:
+1. Tuvasta algsaldo (openingBalance) ja lõppsaldo (closingBalance).
+2. Tuvasta KÕIK tehingud ja pane need rangelt KRONOLOOGILISSE järjekorda (alt üles: algsaldost alates kuni lõppsaldoni).
+3. Eralda tehingul kuupäev, selgitus/saaja, deebet (kulu), kreedit (tulu) ja jooksev saldo.
+
+Tagasta AINULT JSON:
 {
-  "bankName": "panga nimi või null",
-  "accountNumber": "IBAN või null",
+  "bankName": "string või null",
+  "accountNumber": "string või null",
   "openingBalance": 0.00,
   "closingBalance": 0.00,
   "transactions": [
     {
       "date": "YYYY-MM-DD",
       "description": "selgitus",
-      "debit": null,
-      "credit": 12.34,
+      "debit": 12.34,
+      "credit": null,
       "balance": 100.00,
       "currency": "EUR"
     }
   ]
 }
 Tekst:
-${text.slice(0, 50000)}`;
+${text.slice(0, 60000)}`;
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
-      { role: "system", content: "Oled finantsdokumentide lugeja. Vasta ainult puhtas JSON formaadis." },
+      { role: "system", content: "Oled professionaalne finantsdokumentide lugeja. Tagastad alati puhta JSON-i." },
       { role: "user", content: prompt },
     ],
     response_format: { type: "json_object" },
@@ -245,7 +233,7 @@ ${text.slice(0, 50000)}`;
     closingBalance: parsed.closingBalance ?? null,
     printedIncomeTotal: null,
     printedExpenseTotal: null,
-  });
+  }, { alreadyChronological: true });
 
   const bankMeta = buildBankMeta(
     post,
@@ -266,39 +254,39 @@ ${text.slice(0, 50000)}`;
 async function processBankPdfBuffer(buffer: Buffer, filename: string): Promise<BankPdfResult> {
   const text = await extractPdfText(buffer);
 
-  if (!isGarbledText(text) && looksLikeBankStatement(text)) {
-    try {
-      const structural = await extractStructuralPdfBuffer(buffer);
-      if (structural.transactions.length > 0 && structural.columnMap !== null) {
-        const rawTxns = structural.transactions.map((r, i) => rawRowToBankTransaction(r, i));
-        const post = postProcessBankTransactions(rawTxns, {
-          openingBalance: structural.controls.openingBalance,
-          closingBalance: structural.controls.closingBalance,
-          printedIncomeTotal: structural.controls.printedIncomeTotal,
-          printedExpenseTotal: structural.controls.printedExpenseTotal,
-        }, { alreadyChronological: true });
+  // 1. Proovi esmalt kiiret struktuurset analüüsi
+  try {
+    const structural = await extractStructuralPdfBuffer(buffer);
+    if (structural && structural.transactions && structural.transactions.length > 0) {
+      const rawTxns = structural.transactions.map((r, i) => rawRowToBankTransaction(r, i));
+      const post = postProcessBankTransactions(rawTxns, {
+        openingBalance: structural.controls.openingBalance,
+        closingBalance: structural.controls.closingBalance,
+        printedIncomeTotal: structural.controls.printedIncomeTotal,
+        printedExpenseTotal: structural.controls.printedExpenseTotal,
+      }, { alreadyChronological: true });
 
-        const bankMeta = buildBankMeta(post, {
-          openingBalance: structural.controls.openingBalance,
-          closingBalance: structural.controls.closingBalance,
-          printedIncomeTotal: structural.controls.printedIncomeTotal,
-          printedExpenseTotal: structural.controls.printedExpenseTotal,
-        }, structural.pagesTotal);
+      const bankMeta = buildBankMeta(post, {
+        openingBalance: structural.controls.openingBalance,
+        closingBalance: structural.controls.closingBalance,
+        printedIncomeTotal: structural.controls.printedIncomeTotal,
+        printedExpenseTotal: structural.controls.printedExpenseTotal,
+      }, structural.pagesTotal);
 
-        return {
-          isBankStatement: true,
-          transactions: post.transactions,
-          bankMeta,
-          plainText: text,
-          usedOCR: false,
-        };
-      }
-    } catch (e) {
-      console.warn(`[STRUCTURAL FAILED] ${filename}, falling back to AI`, e);
+      return {
+        isBankStatement: true,
+        transactions: post.transactions,
+        bankMeta,
+        plainText: text,
+        usedOCR: false,
+      };
     }
+  } catch (e) {
+    console.warn(`[STRUCTURAL FAILED] ${filename}, minnakse AI peale:`, e);
   }
 
-  if (looksLikeBankStatement(text) || isGarbledText(text)) {
+  // 2. Kui struktuurne lugemine ei leidnud tehinguid, kasuta AI mudelit
+  if (text && text.trim().length > 0) {
     return await extractBankStatementViaAI(text);
   }
 
@@ -319,8 +307,8 @@ router.post("/ai/bank-import", upload.single("file"), async (req, res) => {
   try {
     if (isPdf) {
       const result = await processBankPdfBuffer(file.buffer, file.originalname);
-      if (!result.isBankStatement) {
-        res.status(422).json({ error: "NOT_A_BANK_STATEMENT" });
+      if (!result.isBankStatement || !result.transactions || result.transactions.length === 0) {
+        res.status(422).json({ error: "Tehinguid ei leitud." });
         return;
       }
       res.json({ transactions: result.transactions, bankMeta: result.bankMeta });
@@ -330,7 +318,7 @@ router.post("/ai/bank-import", upload.single("file"), async (req, res) => {
     if (isCsvOrExcel) {
       const parsed = parseBankFile(file.buffer, file.originalname, file.mimetype);
       if (parsed.error || parsed.transactions.length === 0) {
-        res.status(422).json({ error: parsed.error || "NO_TRANSACTIONS_FOUND" });
+        res.status(422).json({ error: parsed.error || "Tehinguid ei leitud." });
         return;
       }
 
@@ -390,7 +378,7 @@ router.post("/ai/upload", upload.single("file"), async (req, res) => {
 
     if (isPdf) {
       const bankRes = await processBankPdfBuffer(file.buffer, file.originalname);
-      if (bankRes.isBankStatement) {
+      if (bankRes.isBankStatement && bankRes.transactions && bankRes.transactions.length > 0) {
         res.json({
           content: bankRes.plainText.slice(0, 30000),
           fileName: file.originalname,
