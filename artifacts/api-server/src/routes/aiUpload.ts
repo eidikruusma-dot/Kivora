@@ -114,23 +114,21 @@ export function buildBankMeta(
 async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
   const b64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
 
-  const prompt = `Analüüsi pangaväljavõtte PDF-i tabelit.
+  const prompt = `Analüüsi pangaväljavõtte PDF-i ja loe KÕIK tehinguread.
 
-Iga rea kohta pane kirja:
-- kuupäev (YYYY-MM-DD)
-- selgitus / saaja nimi
-- summa deebetist (väljamakse) või kreeditist (sissemakse)
-- "expense" (kui oli deebet/väljaminek/digikassa) või "income" (kui oli kreedit/laekumine)
-- saldo pärast tehingut
+Juhised:
+1. Deebet (väljamakse, kaardimakse, püsikorraldus, digikassa, ülekanded teistele või enda kontole) = "expense"
+2. Kreedit (sissetulek, laekumine teiselt isikult või asutuselt) = "income"
+3. ÄRA lisa 0.00 summaga broneeringuid/ridu.
 
-Väljasta kompaktne JSON:
+JSON formaat:
 {
   "openingBalance": 0.00,
   "closingBalance": 0.00,
   "bankName": "SEB",
   "accountNumber": "IBAN",
   "tx": [
-    ["2026-08-01", "Selgitus", 10.00, "expense", 490.00]
+    ["2026-08-01", "Selgitus", 12.34, "expense", 500.00]
   ]
 }`;
 
@@ -182,7 +180,10 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
       let runningBal = typeof parsed.openingBalance === "number" ? parsed.openingBalance : null;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rawTxns: BankTransaction[] = rawList.map((item: any, idx: number) => {
+      const rawTxns: BankTransaction[] = [];
+
+      for (let idx = 0; idx < rawList.length; idx++) {
+        const item = rawList[idx];
         let date = "";
         let desc = "";
         let amount = 0;
@@ -203,7 +204,10 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
           bal = typeof item.balance === "number" ? item.balance : null;
         }
 
-        // Saldo-põhine range kontroll
+        // Ignoreeri 0-summalisi kandeid
+        if (amount <= 0.001) continue;
+
+        // Saldo matemaatiline kontroll
         if (runningBal !== null && bal !== null) {
           const diff = Math.round((bal - runningBal) * 100) / 100;
           if (diff < 0) {
@@ -224,7 +228,7 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
           runningBal = dir === "income" ? runningBal + amount : runningBal - amount;
         }
 
-        return {
+        rawTxns.push({
           id: makeTransactionId(),
           page: 1,
           rowIndex: idx,
@@ -236,8 +240,8 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
           amount,
           direction: dir,
           currency: "EUR",
-        };
-      });
+        });
+      }
 
       if (rawTxns.length === 0) {
         res.status(422).json({ error: "Tehinguid ei leitud." });
