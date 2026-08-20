@@ -114,21 +114,23 @@ export function buildBankMeta(
 async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
   const b64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
 
-  const prompt = `Loe pangaväljavõtte PDF-ist KÕIK tehingud (kõik lehed).
+  const prompt = `Analüüsi pangaväljavõtte PDF-i tabelit.
 
-Juhised:
-1. Deebet/väljamakse/digikassa/ümardus = "expense"
-2. Kreedit/sissemakse/laekumine = "income"
-3. ÄRA jäta ühtegi tehingut vahele.
+Iga rea kohta pane kirja:
+- kuupäev (YYYY-MM-DD)
+- selgitus / saaja nimi
+- summa deebetist (väljamakse) või kreeditist (sissemakse)
+- "expense" (kui oli deebet/väljaminek/digikassa) või "income" (kui oli kreedit/laekumine)
+- saldo pärast tehingut
 
-JSON formaat:
+Väljasta kompaktne JSON:
 {
   "openingBalance": 0.00,
   "closingBalance": 0.00,
   "bankName": "SEB",
   "accountNumber": "IBAN",
   "tx": [
-    ["2026-08-01", "Selgitus", 12.34, "expense", 500.00]
+    ["2026-08-01", "Selgitus", 10.00, "expense", 490.00]
   ]
 }`;
 
@@ -201,7 +203,7 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
           bal = typeof item.balance === "number" ? item.balance : null;
         }
 
-        // Matemaatiline kontroll: kui eelmine ja praegune saldo on teada
+        // Saldo-põhine range kontroll
         if (runningBal !== null && bal !== null) {
           const diff = Math.round((bal - runningBal) * 100) / 100;
           if (diff < 0) {
