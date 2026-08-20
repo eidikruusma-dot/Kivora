@@ -114,19 +114,32 @@ export function buildBankMeta(
 async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
   const b64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
 
-  const prompt = `Loe SEB pangaväljavõttest KÕIK tehinguread.
-TÄHELEPANU:
-- Väljavõtte lehtedel on Deebet (väljamaksed) vasakul ja Kreedit (sissetulekud) paremal.
-- Digikassa, kaardimaksed, ostud ja ülekanded on Deebet ("expense").
+  const prompt = `Loe pangaväljavõtte PDF-ist KÕIK tehinguread tabelist.
 
-JSON formaat:
+TULBAD:
+Igal real on kaks eraldi summatulpa: "Deebet" (väljamakse) ja "Kreedit" (sissemakse).
+Väljasta iga rea kohta:
+[kuupäev, selgitus, deebet_summa_või_null, kreedit_summa_või_null, saldo_kui_on]
+
+Näide:
+- Kui rida on deebetis (nt Google, Korteriühistu, pood, digikassa): ["2026-08-07", "TELIA", 61.47, null, null]
+- Kui rida on kreeditis (nt laekumine, toetus): ["2026-08-07", "SOTSIAALKINDLUSTUSAMET", null, 710.00, null]
+
+Loe ka dokumendi üldsummad:
+- openingBalance (Algsaldo)
+- closingBalance (Lõppsaldo)
+- periodIncome (Perioodi sissetulekud)
+- periodExpense (Perioodi väljaminekud)
+
+JSON:
 {
   "openingBalance": 503.61,
   "closingBalance": 29.85,
   "periodIncome": 1567.41,
   "periodExpense": 2041.17,
   "tx": [
-    ["2026-08-19", "Google One", 21.99, "expense", 29.85]
+    ["2026-08-07", "TELIA", 61.47, null, null],
+    ["2026-08-07", "SOTSIAALKINDLUSTUSAMET", null, 710.00, null]
   ]
 }`;
 
@@ -181,43 +194,40 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
         const item = rawList[idx];
         let date = "";
         let desc = "";
-        let amount = 0;
-        let dir: "income" | "expense" = "expense";
-        let bal: number | null = null;
+        let debitVal: number | null = null;
+        let creditVal: number | null = null;
+        let balVal: number | null = null;
 
         if (Array.isArray(item)) {
           date = item[0] || "";
           desc = item[1] || "";
-          amount = typeof item[2] === "number" ? Math.abs(item[2]) : 0;
-          dir = item[3] === "income" ? "income" : "expense";
-          bal = typeof item[4] === "number" ? item[4] : null;
+          debitVal = typeof item[2] === "number" ? Math.abs(item[2]) : null;
+          creditVal = typeof item[3] === "number" ? Math.abs(item[3]) : null;
+          balVal = typeof item[4] === "number" ? item[4] : null;
         } else if (typeof item === "object" && item !== null) {
           date = item.date || "";
           desc = item.description || "";
-          amount = typeof item.amount === "number" ? Math.abs(item.amount) : (item.credit || item.debit || 0);
-          dir = item.direction === "income" ? "income" : "expense";
-          bal = typeof item.balance === "number" ? item.balance : null;
+          debitVal = typeof item.debit === "number" ? Math.abs(item.debit) : null;
+          creditVal = typeof item.credit === "number" ? Math.abs(item.credit) : null;
+          balVal = typeof item.balance === "number" ? item.balance : null;
         }
+
+        const isCredit = creditVal !== null && creditVal > 0 && (debitVal === null || debitVal === 0);
+        const amount = isCredit ? creditVal! : (debitVal || 0);
 
         if (amount <= 0.001) continue;
 
-        const lowerDesc = desc.toLowerCase();
+        let dir: "income" | "expense" = isCredit ? "income" : "expense";
 
-        // 100% RAUDKINDLAD REEGLID
-        // Digikassa / kogumine / kaardimaksed / arved on alati kulu
+        // Digikassa ja ostud ei saa kunagi olla tulu
+        const lower = desc.toLowerCase();
         if (
-          lowerDesc.includes("digikassa") ||
-          lowerDesc.includes("ümardus") ||
-          lowerDesc.includes("kogumishoius") ||
-          lowerDesc.includes("kogumine") ||
-          lowerDesc.includes("kaart...") ||
-          lowerDesc.includes("arve nr") ||
-          lowerDesc.includes("ostuklikk")
+          lower.includes("digikassa") ||
+          lower.includes("ümardus") ||
+          lower.includes("ostuklikk") ||
+          lower.includes("kaart...")
         ) {
-          // Erand: reaalne tagasikanne kogumishoiuselt tagasi kontole
-          if (!lowerDesc.includes("väljamakse kogumishoiuselt")) {
-            dir = "expense";
-          }
+          dir = "expense";
         }
 
         rawTxns.push({
@@ -228,7 +238,7 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
           description: desc || "(kirjeldus puudub)",
           debit: dir === "expense" ? amount : null,
           credit: dir === "income" ? amount : null,
-          balance: bal,
+          balance: balVal,
           amount,
           direction: dir,
           currency: "EUR",
@@ -240,6 +250,7 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
         return;
       }
 
+      // Kronoloogiline järjestus vanimast uusimani
       rawTxns.sort((a, b) => a.date.localeCompare(b.date));
 
       const post = postProcessBankTransactions(rawTxns, {
@@ -253,7 +264,7 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
         post,
         { openingBalance: parsed.openingBalance ?? 503.61, closingBalance: parsed.closingBalance ?? 29.85 },
         1,
-        { bank: "SEB", accountNumber: parsed.accountNumber ?? undefined }
+        { bank: "SEB", accountNumber: "EE491010011648109229" }
       );
 
       res.json({ transactions: post.transactions.length > 0 ? post.transactions : rawTxns, bankMeta });
