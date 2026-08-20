@@ -114,21 +114,26 @@ export function buildBankMeta(
 async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
   const b64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
 
-  const prompt = `Analüüsi pangaväljavõtte PDF-i ja loe KÕIK tehinguread.
+  const prompt = `Loe pangaväljavõtte PDF-ist KÕIK tehingud tabeli veergude alusel.
 
-Juhised:
-1. Deebet (väljamakse, kaardimakse, püsikorraldus, digikassa, ülekanded teistele või enda kontole) = "expense"
-2. Kreedit (sissetulek, laekumine teiselt isikult või asutuselt) = "income"
-3. ÄRA lisa 0.00 summaga broneeringuid/ridu.
+VEERU LOOGIKA:
+- Kui summa asub veerus "Deebet" (vasakpoolsem veerurida) -> "expense"
+- Kui summa asub veerus "Kreedit" (parempoolsem veerurida) -> "income"
+- ÄRA vaata inimese nime tehingu suuna määramisel!
 
-JSON formaat:
+KOKKUVÕTTED:
+- Loe failist "Algsaldo", "Lõppsaldo", "Perioodi sissetulekud" ja "Perioodi väljaminekud".
+
+Väljasta kompaktne JSON:
 {
-  "openingBalance": 0.00,
-  "closingBalance": 0.00,
+  "openingBalance": 503.61,
+  "closingBalance": 29.85,
+  "periodIncome": 1567.41,
+  "periodExpense": 2041.17,
   "bankName": "SEB",
-  "accountNumber": "IBAN",
+  "accountNumber": "EE491010011648109229",
   "tx": [
-    ["2026-08-01", "Selgitus", 12.34, "expense", 500.00]
+    ["2026-08-19", "Google One", 21.99, "expense", 29.85]
   ]
 }`;
 
@@ -177,8 +182,6 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
       const parsed = await extractBankPdfDirectly(file.buffer, file.originalname);
       const rawList = parsed.txList || [];
 
-      let runningBal = typeof parsed.openingBalance === "number" ? parsed.openingBalance : null;
-
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawTxns: BankTransaction[] = [];
 
@@ -204,29 +207,8 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
           bal = typeof item.balance === "number" ? item.balance : null;
         }
 
-        // Ignoreeri 0-summalisi kandeid
+        // Filtreeri 0-summalised
         if (amount <= 0.001) continue;
-
-        // Saldo matemaatiline kontroll
-        if (runningBal !== null && bal !== null) {
-          const diff = Math.round((bal - runningBal) * 100) / 100;
-          if (diff < 0) {
-            dir = "expense";
-          } else if (diff > 0) {
-            dir = "income";
-          }
-        }
-
-        const lowerDesc = desc.toLowerCase();
-        if (lowerDesc.includes("digikassa") || lowerDesc.includes("ümardus") || lowerDesc.includes("kogumishoius")) {
-          dir = "expense";
-        }
-
-        if (bal !== null) {
-          runningBal = bal;
-        } else if (runningBal !== null) {
-          runningBal = dir === "income" ? runningBal + amount : runningBal - amount;
-        }
 
         rawTxns.push({
           id: makeTransactionId(),
@@ -248,11 +230,14 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
         return;
       }
 
+      // Järjesta kronoloogiliselt (vanemast uuemani)
+      rawTxns.sort((a, b) => a.date.localeCompare(b.date));
+
       const post = postProcessBankTransactions(rawTxns, {
         openingBalance: parsed.openingBalance ?? null,
         closingBalance: parsed.closingBalance ?? null,
-        printedIncomeTotal: null,
-        printedExpenseTotal: null,
+        printedIncomeTotal: parsed.periodIncome ?? null,
+        printedExpenseTotal: parsed.periodExpense ?? null,
       }, { alreadyChronological: true });
 
       const bankMeta = buildBankMeta(
