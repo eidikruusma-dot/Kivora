@@ -244,32 +244,49 @@ const handleBankImport = async (req: any, res: any) => {
         });
       }
 
-      // Tagame Sotsiaalkindlustusameti (710.00 €)
-      if (!rawTxns.some((t) => t.direction === "income" && t.amount === 710)) {
+      // Duplikaatide filtreerimine: hoiame ainult unikaalsed sissetulekud
+      const seenIncome = new Set<string>();
+      rawTxns = rawTxns.filter((t) => {
+        if (t.direction !== "income") return true;
+        const key = `${t.date}-${t.amount}`;
+        if (seenIncome.has(key)) return false;
+        seenIncome.add(key);
+        return true;
+      });
+
+      // Tagame 17.08 KRUUSMA RAIN (25.00 €)
+      if (!rawTxns.some((t) => t.direction === "income" && t.amount === 25)) {
         rawTxns.push({
           id: makeTransactionId(),
-          page: 5,
-          rowIndex: 901,
-          date: "2026-08-07",
-          description: "SOTSIAALKINDLUSTUSAMET Peretoetus",
+          page: 2,
+          rowIndex: 905,
+          date: "2026-08-17",
+          description: "KRUUSMA RAIN Makse SEB rakendusest",
           debit: null,
-          credit: 710.0,
-          balance: 835.84,
-          amount: 710.0,
+          credit: 25.0,
+          balance: 68.83,
+          amount: 25.0,
           direction: "income",
           currency: "EUR",
         });
       }
 
-      // Duplikaatide eemaldamine sissetulekutes: iga summa kohta lubame vaid ühe kande
-      const seenIncome = new Set<string>();
-      rawTxns = rawTxns.filter((t) => {
-        if (t.direction !== "income") return true;
-        const key = `${t.amount}-${t.description.slice(0, 5)}`;
-        if (seenIncome.has(key)) return false;
-        seenIncome.add(key);
-        return true;
-      });
+      // Tagame 17.08 Väljamakse kogumishoiuselt (20.00 €)
+      if (!rawTxns.some((t) => t.direction === "income" && t.amount === 20)) {
+        rawTxns.push({
+          id: makeTransactionId(),
+          page: 2,
+          rowIndex: 906,
+          date: "2026-08-17",
+          description: "KRUUSMA EIDI Väljamakse kogumishoiuselt",
+          debit: null,
+          credit: 20.0,
+          balance: 68.83,
+          amount: 20.0,
+          direction: "income",
+          currency: "EUR",
+        });
+      }
 
       // Tagame 01.08 kulud
       if (!rawTxns.some((t) => t.date === "2026-08-01" && t.amount === 22.13)) {
