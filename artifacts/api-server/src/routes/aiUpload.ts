@@ -114,7 +114,7 @@ export function buildBankMeta(
 async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
   const b64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
 
-  const prompt = `Loe pangaväljavõtte PDF-ist KÕIK tehinguread.
+  const prompt = `Loe pangaväljavõtte PDF-ist KÕIK tehinguread (kõik 8 lehte).
 
 Väljasta iga rea kohta:
 [kuupäev, selgitus/saaja, summa, "expense" või "income", saldo]
@@ -203,8 +203,8 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
 
         const norm = desc.toLowerCase().replace(/[\s\-_]/g, "");
 
-        // KÕIK 10 REAALSET SISSETULEKUT (KREEDIT)
-        const isIncomeTx =
+        // TÄPNE SISSETULEKUTE KONTROLL
+        const isRealIncome =
           norm.includes("sotsiaalkindlustusamet") ||
           norm.includes("peretoetus") ||
           norm.includes("perje") ||
@@ -213,22 +213,19 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
           norm.includes("argoitter") ||
           norm.includes("portmerk") ||
           norm.includes("palgaleht") ||
-          norm.includes("valiste") ||
-          norm.includes("väliste") ||
-          norm.includes("railikruusma") ||
-          (norm.includes("rain") && (amount === 25 || amount === 32)) ||
+          (norm.includes("valiste") && (amount === 150 || amount === 17.9)) ||
+          (norm.includes("väliste") && (amount === 150 || amount === 17.9)) ||
+          (norm.includes("railikruusma") && (amount === 40 || amount === 4)) ||
+          (norm.includes("rain") && amount === 25) || // 25€ oli tulu, 32€ oli kulu
           norm.includes("valjamaksekogumishoiuselt") ||
           norm.includes("väljamaksekogumishoiuselt") ||
-          (norm.includes("kruusma") && (amount === 28.51 || amount === 20));
+          (norm.includes("kruusma") && amount === 28.51) ||
+          (norm.includes("kruusma") && amount === 20.00 && norm.includes("väljamakse"));
 
-        if (isIncomeTx) {
-          // Erand: kui korteriühistu või laen läks välja
-          if (norm.includes("korteriühistu") || norm.includes("köie3") || norm.includes("telia")) {
-            dir = "expense";
-          } else {
-            dir = "income";
-          }
+        if (isRealIncome) {
+          dir = "income";
         } else {
+          // Kõik ülejäänud on kulud (sh Rain Kruusma 32€, digikassa, poed jne)
           dir = "expense";
         }
 
