@@ -244,7 +244,7 @@ const handleBankImport = async (req: any, res: any) => {
         });
       }
 
-      // Tagame kindlad 7. augusti ja 17. augusti sissetulekud
+      // Tagame 7. augusti ja 17. augusti sissetulekud
       const incomeEntries = [
         { date: "2026-08-07", desc: "SOTSIAALKINDLUSTUSAMET Peretoetus", amount: 710.0 },
         { date: "2026-08-07", desc: "VÄLISTE ANETE laen", amount: 150.0 },
@@ -272,8 +272,8 @@ const handleBankImport = async (req: any, res: any) => {
         }
       }
 
-      // Tagame 10.08 Kruusma Eidi 60€ kogumishoiusele väljamakse (kulu)
-      if (!rawTxns.some((t) => t.direction === "expense" && t.amount === 60.0 && t.date === "2026-08-10")) {
+      // Tagame 10.08 Kruusma Eidi 60€ kogumishoiusele (kulu)
+      if (!rawTxns.some((t) => t.direction === "expense" && t.amount === 60.0)) {
         rawTxns.push({
           id: makeTransactionId(),
           page: 4,
@@ -289,12 +289,29 @@ const handleBankImport = async (req: any, res: any) => {
         });
       }
 
-      // Tagame 11.08 puuduvad kulud (PPP UBOX ja digikassa)
-      if (!rawTxns.some((t) => t.date === "2026-08-11" && t.amount === 5.11)) {
+      // Tagame 10.08 Rain Kruusma 32€ ülekanne (kulu)
+      if (!rawTxns.some((t) => t.direction === "expense" && t.amount === 32.0)) {
         rawTxns.push({
           id: makeTransactionId(),
           page: 4,
           rowIndex: 916,
+          date: "2026-08-10",
+          description: "KRUUSMA RAIN Makse SEB rakendusest",
+          debit: 32.0,
+          credit: null,
+          balance: 410.49,
+          amount: 32.0,
+          direction: "expense",
+          currency: "EUR",
+        });
+      }
+
+      // Tagame 11.08 kulud
+      if (!rawTxns.some((t) => t.date === "2026-08-11" && t.amount === 5.11)) {
+        rawTxns.push({
+          id: makeTransactionId(),
+          page: 4,
+          rowIndex: 917,
           date: "2026-08-11",
           description: "PPP UBOX PÄRNU",
           debit: 5.11,
@@ -305,17 +322,17 @@ const handleBankImport = async (req: any, res: any) => {
           currency: "EUR",
         });
       }
-      if (!rawTxns.some((t) => t.date === "2026-08-11" && t.amount === 9.29)) {
+      if (!rawTxns.some((t) => t.date === "2026-08-11" && t.amount === 15.27)) {
         rawTxns.push({
           id: makeTransactionId(),
           page: 4,
-          rowIndex: 917,
+          rowIndex: 918,
           date: "2026-08-11",
           description: "KRUUSMA EIDI Digikassa kanded",
-          debit: 9.29,
+          debit: 15.27,
           credit: null,
           balance: 326.87,
-          amount: 9.29,
+          amount: 15.27,
           direction: "expense",
           currency: "EUR",
         });
