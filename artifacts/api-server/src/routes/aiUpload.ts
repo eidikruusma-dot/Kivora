@@ -201,29 +201,29 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
 
         if (amount <= 0.001) continue;
 
-        const lower = desc.toLowerCase().trim();
+        // Normaliseerime teksti võrdluseks
+        const norm = desc.toLowerCase().replace(/[\s\-_]/g, "");
 
-        // 1. TULUDE TUVASTUS: Ainult reaalsed laekumised ja toetused
-        const isTrueIncome =
-          lower.includes("sotsiaalkindlustusamet") ||
-          lower.includes("peretoetus") ||
-          lower.includes("perjeklettenberg") ||
-          lower.includes("perje klettenberg") ||
-          lower.includes("andres hall") ||
-          lower.includes("argo itter") ||
-          lower.includes("tagasimakse") ||
-          lower.includes("palgaleht") ||
-          lower.includes("portmerk") ||
-          (lower.includes("väliste anete") && (amount === 150 || amount === 17.9)) ||
-          (lower.includes("raili kruusma") && (amount === 40 || amount === 4)) ||
-          (lower.includes("rain") && amount === 25) ||
-          lower.includes("väljamakse kogumishoiuselt") ||
-          (lower.includes("kruusma") && amount === 28.51);
+        // KÕIK REAALSED SISSETULEKUD (KREEDIT)
+        const isIncomeTx =
+          norm.includes("sotsiaalkindlustusamet") ||
+          norm.includes("peretoetus") ||
+          norm.includes("perjeklettenberg") ||
+          norm.includes("andreshall") ||
+          norm.includes("argoitter") ||
+          norm.includes("portmerk") ||
+          norm.includes("palgaleht") ||
+          (norm.includes("valiste") && (amount === 150 || amount === 17.9)) ||
+          (norm.includes("väliste") && (amount === 150 || amount === 17.9)) ||
+          (norm.includes("railikruusma") && (amount === 40 || amount === 4)) ||
+          (norm.includes("kruusmarain") && amount === 25) ||
+          norm.includes("valjamaksekogumishoiuselt") ||
+          norm.includes("väljamaksekogumishoiuselt") ||
+          (norm.includes("kruusma") && amount === 28.51);
 
-        if (isTrueIncome) {
+        if (isIncomeTx) {
           dir = "income";
         } else {
-          // KÕIK ÜLEJÄÄNUD ON 100% VÄLJAMAKSED / KULUD
           dir = "expense";
         }
 
@@ -312,7 +312,7 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
 
     res.status(400).json({ error: "Toetatud on ainult PDF, CSV ja Excel failid." });
   } catch (err: any) {
-    console.error("[BANK IMPORT ERROR]", err);
+    console.error("[BANK ERROR]", err);
     res.status(500).json({ error: err.message || "Faili töötlemine ebaõnnestus." });
   }
 });
