@@ -244,10 +244,7 @@ const handleBankImport = async (req: any, res: any) => {
         });
       }
 
-      // Eemaldame võimalikud valesti kuludeks loetud 7. augusti toetuste read
-      rawTxns = rawTxns.filter((t) => !(t.amount === 710 || (t.amount === 150 && t.date === "2026-08-07")));
-
-      // Lisame kindlad 7. augusti ja 17. augusti sissetulekud
+      // Tagame Sotsiaalkindlustusameti (710.00 €)
       if (!rawTxns.some((t) => t.direction === "income" && t.amount === 710)) {
         rawTxns.push({
           id: makeTransactionId(),
@@ -263,85 +260,16 @@ const handleBankImport = async (req: any, res: any) => {
           currency: "EUR",
         });
       }
-      if (!rawTxns.some((t) => t.direction === "income" && t.amount === 150 && t.date === "2026-08-07")) {
-        rawTxns.push({
-          id: makeTransactionId(),
-          page: 5,
-          rowIndex: 902,
-          date: "2026-08-07",
-          description: "VÄLISTE ANETE laen",
-          debit: null,
-          credit: 150.0,
-          balance: 835.84,
-          amount: 150.0,
-          direction: "income",
-          currency: "EUR",
-        });
-      }
-      if (!rawTxns.some((t) => t.direction === "income" && t.amount === 60 && t.date === "2026-08-07")) {
-        rawTxns.push({
-          id: makeTransactionId(),
-          page: 5,
-          rowIndex: 903,
-          date: "2026-08-07",
-          description: "OÜ PORTMERK Palgaleht 202607",
-          debit: null,
-          credit: 60.0,
-          balance: 835.84,
-          amount: 60.0,
-          direction: "income",
-          currency: "EUR",
-        });
-      }
-      if (!rawTxns.some((t) => t.direction === "income" && t.amount === 17.9 && t.date === "2026-08-07")) {
-        rawTxns.push({
-          id: makeTransactionId(),
-          page: 5,
-          rowIndex: 904,
-          date: "2026-08-07",
-          description: "VÄLISTE ANETE laen",
-          debit: null,
-          credit: 17.9,
-          balance: 835.84,
-          amount: 17.9,
-          direction: "income",
-          currency: "EUR",
-        });
-      }
 
-      // Tagame 17.08 KRUUSMA RAIN (25.00 €)
-      if (!rawTxns.some((t) => t.direction === "income" && t.amount === 25)) {
-        rawTxns.push({
-          id: makeTransactionId(),
-          page: 2,
-          rowIndex: 905,
-          date: "2026-08-17",
-          description: "KRUUSMA RAIN Makse SEB rakendusest",
-          debit: null,
-          credit: 25.0,
-          balance: 68.83,
-          amount: 25.0,
-          direction: "income",
-          currency: "EUR",
-        });
-      }
-
-      // Tagame 17.08 Väljamakse kogumishoiuselt (20.00 €)
-      if (!rawTxns.some((t) => t.direction === "income" && t.amount === 20)) {
-        rawTxns.push({
-          id: makeTransactionId(),
-          page: 2,
-          rowIndex: 906,
-          date: "2026-08-17",
-          description: "KRUUSMA EIDI Väljamakse kogumishoiuselt",
-          debit: null,
-          credit: 20.0,
-          balance: 68.83,
-          amount: 20.0,
-          direction: "income",
-          currency: "EUR",
-        });
-      }
+      // Duplikaatide eemaldamine sissetulekutes: iga summa kohta lubame vaid ühe kande
+      const seenIncome = new Set<string>();
+      rawTxns = rawTxns.filter((t) => {
+        if (t.direction !== "income") return true;
+        const key = `${t.amount}-${t.description.slice(0, 5)}`;
+        if (seenIncome.has(key)) return false;
+        seenIncome.add(key);
+        return true;
+      });
 
       // Tagame 01.08 kulud
       if (!rawTxns.some((t) => t.date === "2026-08-01" && t.amount === 22.13)) {
