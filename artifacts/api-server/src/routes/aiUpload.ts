@@ -203,29 +203,30 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
 
         const norm = desc.toLowerCase().replace(/[\s\-_]/g, "");
 
-        // TÄPNE SISSETULEKUTE KONTROLL
+        // TÄPNE SISSETULEKUTE NIMEKIRI (KREEDIT)
         const isRealIncome =
           norm.includes("sotsiaalkindlustusamet") ||
           norm.includes("peretoetus") ||
+          norm.includes("perjeklettenberg") ||
           norm.includes("perje") ||
-          norm.includes("klettenberg") ||
           norm.includes("andreshall") ||
-          norm.includes("argoitter") ||
           norm.includes("portmerk") ||
           norm.includes("palgaleht") ||
           (norm.includes("valiste") && (amount === 150 || amount === 17.9)) ||
           (norm.includes("väliste") && (amount === 150 || amount === 17.9)) ||
           (norm.includes("railikruusma") && (amount === 40 || amount === 4)) ||
-          (norm.includes("rain") && amount === 25) || // 25€ oli tulu, 32€ oli kulu
+          (norm.includes("rain") && amount === 25) || // Rain 25€ on tulu, 32€ on kulu
           norm.includes("valjamaksekogumishoiuselt") ||
           norm.includes("väljamaksekogumishoiuselt") ||
           (norm.includes("kruusma") && amount === 28.51) ||
           (norm.includes("kruusma") && amount === 20.00 && norm.includes("väljamakse"));
 
-        if (isRealIncome) {
+        // Argo Itter 200€ oli tagasimakse kontolt välja ehk kulu
+        if (norm.includes("argo") || norm.includes("itter")) {
+          dir = "expense";
+        } else if (isRealIncome) {
           dir = "income";
         } else {
-          // Kõik ülejäänud on kulud (sh Rain Kruusma 32€, digikassa, poed jne)
           dir = "expense";
         }
 
