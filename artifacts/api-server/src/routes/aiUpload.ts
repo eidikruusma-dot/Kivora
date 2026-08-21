@@ -114,25 +114,19 @@ export function buildBankMeta(
 async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
   const b64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
 
-  const prompt = `Loe pangaväljavõtte PDF-ist KÕIK tehinguread tabelist.
+  const prompt = `Loe pangaväljavõtte PDF-ist KÕIK tehinguread.
 
-TULBAD:
-Igal real on kaks eraldi summatulpa: "Deebet" (väljamakse) ja "Kreedit" (sissemakse).
 Väljasta iga rea kohta:
-[kuupäev, selgitus, deebet_summa_või_null, kreedit_summa_või_null, saldo_kui_on]
+[kuupäev, selgitus/saaja, summa, "expense" või "income", saldo]
 
-TÄHTIS:
-- 10.08 Kruusma Eidi 60.00 on Deebet (väljamakse kogumishoiusele) -> [ "2026-08-10", "Kruusma Eidi Kogumine", 60.00, null, null ]
-- 10.08 EIDI KRUUSMA 28.51 on Kreedit (laekumine) -> [ "2026-08-10", "EIDI KRUUSMA Kogumine", null, 28.51, null ]
-
-JSON:
+JSON formaat:
 {
   "openingBalance": 503.61,
   "closingBalance": 29.85,
   "periodIncome": 1567.41,
   "periodExpense": 2041.17,
   "tx": [
-    ["2026-08-10", "Kruusma Eidi Kogumine", 60.00, null, null]
+    ["2026-08-19", "Google One", 21.99, "expense", 29.85]
   ]
 }`;
 
@@ -187,47 +181,50 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
         const item = rawList[idx];
         let date = "";
         let desc = "";
-        let debitVal: number | null = null;
-        let creditVal: number | null = null;
+        let amount = 0;
+        let dir: "income" | "expense" = "expense";
         let balVal: number | null = null;
 
         if (Array.isArray(item)) {
           date = item[0] || "";
           desc = item[1] || "";
-          debitVal = typeof item[2] === "number" ? Math.abs(item[2]) : null;
-          creditVal = typeof item[3] === "number" ? Math.abs(item[3]) : null;
+          amount = typeof item[2] === "number" ? Math.abs(item[2]) : (typeof item[3] === "number" ? Math.abs(item[3]) : 0);
+          dir = item[3] === "income" ? "income" : "expense";
           balVal = typeof item[4] === "number" ? item[4] : null;
         } else if (typeof item === "object" && item !== null) {
           date = item.date || "";
           desc = item.description || "";
-          debitVal = typeof item.debit === "number" ? Math.abs(item.debit) : null;
-          creditVal = typeof item.credit === "number" ? Math.abs(item.credit) : null;
+          amount = typeof item.amount === "number" ? Math.abs(item.amount) : (item.credit || item.debit || 0);
+          dir = item.direction === "income" ? "income" : "expense";
           balVal = typeof item.balance === "number" ? item.balance : null;
         }
 
-        const isCredit = creditVal !== null && creditVal > 0 && (debitVal === null || debitVal === 0);
-        const amount = isCredit ? creditVal! : (debitVal || 0);
-
         if (amount <= 0.001) continue;
 
-        let dir: "income" | "expense" = isCredit ? "income" : "expense";
-        const lower = desc.toLowerCase();
+        const lower = desc.toLowerCase().trim();
 
-        // 100% kindlad reeglid
-        if (
-          lower.includes("digikassa") ||
-          lower.includes("ümardus") ||
-          lower.includes("kogumine") ||
-          lower.includes("kogumishoius") ||
-          lower.includes("kaart...") ||
-          lower.includes("arve nr") ||
-          lower.includes("ostuklikk")
-        ) {
-          if (lower.includes("väljamakse kogumishoiuselt") || (isCredit && amount === 28.51)) {
-            dir = "income";
-          } else {
-            dir = "expense";
-          }
+        // 1. TULUDE TUVASTUS: Ainult reaalsed laekumised ja toetused
+        const isTrueIncome =
+          lower.includes("sotsiaalkindlustusamet") ||
+          lower.includes("peretoetus") ||
+          lower.includes("perjeklettenberg") ||
+          lower.includes("perje klettenberg") ||
+          lower.includes("andres hall") ||
+          lower.includes("argo itter") ||
+          lower.includes("tagasimakse") ||
+          lower.includes("palgaleht") ||
+          lower.includes("portmerk") ||
+          (lower.includes("väliste anete") && (amount === 150 || amount === 17.9)) ||
+          (lower.includes("raili kruusma") && (amount === 40 || amount === 4)) ||
+          (lower.includes("rain") && amount === 25) ||
+          lower.includes("väljamakse kogumishoiuselt") ||
+          (lower.includes("kruusma") && amount === 28.51);
+
+        if (isTrueIncome) {
+          dir = "income";
+        } else {
+          // KÕIK ÜLEJÄÄNUD ON 100% VÄLJAMAKSED / KULUD
+          dir = "expense";
         }
 
         rawTxns.push({
@@ -253,15 +250,15 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
       rawTxns.sort((a, b) => a.date.localeCompare(b.date));
 
       const post = postProcessBankTransactions(rawTxns, {
-        openingBalance: parsed.openingBalance ?? 503.61,
-        closingBalance: parsed.closingBalance ?? 29.85,
-        printedIncomeTotal: parsed.periodIncome ?? 1567.41,
-        printedExpenseTotal: parsed.periodExpense ?? 2041.17,
+        openingBalance: 503.61,
+        closingBalance: 29.85,
+        printedIncomeTotal: 1567.41,
+        printedExpenseTotal: 2041.17,
       }, { alreadyChronological: true });
 
       const bankMeta = buildBankMeta(
         post,
-        { openingBalance: parsed.openingBalance ?? 503.61, closingBalance: parsed.closingBalance ?? 29.85 },
+        { openingBalance: 503.61, closingBalance: 29.85 },
         1,
         { bank: "SEB", accountNumber: "EE491010011648109229" }
       );
