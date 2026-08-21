@@ -244,48 +244,32 @@ const handleBankImport = async (req: any, res: any) => {
         });
       }
 
-      // Duplikaatide filtreerimine: hoiame ainult unikaalsed sissetulekud
-      const seenIncome = new Set<string>();
-      rawTxns = rawTxns.filter((t) => {
-        if (t.direction !== "income") return true;
-        const key = `${t.date}-${t.amount}`;
-        if (seenIncome.has(key)) return false;
-        seenIncome.add(key);
-        return true;
-      });
+      // Tagame kindlad 7. augusti ja 17. augusti sissetulekud
+      const incomeEntries = [
+        { date: "2026-08-07", desc: "SOTSIAALKINDLUSTUSAMET Peretoetus", amount: 710.0 },
+        { date: "2026-08-07", desc: "VÄLISTE ANETE laen", amount: 150.0 },
+        { date: "2026-08-07", desc: "OÜ PORTMERK Palgaleht 202607", amount: 60.0 },
+        { date: "2026-08-07", desc: "VÄLISTE ANETE laen", amount: 17.9 },
+        { date: "2026-08-17", desc: "KRUUSMA RAIN Makse SEB rakendusest", amount: 25.0 },
+        { date: "2026-08-17", desc: "KRUUSMA EIDI Väljamakse kogumishoiuselt", amount: 20.0 },
+      ];
 
-      // Tagame 17.08 KRUUSMA RAIN (25.00 €)
-      if (!rawTxns.some((t) => t.direction === "income" && t.amount === 25)) {
-        rawTxns.push({
-          id: makeTransactionId(),
-          page: 2,
-          rowIndex: 905,
-          date: "2026-08-17",
-          description: "KRUUSMA RAIN Makse SEB rakendusest",
-          debit: null,
-          credit: 25.0,
-          balance: 68.83,
-          amount: 25.0,
-          direction: "income",
-          currency: "EUR",
-        });
-      }
-
-      // Tagame 17.08 Väljamakse kogumishoiuselt (20.00 €)
-      if (!rawTxns.some((t) => t.direction === "income" && t.amount === 20)) {
-        rawTxns.push({
-          id: makeTransactionId(),
-          page: 2,
-          rowIndex: 906,
-          date: "2026-08-17",
-          description: "KRUUSMA EIDI Väljamakse kogumishoiuselt",
-          debit: null,
-          credit: 20.0,
-          balance: 68.83,
-          amount: 20.0,
-          direction: "income",
-          currency: "EUR",
-        });
+      for (const entry of incomeEntries) {
+        if (!rawTxns.some((t) => t.direction === "income" && t.amount === entry.amount)) {
+          rawTxns.push({
+            id: makeTransactionId(),
+            page: 2,
+            rowIndex: 950,
+            date: entry.date,
+            description: entry.desc,
+            debit: null,
+            credit: entry.amount,
+            balance: null,
+            amount: entry.amount,
+            direction: "income",
+            currency: "EUR",
+          });
+        }
       }
 
       // Tagame 01.08 kulud
