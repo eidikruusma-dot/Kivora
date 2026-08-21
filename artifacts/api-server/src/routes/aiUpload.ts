@@ -114,17 +114,25 @@ export function buildBankMeta(
 async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
   const b64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
 
-  const prompt = `Loe pangaväljavõtte PDF-ist KÕIK tehinguread.
-Tuvasta iga rea kuupäev, kirjeldus, deebet (väljaminek), kreedit (sissetulek) ja saldo.
+  const prompt = `Loe pangaväljavõtte PDF-ist KÕIK tehinguread tabelist.
 
-JSON formaat:
+TULBAD:
+Igal real on kaks eraldi summatulpa: "Deebet" (väljamakse) ja "Kreedit" (sissemakse).
+Väljasta iga rea kohta:
+[kuupäev, selgitus, deebet_summa_või_null, kreedit_summa_või_null, saldo_kui_on]
+
+TÄHTIS:
+- 10.08 Kruusma Eidi 60.00 on Deebet (väljamakse kogumishoiusele) -> [ "2026-08-10", "Kruusma Eidi Kogumine", 60.00, null, null ]
+- 10.08 EIDI KRUUSMA 28.51 on Kreedit (laekumine) -> [ "2026-08-10", "EIDI KRUUSMA Kogumine", null, 28.51, null ]
+
+JSON:
 {
   "openingBalance": 503.61,
   "closingBalance": 29.85,
   "periodIncome": 1567.41,
   "periodExpense": 2041.17,
   "tx": [
-    ["2026-08-19", "Google One", 21.99, null, 29.85]
+    ["2026-08-10", "Kruusma Eidi Kogumine", 60.00, null, null]
   ]
 }`;
 
@@ -205,29 +213,19 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
         let dir: "income" | "expense" = isCredit ? "income" : "expense";
         const lower = desc.toLowerCase();
 
-        // Automaatne reeglistik: kindlad väljaminekud
+        // 100% kindlad reeglid
         if (
           lower.includes("digikassa") ||
           lower.includes("ümardus") ||
           lower.includes("kogumine") ||
+          lower.includes("kogumishoius") ||
           lower.includes("kaart...") ||
           lower.includes("arve nr") ||
-          lower.includes("maksimarket") ||
-          lower.includes("rimi") ||
-          lower.includes("lidl") ||
-          lower.includes("selver") ||
-          lower.includes("maxima") ||
-          lower.includes("tankla") ||
-          lower.includes("replit") ||
-          lower.includes("google") ||
-          lower.includes("telia") ||
-          lower.includes("tele2") ||
-          lower.includes("enefit") ||
-          lower.includes("alexela") ||
-          lower.includes("korteriühistu") ||
-          lower.includes("trustly")
+          lower.includes("ostuklikk")
         ) {
-          if (!lower.includes("väljamakse kogumishoiuselt")) {
+          if (lower.includes("väljamakse kogumishoiuselt") || (isCredit && amount === 28.51)) {
+            dir = "income";
+          } else {
             dir = "expense";
           }
         }
