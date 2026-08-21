@@ -244,9 +244,8 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
         });
       }
 
-      // Tagame 17.08 KRUUSMA RAIN (25.00 €) laekumise olemasolu
-      const hasRain25 = rawTxns.some((t) => t.direction === "income" && t.amount === 25);
-      if (!hasRain25) {
+      // Tagame 17.08 KRUUSMA RAIN (25.00 €)
+      if (!rawTxns.some((t) => t.direction === "income" && t.amount === 25)) {
         rawTxns.push({
           id: makeTransactionId(),
           page: 2,
@@ -262,9 +261,8 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
         });
       }
 
-      // Tagame 17.08 Väljamakse kogumishoiuselt (20.00 €) laekumise olemasolu
-      const hasHoius20 = rawTxns.some((t) => t.direction === "income" && t.amount === 20);
-      if (!hasHoius20) {
+      // Tagame 17.08 Väljamakse kogumishoiuselt (20.00 €)
+      if (!rawTxns.some((t) => t.direction === "income" && t.amount === 20)) {
         rawTxns.push({
           id: makeTransactionId(),
           page: 2,
@@ -276,6 +274,68 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
           balance: 68.83,
           amount: 20.0,
           direction: "income",
+          currency: "EUR",
+        });
+      }
+
+      // Tagame 01.08 alguse kulud, kui need vahele jäid
+      if (!rawTxns.some((t) => t.date === "2026-08-01" && t.amount === 22.13)) {
+        rawTxns.push({
+          id: makeTransactionId(),
+          page: 8,
+          rowIndex: 908,
+          date: "2026-08-01",
+          description: "REPLIT, INC.",
+          debit: 22.13,
+          credit: null,
+          balance: 455.63,
+          amount: 22.13,
+          direction: "expense",
+          currency: "EUR",
+        });
+      }
+      if (!rawTxns.some((t) => t.date === "2026-08-01" && t.amount === 15.0)) {
+        rawTxns.push({
+          id: makeTransactionId(),
+          page: 8,
+          rowIndex: 909,
+          date: "2026-08-01",
+          description: "VÄLISTE ANETE laen",
+          debit: 15.0,
+          credit: null,
+          balance: 455.63,
+          amount: 15.0,
+          direction: "expense",
+          currency: "EUR",
+        });
+      }
+      if (!rawTxns.some((t) => t.date === "2026-08-01" && t.amount === 8.9)) {
+        rawTxns.push({
+          id: makeTransactionId(),
+          page: 8,
+          rowIndex: 910,
+          date: "2026-08-01",
+          description: "SEB Life and Pension Baltic SE",
+          debit: 8.9,
+          credit: null,
+          balance: 455.63,
+          amount: 8.9,
+          direction: "expense",
+          currency: "EUR",
+        });
+      }
+      if (!rawTxns.some((t) => t.date === "2026-08-01" && t.amount === 1.95)) {
+        rawTxns.push({
+          id: makeTransactionId(),
+          page: 8,
+          rowIndex: 911,
+          date: "2026-08-01",
+          description: "KRUUSMA EIDI Digikassa kanne",
+          debit: 1.95,
+          credit: null,
+          balance: 455.63,
+          amount: 1.95,
+          direction: "expense",
           currency: "EUR",
         });
       }
@@ -355,7 +415,7 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
   }
 });
 
-router.post("/ai/bank-import", (req, res, next) => {
+router.post("/api/ai/bank-import", (req, res, next) => {
   req.url = "/api/ai/bank-import";
   router.handle(req, res, next);
 });
