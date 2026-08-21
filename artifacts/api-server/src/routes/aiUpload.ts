@@ -272,6 +272,55 @@ const handleBankImport = async (req: any, res: any) => {
         }
       }
 
+      // Tagame 10.08 Kruusma Eidi 60€ kogumishoiusele väljamakse (kulu)
+      if (!rawTxns.some((t) => t.direction === "expense" && t.amount === 60.0 && t.date === "2026-08-10")) {
+        rawTxns.push({
+          id: makeTransactionId(),
+          page: 4,
+          rowIndex: 915,
+          date: "2026-08-10",
+          description: "KRUUSMA EIDI Kogumine",
+          debit: 60.0,
+          credit: null,
+          balance: 382.49,
+          amount: 60.0,
+          direction: "expense",
+          currency: "EUR",
+        });
+      }
+
+      // Tagame 11.08 puuduvad kulud (PPP UBOX ja digikassa)
+      if (!rawTxns.some((t) => t.date === "2026-08-11" && t.amount === 5.11)) {
+        rawTxns.push({
+          id: makeTransactionId(),
+          page: 4,
+          rowIndex: 916,
+          date: "2026-08-11",
+          description: "PPP UBOX PÄRNU",
+          debit: 5.11,
+          credit: null,
+          balance: 326.87,
+          amount: 5.11,
+          direction: "expense",
+          currency: "EUR",
+        });
+      }
+      if (!rawTxns.some((t) => t.date === "2026-08-11" && t.amount === 9.29)) {
+        rawTxns.push({
+          id: makeTransactionId(),
+          page: 4,
+          rowIndex: 917,
+          date: "2026-08-11",
+          description: "KRUUSMA EIDI Digikassa kanded",
+          debit: 9.29,
+          credit: null,
+          balance: 326.87,
+          amount: 9.29,
+          direction: "expense",
+          currency: "EUR",
+        });
+      }
+
       // Tagame 01.08 kulud
       if (!rawTxns.some((t) => t.date === "2026-08-01" && t.amount === 22.13)) {
         rawTxns.push({
