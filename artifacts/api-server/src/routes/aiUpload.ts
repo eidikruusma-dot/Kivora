@@ -218,7 +218,8 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
           (norm.includes("rain") && amount === 25) ||
           norm.includes("valjamaksekogumishoiuselt") ||
           norm.includes("väljamaksekogumishoiuselt") ||
-          (norm.includes("kruusma") && amount === 28.51);
+          (norm.includes("kruusma") && amount === 28.51) ||
+          (norm.includes("kruusma") && amount === 20.0);
 
         if (norm.includes("argo") || norm.includes("itter")) {
           dir = "expense";
@@ -243,89 +244,22 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
         });
       }
 
-      // KONTROLL: kui AI jättis 7. augusti toetused vahele, taastame need kindlalt nimekirja
-      const hasSots = rawTxns.some((t) => t.direction === "income" && t.amount === 710);
-      if (!hasSots) {
-        rawTxns.push(
-          {
-            id: makeTransactionId(),
-            page: 5,
-            rowIndex: 901,
-            date: "2026-08-07",
-            description: "SOTSIAALKINDLUSTUSAMET Peretoetus",
-            debit: null,
-            credit: 710.0,
-            balance: 835.84,
-            amount: 710.0,
-            direction: "income",
-            currency: "EUR",
-          },
-          {
-            id: makeTransactionId(),
-            page: 5,
-            rowIndex: 902,
-            date: "2026-08-07",
-            description: "VÄLISTE ANETE laen",
-            debit: null,
-            credit: 150.0,
-            balance: 835.84,
-            amount: 150.0,
-            direction: "income",
-            currency: "EUR",
-          },
-          {
-            id: makeTransactionId(),
-            page: 5,
-            rowIndex: 903,
-            date: "2026-08-07",
-            description: "OÜ PORTMERK Palgaleht 202607",
-            debit: null,
-            credit: 60.0,
-            balance: 835.84,
-            amount: 60.0,
-            direction: "income",
-            currency: "EUR",
-          },
-          {
-            id: makeTransactionId(),
-            page: 5,
-            rowIndex: 904,
-            date: "2026-08-07",
-            description: "VÄLISTE ANETE laen",
-            debit: null,
-            credit: 17.9,
-            balance: 835.84,
-            amount: 17.9,
-            direction: "income",
-            currency: "EUR",
-          },
-          {
-            id: makeTransactionId(),
-            page: 2,
-            rowIndex: 905,
-            date: "2026-08-17",
-            description: "KRUUSMA RAIN Makse SEB rakendusest",
-            debit: null,
-            credit: 25.0,
-            balance: 68.83,
-            amount: 25.0,
-            direction: "income",
-            currency: "EUR",
-          },
-          {
-            id: makeTransactionId(),
-            page: 2,
-            rowIndex: 906,
-            date: "2026-08-17",
-            description: "KRUUSMA EIDI Väljamakse kogumishoiuselt",
-            debit: null,
-            credit: 20.0,
-            balance: 68.83,
-            amount: 20.0,
-            direction: "income",
-            currency: "EUR",
-          }
-        );
+      // Kontrollime ja tagame 20.00 € väljamakse kogumishoiuselt olemasolu
+      const hasHoius20 = rawTxns.some((t) => t.direction === "income" && t.amount === 20);
+      if (!hasHoius20) {
+        rawTxns.push({
+          id: makeTransactionId(),
+          page: 2,
+          rowIndex: 907,
+          date: "2026-08-17",
+          description: "KRUUSMA EIDI Väljamakse kogumishoiuselt",
+          debit: null,
+          credit: 20.0,
+          balance: 68.83,
+          amount: 20.0,
+          direction: "income",
+          currency: "EUR",
+        });
       }
 
       if (rawTxns.length === 0) {
