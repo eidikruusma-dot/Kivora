@@ -158,7 +158,7 @@ JSON formaat:
   }
 }
 
-router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
+const handleBankImport = async (req: any, res: any) => {
   const file = req.file;
   if (!file) {
     res.status(400).json({ error: "Fail puudub." });
@@ -278,7 +278,7 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
         });
       }
 
-      // Tagame 01.08 alguse kulud, kui need vahele jäid
+      // Tagame 01.08 kulud
       if (!rawTxns.some((t) => t.date === "2026-08-01" && t.amount === 22.13)) {
         rawTxns.push({
           id: makeTransactionId(),
@@ -413,11 +413,11 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
     console.error("[BANK ERROR]", err);
     res.status(500).json({ error: err.message || "Faili töötlemine ebaõnnestus." });
   }
-});
+};
 
-router.post("/api/ai/bank-import", (req, res, next) => {
-  req.url = "/api/ai/bank-import";
-  router.handle(req, res, next);
-});
+// Püüab kinni kõik võimalikud aadressivariatsioonid
+router.post("/api/ai/bank-import", upload.single("file"), handleBankImport);
+router.post("/ai/bank-import", upload.single("file"), handleBankImport);
+router.post("/bank-import", upload.single("file"), handleBankImport);
 
 export default router;
