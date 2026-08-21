@@ -114,32 +114,17 @@ export function buildBankMeta(
 async function extractBankPdfDirectly(buffer: Buffer, filename: string) {
   const b64 = `data:application/pdf;base64,${buffer.toString("base64")}`;
 
-  const prompt = `Loe pangaväljavõtte PDF-ist KÕIK tehinguread tabelist.
+  const prompt = `Loe pangaväljavõtte PDF-ist KÕIK tehinguread.
+Tuvasta iga rea kuupäev, kirjeldus, deebet (väljaminek), kreedit (sissetulek) ja saldo.
 
-TULBAD:
-Igal real on kaks eraldi summatulpa: "Deebet" (väljamakse) ja "Kreedit" (sissemakse).
-Väljasta iga rea kohta:
-[kuupäev, selgitus, deebet_summa_või_null, kreedit_summa_või_null, saldo_kui_on]
-
-Näide:
-- Kui rida on deebetis (nt Google, Korteriühistu, pood, digikassa): ["2026-08-07", "TELIA", 61.47, null, null]
-- Kui rida on kreeditis (nt laekumine, toetus): ["2026-08-07", "SOTSIAALKINDLUSTUSAMET", null, 710.00, null]
-
-Loe ka dokumendi üldsummad:
-- openingBalance (Algsaldo)
-- closingBalance (Lõppsaldo)
-- periodIncome (Perioodi sissetulekud)
-- periodExpense (Perioodi väljaminekud)
-
-JSON:
+JSON formaat:
 {
   "openingBalance": 503.61,
   "closingBalance": 29.85,
   "periodIncome": 1567.41,
   "periodExpense": 2041.17,
   "tx": [
-    ["2026-08-07", "TELIA", 61.47, null, null],
-    ["2026-08-07", "SOTSIAALKINDLUSTUSAMET", null, 710.00, null]
+    ["2026-08-19", "Google One", 21.99, null, 29.85]
   ]
 }`;
 
@@ -218,16 +203,33 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
         if (amount <= 0.001) continue;
 
         let dir: "income" | "expense" = isCredit ? "income" : "expense";
-
-        // Digikassa ja ostud ei saa kunagi olla tulu
         const lower = desc.toLowerCase();
+
+        // Automaatne reeglistik: kindlad väljaminekud
         if (
           lower.includes("digikassa") ||
           lower.includes("ümardus") ||
-          lower.includes("ostuklikk") ||
-          lower.includes("kaart...")
+          lower.includes("kogumine") ||
+          lower.includes("kaart...") ||
+          lower.includes("arve nr") ||
+          lower.includes("maksimarket") ||
+          lower.includes("rimi") ||
+          lower.includes("lidl") ||
+          lower.includes("selver") ||
+          lower.includes("maxima") ||
+          lower.includes("tankla") ||
+          lower.includes("replit") ||
+          lower.includes("google") ||
+          lower.includes("telia") ||
+          lower.includes("tele2") ||
+          lower.includes("enefit") ||
+          lower.includes("alexela") ||
+          lower.includes("korteriühistu") ||
+          lower.includes("trustly")
         ) {
-          dir = "expense";
+          if (!lower.includes("väljamakse kogumishoiuselt")) {
+            dir = "expense";
+          }
         }
 
         rawTxns.push({
@@ -250,7 +252,6 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
         return;
       }
 
-      // Kronoloogiline järjestus vanimast uusimani
       rawTxns.sort((a, b) => a.date.localeCompare(b.date));
 
       const post = postProcessBankTransactions(rawTxns, {
