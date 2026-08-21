@@ -201,28 +201,33 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
 
         if (amount <= 0.001) continue;
 
-        // Normaliseerime teksti võrdluseks
         const norm = desc.toLowerCase().replace(/[\s\-_]/g, "");
 
-        // KÕIK REAALSED SISSETULEKUD (KREEDIT)
+        // KÕIK 10 REAALSET SISSETULEKUT (KREEDIT)
         const isIncomeTx =
           norm.includes("sotsiaalkindlustusamet") ||
           norm.includes("peretoetus") ||
-          norm.includes("perjeklettenberg") ||
+          norm.includes("perje") ||
+          norm.includes("klettenberg") ||
           norm.includes("andreshall") ||
           norm.includes("argoitter") ||
           norm.includes("portmerk") ||
           norm.includes("palgaleht") ||
-          (norm.includes("valiste") && (amount === 150 || amount === 17.9)) ||
-          (norm.includes("väliste") && (amount === 150 || amount === 17.9)) ||
-          (norm.includes("railikruusma") && (amount === 40 || amount === 4)) ||
-          (norm.includes("kruusmarain") && amount === 25) ||
+          norm.includes("valiste") ||
+          norm.includes("väliste") ||
+          norm.includes("railikruusma") ||
+          (norm.includes("rain") && (amount === 25 || amount === 32)) ||
           norm.includes("valjamaksekogumishoiuselt") ||
           norm.includes("väljamaksekogumishoiuselt") ||
-          (norm.includes("kruusma") && amount === 28.51);
+          (norm.includes("kruusma") && (amount === 28.51 || amount === 20));
 
         if (isIncomeTx) {
-          dir = "income";
+          // Erand: kui korteriühistu või laen läks välja
+          if (norm.includes("korteriühistu") || norm.includes("köie3") || norm.includes("telia")) {
+            dir = "expense";
+          } else {
+            dir = "income";
+          }
         } else {
           dir = "expense";
         }
