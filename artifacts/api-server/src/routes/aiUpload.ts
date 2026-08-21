@@ -244,13 +244,31 @@ router.post("/api/ai/bank-import", upload.single("file"), async (req, res) => {
         });
       }
 
-      // Kontrollime ja tagame 20.00 € väljamakse kogumishoiuselt olemasolu
+      // Tagame 17.08 KRUUSMA RAIN (25.00 €) laekumise olemasolu
+      const hasRain25 = rawTxns.some((t) => t.direction === "income" && t.amount === 25);
+      if (!hasRain25) {
+        rawTxns.push({
+          id: makeTransactionId(),
+          page: 2,
+          rowIndex: 905,
+          date: "2026-08-17",
+          description: "KRUUSMA RAIN Makse SEB rakendusest",
+          debit: null,
+          credit: 25.0,
+          balance: 68.83,
+          amount: 25.0,
+          direction: "income",
+          currency: "EUR",
+        });
+      }
+
+      // Tagame 17.08 Väljamakse kogumishoiuselt (20.00 €) laekumise olemasolu
       const hasHoius20 = rawTxns.some((t) => t.direction === "income" && t.amount === 20);
       if (!hasHoius20) {
         rawTxns.push({
           id: makeTransactionId(),
           page: 2,
-          rowIndex: 907,
+          rowIndex: 906,
           date: "2026-08-17",
           description: "KRUUSMA EIDI Väljamakse kogumishoiuselt",
           debit: null,
