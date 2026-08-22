@@ -7,7 +7,9 @@
  *   - BankImportModal in FinancePage  (new explicit Money-module import path)
  *
  * Direction comes ONLY from the server extraction pipeline — never re-derived here.
- * Import is blocked while any needsReview transaction exists or validation fails.
+ * The Confirm button is always enabled once at least one transaction was
+ * extracted; a balance mismatch or flagged row is shown as a warning, never
+ * a hard block — the user decides whether to fix rows first or import anyway.
  */
 
 import { X } from "lucide-react";
@@ -302,18 +304,18 @@ export default function MoneyImportReviewCard({
         style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
       >
         {/* Unverified: import is allowed but no control totals were found */}
-        {!blocked && isUnverified && (
+        {isUnverified && (
           <p className="text-[11px] text-[#B45309] font-medium mb-2 leading-snug">
             {et
               ? "⚠ Automaatseid kontrollandmeid ei leitud. Kontrolli tehingud enne importimist."
               : "⚠ No automated control data found. Review transactions before importing."}
           </p>
         )}
-        {/* Review-required but NOT blocked: reconciliation didn't fully match
-            (balance mismatch or flagged rows) — informational only. Import
-            stays clickable; the user can fix flagged rows above first, or
-            confirm anyway with full awareness of the mismatch. */}
-        {!blocked && validationStatus === "review_required" && (
+        {/* Review-required: reconciliation didn't fully match (balance
+            mismatch or flagged rows) — informational only. The button below
+            is never disabled by this; the user can fix flagged rows above
+            first, or confirm anyway with full awareness of the mismatch. */}
+        {validationStatus === "review_required" && (
           <p className="text-[11px] text-[#B45309] font-medium mb-2 leading-snug">
             {blockReason
               ? `⚠ ${blockReason}`
@@ -322,8 +324,8 @@ export default function MoneyImportReviewCard({
                 : "⚠ Balance or transactions don't fully reconcile. Review rows before confirming, but you can still import."}
           </p>
         )}
-        {/* Blocked: extraction produced no transactions at all */}
-        {blocked && (
+        {/* No transactions at all — informational only, button stays enabled */}
+        {transactions.length === 0 && (
           <p className="text-[11px] text-[#DC2626] font-medium mb-2 leading-snug">
             {et
               ? "⛔ Tehinguid ei leitud — importimiseks pole midagi."
@@ -332,15 +334,13 @@ export default function MoneyImportReviewCard({
         )}
 
         <div className="flex gap-2">
-          {/* Confirm — disabled while any gate is unmet; never bypassed */}
+          {/* Confirm — always enabled whenever transactions were found; a
+              balance mismatch or flagged row is shown as a warning above,
+              never disables this button. The user decides. */}
           <button
             onClick={onConfirm}
-            disabled={blocked}
-            className={`flex-1 py-2.5 rounded-lg text-white text-sm font-medium transition-colors ${
-              blocked
-                ? "bg-[#94A3B8] cursor-not-allowed opacity-70"
-                : "bg-[#16A34A] hover:bg-[#15803D] active:bg-[#166534]"
-            }`}
+            disabled={false}
+            className="flex-1 py-2.5 rounded-lg text-white text-sm font-medium transition-colors bg-[#16A34A] hover:bg-[#15803D] active:bg-[#166534] cursor-pointer"
           >
             {et ? "Kinnita import" : "Confirm import"}
           </button>

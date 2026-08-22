@@ -167,11 +167,14 @@ function run(): void {
     passed++;
   }
 
-  // ── 4. Balance mismatch flagged as needsReview on the failing row ─────────
+  // ── 4. Balance mismatch: reported and reconciliation fails, but never
+  //        blocks import or excludes the row (explicit product decision —
+  //        the running-balance chain is shown as a warning, never a hard
+  //        lock; the user reviews and decides, or manually corrects a row).
   //
   // Input is in newest-first order (as the AI model returns it).  After the
   // chronological sort, tx(1,1) runs first (100-20=80 ✓) and tx(1,2) runs
-  // second (80+50=130 ≠ 999 ✗).  Only the second row must be flagged.
+  // second (80+50=130 ≠ 999 ✗).
   {
     const transactions: NormalizedTransaction[] = [
       tx(1, 2, "2026-08-01", null, 50, 999), // newest in AI output — wrong balance
@@ -185,23 +188,23 @@ function run(): void {
     // After sort: [tx(1,1), tx(1,2)]; tx(1,1) passes, tx(1,2) fails.
     assert(
       result.reconciliation.ok === false,
-      "Balance mismatch must fail reconciliation",
+      "Balance mismatch must still fail reconciliation (still detected and reported)",
     );
     assert(
-      result.transactions[1].needsReview === true,
-      "Mismatched transaction (tx rowIndex 2, index 1 after sort) must be flagged",
+      result.transactions[1].needsReview !== true,
+      "A balance-chain mismatch alone must NOT set needsReview — no longer excludes the row",
     );
     assert(
       result.transactions[1].reviewReason?.includes("Jooksev saldo"),
-      "Review reason must mention balance mismatch",
+      "Review reason must still mention the balance mismatch (informational)",
     );
     assert(
-      result.transactions[0].needsReview !== true,
-      "First transaction (correct balance) must not be flagged",
+      result.importAllowed === true,
+      "Import must be allowed even when the balance chain fails — never a hard block",
     );
     assert(
-      result.importAllowed === false,
-      "Import must be blocked when chain fails",
+      result.validationStatus === "review_required",
+      "Status must still surface as review_required so the UI can show a warning",
     );
     assert(
       result.reconciliation.mismatchedRows.length === 1,
@@ -210,6 +213,10 @@ function run(): void {
     assert(
       result.reconciliation.mismatchedRows[0].rowIndex === 2,
       "Mismatch must be on rowIndex 2",
+    );
+    assert(
+      result.calculatedIncomeTotal === 50 && result.calculatedExpenseTotal === 20,
+      "Both rows must still count toward posted totals despite the mismatch",
     );
 
     passed++;
@@ -393,10 +400,10 @@ function run(): void {
     passed++;
   }
 
-  // ── 10. alreadyChronological must NOT mask genuine incompleteness ─────────
+  // ── 10. Incomplete extraction: reconciliation still catches it, but no
+  //         longer blocks import (explicit product decision — see test 4).
   // A row is missing (simulating a truncated/incomplete extraction) so the
-  // running-balance chain cannot reach the printed closing balance. Even
-  // with alreadyChronological set, this must still fail closed.
+  // running-balance chain cannot reach the printed closing balance.
   {
     const missingARow: NormalizedTransaction[] = [
       tx(1, 0, "2031-03-01", 50, null, 950), // only the expense; income row is missing
@@ -409,11 +416,15 @@ function run(): void {
 
     assert(
       result.reconciliation.ok === false,
-      "Incomplete extraction must never be silently treated as valid",
+      "Incomplete extraction must still be detected by reconciliation (never silently 'ok')",
     );
     assert(
-      result.importAllowed === false,
-      "Import must be blocked when extraction is incomplete",
+      result.validationStatus === "review_required",
+      "Incompleteness must still surface as review_required for the UI warning",
+    );
+    assert(
+      result.importAllowed === true,
+      "Import is allowed regardless — the row itself has date+amount, so it is not excluded",
     );
 
     passed++;

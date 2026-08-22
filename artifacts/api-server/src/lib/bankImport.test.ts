@@ -241,22 +241,23 @@ test("T15 - balance chain matches → validationStatus=verified", () => {
   assert.equal(result.importAllowed, true);
 });
 
-test("T16 - balance chain mismatch → importAllowed=false, review_required", () => {
-  // Running balance 1000+500=1500 but row shows 1700 → per-row mismatch
+test("T16 - balance chain mismatch → importAllowed=true (warning only), review_required", () => {
+  // Running balance 1000+500=1500 but row shows 1700 → per-row mismatch.
+  // A balance-chain mismatch alone is a warning, never a hard block.
   const result = postProcessBankTransactions(
     [tx({ credit: 500, amount: 500, direction: "income", balance: 1700 })],
     { openingBalance: 1000, closingBalance: 1700, printedIncomeTotal: null, printedExpenseTotal: null },
   );
-  assert.equal(result.importAllowed, false);
+  assert.equal(result.importAllowed, true);
   assert.notEqual(result.validationStatus, "verified");
 });
 
-test("T17 - needsReview row present → importAllowed=false, reviewCount=1", () => {
+test("T17 - needsReview row present → importAllowed=true (warning only), reviewCount=1", () => {
   const result = postProcessBankTransactions(
     [tx({ needsReview: true, reviewReason: "Both columns", amount: 100 })],
     NO_CONTROLS,
   );
-  assert.equal(result.importAllowed, false);
+  assert.equal(result.importAllowed, true);
   assert.equal(result.reviewCount, 1);
   assert.equal(result.validationStatus, "review_required");
 });
@@ -357,7 +358,7 @@ test("T20 - mixed income/expense: correct incomeCount, expenseCount, totals", ()
   assert.equal(post!.importAllowed, true);
 });
 
-test("T21 - both debit+credit in CSV → review_required, importAllowed=false", () => {
+test("T21 - both debit+credit in CSV → review_required, importAllowed=true (warning only)", () => {
   const { post } = runPipeline(csv(
     "Date,Description,Debit,Credit",
     "2024-01-10,Salary,,3000.00",
@@ -365,7 +366,7 @@ test("T21 - both debit+credit in CSV → review_required, importAllowed=false", 
   ));
   assert.ok(post !== null);
   assert.equal(post!.reviewCount, 1);
-  assert.equal(post!.importAllowed, false);
+  assert.equal(post!.importAllowed, true);
   assert.equal(post!.validationStatus, "review_required");
 });
 
@@ -382,7 +383,7 @@ test("T22 - opening/closing balance present and correct → verified", () => {
   assert.equal(post!.importAllowed, true);
 });
 
-test("T23 - opening/closing balance mismatch → not verified", () => {
+test("T23 - opening/closing balance mismatch → not verified, importAllowed=true (warning only)", () => {
   // Per-row balance 1700 but opening(1000)+credit(500)=1500 → chain mismatch.
   const { post } = runPipeline(csv(
     "Date,Description,Credit,Balance",
@@ -391,7 +392,8 @@ test("T23 - opening/closing balance mismatch → not verified", () => {
     "Closing balance,,,1700.00",
   ));
   assert.ok(post !== null);
-  assert.equal(post!.importAllowed, false);
+  assert.notEqual(post!.validationStatus, "verified");
+  assert.equal(post!.importAllowed, true);
 });
 
 test("T24 - no controls at all → unverified, still importAllowed", () => {

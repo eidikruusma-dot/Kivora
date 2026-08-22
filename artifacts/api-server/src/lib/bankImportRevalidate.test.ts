@@ -106,21 +106,27 @@ async function run(): Promise<void> {
       alreadyChronological: true,
     });
 
-    assert(before.importAllowed === false, "Misread statement must be blocked before the fix");
-    assert(before.reviewCount === 1, `Expected exactly 1 flagged row before fix; got ${before.reviewCount}`);
+    // A balance-chain mismatch alone no longer blocks import or sets
+    // needsReview (explicit product decision — see
+    // postProcessBankTransactions.test.ts #4) — it is still detected and
+    // surfaced as a review_required warning + reviewReason text, which is
+    // exactly what the user needs to spot row2 and fix it by hand.
+    assert(before.importAllowed === true, "Import is never blocked by a balance mismatch alone");
+    assert(before.validationStatus === "review_required", "Mismatch must still surface as review_required");
+    assert(before.reviewCount === 0, `A balance mismatch alone must not set needsReview; got reviewCount=${before.reviewCount}`);
     const flaggedBefore = before.transactions.find((t) => t.id === "row2");
-    assert(flaggedBefore?.needsReview === true, "row2 (the misread one) must be flagged");
     assert(
-      before.transactions.find((t) => t.id === "row1")?.needsReview !== true,
-      "row1 must NOT be flagged — only the actually-wrong row",
+      flaggedBefore?.reviewReason?.includes("Jooksev saldo"),
+      "row2 (the misread one) must still carry a reviewReason mentioning the mismatch",
     );
     assert(
-      before.transactions.find((t) => t.id === "row3")?.needsReview !== true,
-      "row3 must NOT be flagged — only the actually-wrong row",
+      before.reconciliation.mismatchedRows.length === 1 &&
+        before.reconciliation.mismatchedRows[0].rowIndex === 1,
+      "Exactly row2 must be identified as the mismatched row",
     );
 
     const bankMetaBefore = buildBankMeta(before, controls, 1);
-    assert(bankMetaBefore.importAllowed === false, "bankMeta must mirror post.importAllowed");
+    assert(bankMetaBefore.importAllowed === true, "bankMeta must mirror post.importAllowed");
 
     // ── Simulate the client edit: user clicks row2 and flips it to income ──
     // (amount/balance untouched — only which column the amount belongs to).
@@ -181,6 +187,10 @@ async function run(): Promise<void> {
 
     // Row "b" carries a STALE flag from a previous (already-fixed) run —
     // its own numbers reconcile perfectly, the flag is just leftover state.
+    // A stale flag never blocks import (importAllowed only depends on
+    // having at least one transaction), but it would still mislead the
+    // user by appearing in the "needs review" list — stripping it keeps
+    // that list accurate.
     const staleInput: SynTx[] = [
       clean[0],
       { ...clean[1], needsReview: true, reviewReason: "stale reason from a prior attempt" },
@@ -191,9 +201,9 @@ async function run(): Promise<void> {
     });
     assert(
       withoutStripping.reviewCount === 1,
-      "Without stripping, the stale flag alone must still block import (proves stripping is necessary, not optional)",
+      "Without stripping, the stale flag alone would still appear in the needs-review list (proves stripping is necessary, not optional)",
     );
-    assert(withoutStripping.importAllowed === false, "Without stripping, import stays blocked by the stale flag alone");
+    assert(withoutStripping.importAllowed === true, "A stale needsReview flag never blocks import either way");
 
     const stripped: SynTx[] = staleInput.map((t) => {
       const { needsReview: _needsReview, reviewReason: _reviewReason, ...rest } = t;

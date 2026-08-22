@@ -643,8 +643,11 @@ async function run(): Promise<void> {
   }
 
   // ── 10. Incomplete merged result (a page's transaction missing) must still
-  //        fail reconciliation and be blocked — batching must never weaken
-  //        the existing "never import incomplete data" guarantee ────────────
+  //        fail reconciliation (detected and reported) — batching must never
+  //        weaken that detection. Whether it BLOCKS import is a separate,
+  //        explicit product decision (see postProcessBankTransactions.test.ts
+  //        #4/#10): reconciliation failures are surfaced as a warning, never
+  //        a hard lock — so importAllowed stays true here. ────────────────
   {
     const batches = [
       {
@@ -696,7 +699,8 @@ async function run(): Promise<void> {
     });
 
     assert(post.reconciliation.ok === false, "Incomplete merged data must never reconcile successfully");
-    assert(post.importAllowed === false, "Incomplete merged data must never be importable");
+    assert(post.validationStatus === "review_required", "Incompleteness must still surface as review_required");
+    assert(post.importAllowed === true, "Import is allowed regardless — reconciliation failures are a warning, not a block");
 
     passed++;
   }

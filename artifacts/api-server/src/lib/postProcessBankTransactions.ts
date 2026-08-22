@@ -254,7 +254,13 @@ export function postProcessBankTransactions<T extends NormalizedTransaction>(
     controls,
   );
 
-  // ── 3. Per-transaction mismatch flagging ──────────────────────────────────
+  // ── 3. Per-transaction mismatch flagging (informational, non-blocking) ────
+  // A running-balance-chain mismatch on a row no longer marks it needsReview
+  // or excludes it from the income/expense lists — a row with a valid date,
+  // amount, and description is classified directly. The mismatch is still
+  // recorded on the row as a visible note (reviewReason, needsReview stays
+  // false) and surfaces in the reconciliation summary below, so the user can
+  // still see and manually correct it, but it never blocks import on its own.
   const mismatchKeySet = new Set(
     reconciliation.mismatchedRows.map((r) => `${r.pageNumber}:${r.rowIndex}`),
   );
@@ -269,17 +275,13 @@ export function postProcessBankTransactions<T extends NormalizedTransaction>(
       const newReason = existing
         ? `${existing}; ${BALANCE_MISMATCH_REASON}`
         : BALANCE_MISMATCH_REASON;
-      // Safe cast: only overriding optional fields already declared in
-      // NormalizedTransaction; all extra fields of T are spread through.
-      return { ...tx, needsReview: true, reviewReason: newReason } as T;
+      return { ...tx, reviewReason: newReason } as T;
     }
     return tx;
   });
 
-  // ── 4. Posted totals (exclude pending + needsReview) ─────────────────────
-  const confirmed = flagged.filter(
-    (t) => !t.needsReview && t.amount > 0 && !t.pending,
-  );
+  // ── 4. Posted totals (exclude only pending; needsReview no longer excludes) ─
+  const confirmed = flagged.filter((t) => t.amount > 0 && !t.pending);
   const incomeRows = confirmed.filter((t) => t.direction === "income");
   const expenseRows = confirmed.filter((t) => t.direction === "expense");
   const incomeCount = incomeRows.length;
@@ -291,17 +293,20 @@ export function postProcessBankTransactions<T extends NormalizedTransaction>(
   const reviewCount = flagged.filter((t) => t.needsReview).length;
 
   // ── 5. Import decision ────────────────────────────────────────────────────
-  const importAllowed = reconciliation.ok && reviewCount === 0;
+  // Blocked only when there is nothing to import at all. A balance-chain
+  // mismatch or flagged row is shown as a warning (validationStatus below)
+  // but never blocks confirming the import — the user decides.
+  const importAllowed = confirmed.length > 0;
 
   const validationErrors = [...reconciliation.errors];
   if (reviewCount > 0) {
-    validationErrors.push(
-      `${reviewCount} tehingut vajab ülevaatust — import blokeeritud`,
-    );
+    validationErrors.push(`${reviewCount} tehingut vajab ülevaatust`);
   }
 
-  // verified   — at least one independent control check was available and passed
-  // unverified — no control data was present; arithmetically neutral
+  // verified        — at least one independent control check was available and passed
+  // unverified      — no control data was present; arithmetically neutral
+  // review_required — informational only: reconciliation didn't fully match,
+  //                   shown as a warning but does not block importAllowed
   const hasControls =
     controls.openingBalance != null ||
     controls.closingBalance != null ||
@@ -310,7 +315,11 @@ export function postProcessBankTransactions<T extends NormalizedTransaction>(
     reconciliation.runningBalanceChecks > 0;
 
   const validationStatus: "verified" | "unverified" | "review_required" =
-    !importAllowed ? "review_required" : hasControls ? "verified" : "unverified";
+    !reconciliation.ok || reviewCount > 0
+      ? "review_required"
+      : hasControls
+        ? "verified"
+        : "unverified";
 
   return {
     transactions: flagged,

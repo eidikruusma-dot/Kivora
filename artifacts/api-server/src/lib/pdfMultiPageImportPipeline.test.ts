@@ -308,10 +308,13 @@ async function run(): Promise<void> {
     passed++;
   }
 
-  // ── 4. Genuine incompleteness still fails closed through the full pipeline ─
+  // ── 4. Genuine incompleteness is still detected through the full pipeline ─
   // Drop one page's transaction (simulating a real truncation) while keeping
   // the original printed controls — the chain can no longer reach the
-  // printed closing balance, so the pipeline must refuse to import.
+  // printed closing balance. Reconciliation must still catch this (never
+  // silently "ok"), but per an explicit product decision it surfaces as a
+  // review_required warning rather than blocking import outright — the user
+  // decides whether to fix the flagged rows or import anyway.
   {
     const truncatedStructural: StructuralPdfBufferResult = {
       ...structural,
@@ -327,8 +330,12 @@ async function run(): Promise<void> {
       "Truncated extraction must never reconcile successfully",
     );
     assert(
-      post.importAllowed === false,
-      "Truncated extraction must never be imported",
+      post.validationStatus === "review_required",
+      "Truncated extraction must still surface as review_required",
+    );
+    assert(
+      post.importAllowed === true,
+      "Import is allowed regardless — reconciliation failures warn, never hard-block",
     );
 
     passed++;
