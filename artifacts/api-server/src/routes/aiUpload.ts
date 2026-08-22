@@ -1970,7 +1970,9 @@ async function extractBankStatementWithRetry(
 //
 //   Readable + bank:   extractStructuralPdfBuffer first; genuine failure → AI fallback
 //   Readable + other:  isBankStatement = false, return plain text
-//   Garbled + bank:    extractScannedPdf OCR text → AI model extraction
+//   Garbled + bank:    extractScannedPdf OCR (plainText only) run in PARALLEL
+//                       with the batched AI model extraction — the batched
+//                       result's own isBankStatement is authoritative
 //   Garbled + other:   isBankStatement = false, return OCR text
 //
 // "Genuine failure" = structural.transactions.length === 0 OR structural.columnMap === null.
@@ -1995,18 +1997,33 @@ async function processBankPdfBuffer(
   }
 
   if (isGarbledText(text, filename)) {
-    // ── Step 2a: garbled / image-only → generic OCR ───────────────────────────
+    // ── Step 2: garbled / image-only → generic OCR ────────────────────────────
     console.log(`[PDF BANK] garbled text → OCR: ${filename}`);
-    const scanned = await extractScannedPdf(buffer, filename);
-    text = scanned.text;
 
-    if (!looksLikeBankStatement(text)) {
-      return { isBankStatement: false, plainText: text, usedOCR: true };
+    // Run the whole-document OCR (needed only for plainText in the
+    // non-bank-statement fallback below) CONCURRENTLY with the batched
+    // extraction pipeline, instead of sequentially before it. Production
+    // evidence: the sequential version could take 90+ seconds for an 8-page
+    // statement (OCR call + batch calls summed), risking a platform 502
+    // timeout. The batched pipeline's own model.document.isBankStatement
+    // (returned by extractBankStatementWithRetry) is the authoritative
+    // classification signal — the separate OCR call here only supplies
+    // readable plainText, so it no longer needs to gate the batched call.
+    // Trade-off: a genuinely non-bank garbled PDF now also pays for the
+    // batched extraction call(s) it previously skipped — accepted in
+    // exchange for real bank statements (the overwhelmingly common case)
+    // completing well under the timeout.
+    const [scanned, extraction] = await Promise.all([
+      extractScannedPdf(buffer, filename),
+      extractBankStatementWithRetry(buffer, filename, "", true),
+    ]);
+
+    if (!extraction.isBankStatement) {
+      return { isBankStatement: false, plainText: scanned.text, usedOCR: true };
     }
 
-    // ── Step 2b: OCR text IS a bank statement → AI extraction ─────────────────
     console.log(`[PDF BANK] OCR result looks like bank statement: ${filename}`);
-    return extractBankStatementWithRetry(buffer, filename, text, true);
+    return { ...extraction, plainText: scanned.text };
   }
 
   // ── Step 3: readable text — is this a bank statement? ────────────────────────
