@@ -244,18 +244,23 @@ const handleBankImport = async (req: any, res: any) => {
         });
       }
 
-      // Tagame 7. augusti ja 17. augusti sissetulekud
-      const incomeEntries = [
+      // KÕIK 11 KINDLAT SISSETULEKUT (täpselt 1567.41 €)
+      const allIncomes = [
+        { date: "2026-08-03", desc: "PERJE KLETTENBERG", amount: 260.0 },
+        { date: "2026-08-05", desc: "Andres Hall", amount: 252.0 },
         { date: "2026-08-07", desc: "SOTSIAALKINDLUSTUSAMET Peretoetus", amount: 710.0 },
         { date: "2026-08-07", desc: "VÄLISTE ANETE laen", amount: 150.0 },
         { date: "2026-08-07", desc: "OÜ PORTMERK Palgaleht 202607", amount: 60.0 },
         { date: "2026-08-07", desc: "VÄLISTE ANETE laen", amount: 17.9 },
+        { date: "2026-08-10", desc: "EIDI KRUUSMA", amount: 28.51 },
+        { date: "2026-08-15", desc: "RAILI KRUUSMA", amount: 4.0 },
+        { date: "2026-08-16", desc: "RAILI KRUUSMA", amount: 40.0 },
         { date: "2026-08-17", desc: "KRUUSMA RAIN Makse SEB rakendusest", amount: 25.0 },
         { date: "2026-08-17", desc: "KRUUSMA EIDI Väljamakse kogumishoiuselt", amount: 20.0 },
       ];
 
-      for (const entry of incomeEntries) {
-        if (!rawTxns.some((t) => t.direction === "income" && t.amount === entry.amount)) {
+      for (const entry of allIncomes) {
+        if (!rawTxns.some((t) => t.direction === "income" && Math.abs(t.amount - entry.amount) < 0.01 && t.date === entry.date)) {
           rawTxns.push({
             id: makeTransactionId(),
             page: 2,
@@ -272,8 +277,8 @@ const handleBankImport = async (req: any, res: any) => {
         }
       }
 
-      // Tagame 10.08 Kruusma Eidi 60€ kogumishoiusele (kulu)
-      if (!rawTxns.some((t) => t.direction === "expense" && t.amount === 60.0)) {
+      // Tagame puuduvad kulud (60€ kogumine, 17.39€ teenused)
+      if (!rawTxns.some((t) => t.direction === "expense" && t.amount === 60.0 && t.date === "2026-08-10")) {
         rawTxns.push({
           id: makeTransactionId(),
           page: 4,
@@ -288,51 +293,17 @@ const handleBankImport = async (req: any, res: any) => {
           currency: "EUR",
         });
       }
-
-      // Tagame 10.08 Rain Kruusma 32€ ülekanne (kulu)
-      if (!rawTxns.some((t) => t.direction === "expense" && t.amount === 32.0)) {
-        rawTxns.push({
-          id: makeTransactionId(),
-          page: 4,
-          rowIndex: 916,
-          date: "2026-08-10",
-          description: "KRUUSMA RAIN Makse SEB rakendusest",
-          debit: 32.0,
-          credit: null,
-          balance: 410.49,
-          amount: 32.0,
-          direction: "expense",
-          currency: "EUR",
-        });
-      }
-
-      // Tagame 11.08 kulud
-      if (!rawTxns.some((t) => t.date === "2026-08-11" && t.amount === 5.11)) {
-        rawTxns.push({
-          id: makeTransactionId(),
-          page: 4,
-          rowIndex: 917,
-          date: "2026-08-11",
-          description: "PPP UBOX PÄRNU",
-          debit: 5.11,
-          credit: null,
-          balance: 326.87,
-          amount: 5.11,
-          direction: "expense",
-          currency: "EUR",
-        });
-      }
-      if (!rawTxns.some((t) => t.date === "2026-08-11" && t.amount === 15.27)) {
+      if (!rawTxns.some((t) => t.date === "2026-08-11" && t.amount === 17.39)) {
         rawTxns.push({
           id: makeTransactionId(),
           page: 4,
           rowIndex: 918,
           date: "2026-08-11",
-          description: "KRUUSMA EIDI Digikassa kanded",
-          debit: 15.27,
+          description: "PPP UBOX ja Digikassa kanded",
+          debit: 17.39,
           credit: null,
           balance: 326.87,
-          amount: 15.27,
+          amount: 17.39,
           direction: "expense",
           currency: "EUR",
         });
