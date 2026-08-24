@@ -954,6 +954,21 @@ KEY RULE: debit and credit are NEVER both non-null on the same row.
 If a column has a value on EVERY row → it is the running balance, not debit or credit.
 If a column is sometimes blank → it is debit or credit.
 
+VERIFY your column identification against the running balance before extracting
+any rows — this is the single most common extraction error, so check it
+explicitly: pick any two consecutive rows and confirm
+  previousBalance + credit − debit == thisRowsBalance
+If that equation does NOT hold for the column you labeled "credit", you have
+debit and credit SWAPPED — re-identify which physical column is which before
+proceeding. Worked example of a correctly-identified table (values illustrative
+only):
+  Date        Description   Debit    Credit   Balance
+  2025-01-01  Landlord Ltd  120.00            880.00   (1000.00 − 120.00 = 880.00 ✓ this is DEBIT/expense)
+  2025-01-03  ACME Payroll            600.00  1480.00   (880.00 + 600.00 = 1480.00 ✓ this is CREDIT/income)
+A column mislabeled as the opposite of this would fail the equation above —
+if your candidate column assignment fails it, swap debit and credit and
+re-check.
+
 ═══════════════════════════════════════════════
 STEP 4 — TRANSACTION EXTRACTION
 ═══════════════════════════════════════════════
@@ -966,6 +981,7 @@ COMPLETENESS IS CRITICAL:
 - Do not stop after finding enough examples.
 - Before returning the result, make a final top-to-bottom pass over the transaction table and verify that every visible transaction row has been included exactly once.
 - If a visible row cannot be read confidently, include it with low confidence rather than silently omitting it.
+- Explicit self-check: count the visible transaction rows on the page(s) BEFORE extracting, then count the rows in your transactions[] output AFTER extracting. These two counts must be equal. If your output count is lower, you have skipped rows — go back and find them before returning the result.
 
 For each transaction:
   date        — as it appears in the date column.  Do NOT convert.
@@ -1838,6 +1854,45 @@ function buildBankResultFromStructural(
 
 // ── Build result from AI model extraction ────────────────────────────────────
 
+// ── Fallback opening/closing balance derivation ──────────────────────────────
+// The model sometimes reads every transaction row's own running balance
+// correctly but still misses the separate openingBalance/closingBalance
+// document-level aggregate fields (an observed extraction gap — the header
+// or footer label is easy to overlook even when the table itself is read
+// well). Rather than leave the statement header blank, derive them
+// deterministically from the transactions' own balance column. Never
+// overrides a value the model DID report.
+export function deriveFallbackBalances(
+  transactions: Array<{
+    date: string;
+    debit: number | null;
+    credit: number | null;
+    balance: number | null;
+  }>,
+  document: { openingBalance: number | null; closingBalance: number | null },
+): { openingBalance: number | null; closingBalance: number | null } {
+  if (document.openingBalance !== null && document.closingBalance !== null) {
+    return document;
+  }
+
+  const withBalance = transactions.filter(
+    (t) => typeof t.balance === "number" && t.date,
+  );
+  if (withBalance.length === 0) return document;
+
+  const sorted = [...withBalance].sort((a, b) => a.date.localeCompare(b.date));
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+
+  const openingBalance =
+    document.openingBalance ??
+    roundMoney((first.balance as number) - (first.credit ?? 0) + (first.debit ?? 0));
+
+  const closingBalance = document.closingBalance ?? (last.balance as number);
+
+  return { openingBalance, closingBalance };
+}
+
 function buildBankResultFromModel(
   model: ModelBankStatement,
   plainText: string,
@@ -1846,9 +1901,13 @@ function buildBankResultFromModel(
   const rawTxns = model.transactions.map((row, idx) =>
     normalizeBankTransaction(row, idx, model.document),
   );
-  const post = postProcessBankTransactions(rawTxns, {
+  const balances = deriveFallbackBalances(rawTxns, {
     openingBalance: model.document.openingBalance,
     closingBalance: model.document.closingBalance,
+  });
+  const post = postProcessBankTransactions(rawTxns, {
+    openingBalance: balances.openingBalance,
+    closingBalance: balances.closingBalance,
     printedIncomeTotal: model.document.printedIncomeTotal,
     printedExpenseTotal: model.document.printedExpenseTotal,
   });
@@ -1862,8 +1921,8 @@ function buildBankResultFromModel(
   const bankMeta = buildBankMeta(
     post,
     {
-      openingBalance: model.document.openingBalance,
-      closingBalance: model.document.closingBalance,
+      openingBalance: balances.openingBalance,
+      closingBalance: balances.closingBalance,
       printedIncomeTotal: model.document.printedIncomeTotal,
       printedExpenseTotal: model.document.printedExpenseTotal,
     },

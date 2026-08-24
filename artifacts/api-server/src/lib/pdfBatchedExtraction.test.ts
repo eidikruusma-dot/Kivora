@@ -62,6 +62,7 @@ async function run(): Promise<void> {
     dedupeAdjacentDuplicateTransactions,
     mergeModelBankStatements,
     normalizeBankTransaction,
+    deriveFallbackBalances,
   } = await import("../routes/aiUpload");
 
   let passed = 0;
@@ -702,6 +703,62 @@ async function run(): Promise<void> {
     assert(post.validationStatus === "review_required", "Incompleteness must still surface as review_required");
     assert(post.importAllowed === true, "Import is allowed regardless — reconciliation failures are a warning, not a block");
 
+    passed++;
+  }
+
+  // ── 11. deriveFallbackBalances: fills in a missing closingBalance from the
+  //         last transaction's own printed running balance ─────────────────
+  {
+    const txns = [
+      { date: "2027-02-01", debit: 30, credit: null, balance: 470 },
+      { date: "2027-02-03", debit: null, credit: 80, balance: 550 },
+    ];
+    const result = deriveFallbackBalances(txns, {
+      openingBalance: 500,
+      closingBalance: null,
+    });
+    assert(result.openingBalance === 500, "An explicitly-reported openingBalance must never be overridden");
+    assert(result.closingBalance === 550, `closingBalance must fall back to the last transaction's balance; got ${result.closingBalance}`);
+    passed++;
+  }
+
+  // ── 12. deriveFallbackBalances: fills in a missing openingBalance by
+  //         reversing the first transaction's own credit/debit delta ───────
+  {
+    const txns = [
+      { date: "2027-03-01", debit: null, credit: 100, balance: 600 }, // opening + 100 = 600 → opening = 500
+      { date: "2027-03-02", debit: 20, credit: null, balance: 580 },
+    ];
+    const result = deriveFallbackBalances(txns, {
+      openingBalance: null,
+      closingBalance: 580,
+    });
+    assert(result.openingBalance === 500, `openingBalance must be reverse-derived from the first row; got ${result.openingBalance}`);
+    assert(result.closingBalance === 580, "An explicitly-reported closingBalance must never be overridden");
+    passed++;
+  }
+
+  // ── 13. deriveFallbackBalances: both present → returned unchanged, no
+  //         transaction scan needed ─────────────────────────────────────────
+  {
+    const txns = [{ date: "2027-04-01", debit: 10, credit: null, balance: 990 }];
+    const result = deriveFallbackBalances(txns, {
+      openingBalance: 1000,
+      closingBalance: 990,
+    });
+    assert(result.openingBalance === 1000 && result.closingBalance === 990, "Both explicit values must pass through unchanged");
+    passed++;
+  }
+
+  // ── 14. deriveFallbackBalances: no transactions with a balance → both
+  //         stay null rather than guessing ─────────────────────────────────
+  {
+    const txns = [{ date: "2027-05-01", debit: 10, credit: null, balance: null }];
+    const result = deriveFallbackBalances(txns, {
+      openingBalance: null,
+      closingBalance: null,
+    });
+    assert(result.openingBalance === null && result.closingBalance === null, "Must never invent a balance when no row has one");
     passed++;
   }
 
