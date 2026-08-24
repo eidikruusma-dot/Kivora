@@ -143,6 +143,23 @@ function generateId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+// Persists the printed closing balance from the most recently confirmed
+// bank-statement import (see BankImportModal.runImport). Read by
+// FinancePage's currentAccountBalance in preference to re-deriving a
+// balance from stored transactions, which is unreliable for same-day ties.
+const LAST_STATEMENT_BALANCE_KEY = "kivora:lastStatementBalance";
+
+function readLastStatementBalance(): number | null {
+  try {
+    const raw = localStorage.getItem(LAST_STATEMENT_BALANCE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { balance?: unknown };
+    return typeof parsed.balance === "number" ? parsed.balance : null;
+  } catch {
+    return null;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Category styling
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2481,6 +2498,27 @@ function BankImportModal({
       parts.push(`${updatedCount} ${et ? "uuendatud/kattuvat" : "updated"}`);
     if (failed > 0) parts.push(`${failed} ${et ? "ebaõnnestus" : "failed"}`);
 
+    // Persist the statement's own printed closing balance, exactly as read
+    // from the imported PDF — used by the "Kontojääk" card instead of
+    // re-deriving a balance from stored transactions. That re-derivation
+    // picks "the transaction with the latest date, tie-broken by createdAt"
+    // — but every transaction from one import batch shares the same
+    // createdAt (see the `now` used above for every row), so same-day ties
+    // fall back to whatever order the data happens to come back in, which
+    // is not reliably the true last transaction of the day. The statement's
+    // own closingBalance has no such ambiguity.
+    if (typeof bankMeta.closingBalance === "number") {
+      try {
+        localStorage.setItem(
+          LAST_STATEMENT_BALANCE_KEY,
+          JSON.stringify({ balance: bankMeta.closingBalance, importedAt: now }),
+        );
+      } catch {
+        // localStorage unavailable (private mode, quota) — non-fatal, the
+        // card falls back to the transaction-derived balance.
+      }
+    }
+
     setState((s) => ({
       ...s,
       phase: "done",
@@ -2767,6 +2805,14 @@ export default function FinancePage() {
     income > 0 ? Math.min((planUsedTotal / income) * 100, 100) : 0;
 
   const currentAccountBalance = useMemo(() => {
+    // Prefer the last imported statement's own printed closing balance —
+    // unambiguous, unlike re-deriving one from stored transactions (every
+    // row from one import shares the same createdAt, so same-day ties fall
+    // back to arbitrary storage order). Re-read on every transactions
+    // change so a fresh import's just-written value is picked up.
+    const statementBalance = readLastStatementBalance();
+    if (statementBalance !== null) return statementBalance;
+
     const posted = transactions.filter(
       (t) => !t.pending && t.balance != null && typeof t.balance === "number",
     );
@@ -3337,12 +3383,14 @@ export default function FinancePage() {
                       <p
                         className={`font-bold tabular-nums leading-none ${
                           isHighlight
-                            ? "text-[21px] text-[#6F5AE8]"
+                            ? `text-[21px] ${item.value !== null && item.value < 0 ? "text-[#DC2626]" : "text-[#6F5AE8]"}`
                             : "text-[15px] text-[#1A1F36]"
                         }`}
                       >
                         {item.value !== null
-                          ? formatEuro(Math.abs(item.value ?? 0))
+                          ? isHighlight
+                            ? `${item.value < 0 ? "−" : ""}${formatEuro(Math.abs(item.value))}`
+                            : formatEuro(Math.abs(item.value ?? 0))
                           : isHighlight
                             ? "—"
                             : ""}
