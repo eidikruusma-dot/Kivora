@@ -5,12 +5,13 @@ import type { AppLang } from '@/lib/languageStore'
 import { t, type TranslationKey } from '@/lib/translations'
 import AppCard from '@/components/ui/AppCard'
 import ProgressBar from '@/components/ui/ProgressBar'
-import { PLAN_TEMPLATES, type PlanTemplateType } from '@/data/planTemplates'
+import { PLAN_TEMPLATES, type PlanTemplate, type PlanTemplateType } from '@/data/planTemplates'
 import {
   usePlans,
   usePlansLoading,
   addPlan,
   computePlanProgress,
+  createPlanItemsFromTemplate,
   isValidPlanTitle,
   isValidPlanDateRange,
   type Plan,
@@ -72,6 +73,7 @@ export default function PlansPage() {
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
   const [activeTab, setActiveTab] = useState<PlansTab>('myPlans')
   const [modalOpen, setModalOpen] = useState(false)
+  const [creatingTemplate, setCreatingTemplate] = useState<PlanTemplate | null>(null)
   const [form, setForm] = useState<CreateForm>(EMPTY_FORM)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -81,8 +83,13 @@ export default function PlansPage() {
 
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
 
-  function openCreateModal() {
-    setForm(EMPTY_FORM)
+  function openCreateModal(template: PlanTemplate | null) {
+    setCreatingTemplate(template)
+    setForm(
+      template
+        ? { title: t(template.titleKey, lang), color: template.defaultColor, startDate: '', endDate: '' }
+        : EMPTY_FORM,
+    )
     setFormError('')
     setModalOpen(true)
   }
@@ -90,6 +97,7 @@ export default function PlansPage() {
   function closeCreateModal() {
     if (saving) return
     setModalOpen(false)
+    setCreatingTemplate(null)
     setForm(EMPTY_FORM)
     setFormError('')
   }
@@ -113,17 +121,18 @@ export default function PlansPage() {
       const now = Date.now()
       const newPlan: Plan = {
         id: `plan-${now}-${Math.random().toString(36).slice(2, 7)}`,
-        type: 'blank',
+        type: creatingTemplate ? creatingTemplate.type : 'blank',
         title,
         color: form.color,
         startDate: form.startDate || undefined,
         endDate: form.endDate || undefined,
-        items: [],
+        items: creatingTemplate ? createPlanItemsFromTemplate(creatingTemplate, lang) : [],
         createdAt: now,
         updatedAt: now,
       }
       await addPlan(newPlan)
       setModalOpen(false)
+      setCreatingTemplate(null)
       setForm(EMPTY_FORM)
       setActiveTab('myPlans')
     } catch {
@@ -221,9 +230,19 @@ export default function PlansPage() {
                 {t('plans.templates.heading', lang)}
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {PLAN_TEMPLATES.map(({ type, icon: Icon, titleKey, descriptionKey, accentColor, accentBg }) => {
-                  const content = (
-                    <>
+                {PLAN_TEMPLATES.map((template) => {
+                  const { type, icon: Icon, titleKey, descriptionKey, accentColor, accentBg } = template
+                  const isBlank = type === 'blank'
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => openCreateModal(isBlank ? null : template)}
+                      className={`flex items-start gap-3 p-4 rounded-2xl border bg-white text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6F5AE8] focus-visible:ring-offset-2 ${
+                        isBlank
+                          ? 'border-dashed border-[#D1D5DB] hover:border-[#6F5AE8] hover:bg-[#F8F7FF]'
+                          : 'border-[#E8ECF0] hover:border-[#6F5AE8] hover:shadow-sm'
+                      }`}
+                    >
                       <div
                         className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
                         style={{ backgroundColor: accentBg, color: accentColor }}
@@ -234,25 +253,7 @@ export default function PlansPage() {
                         <p className="text-sm font-semibold text-[#1A1F36]">{t(titleKey, lang)}</p>
                         <p className="text-xs text-[#94A3B8] mt-0.5">{t(descriptionKey, lang)}</p>
                       </div>
-                    </>
-                  )
-
-                  if (type === 'blank') {
-                    return (
-                      <button
-                        key={type}
-                        onClick={openCreateModal}
-                        className="flex items-start gap-3 p-4 rounded-2xl border border-dashed border-[#D1D5DB] bg-white text-left hover:border-[#6F5AE8] hover:bg-[#F8F7FF] transition-colors"
-                      >
-                        {content}
-                      </button>
-                    )
-                  }
-
-                  return (
-                    <AppCard key={type} className="flex items-start gap-3 p-4 border border-[#E8ECF0]">
-                      {content}
-                    </AppCard>
+                    </button>
                   )
                 })}
               </div>
@@ -277,7 +278,7 @@ export default function PlansPage() {
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#F4F4F0] sticky top-0 bg-white rounded-t-2xl">
               <h2 id="plan-modal-title" className="text-base font-semibold text-[#1A1F36]">
-                {t('plans.modal.title', lang)}
+                {t(creatingTemplate ? 'plans.modal.createFromTemplateTitle' : 'plans.modal.title', lang)}
               </h2>
               <button
                 onClick={closeCreateModal}

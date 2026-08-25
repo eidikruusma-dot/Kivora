@@ -8,7 +8,9 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { sanitizeForFirestore } from '@/lib/firestoreUtils'
-import type { PlanTemplateType } from '@/data/planTemplates'
+import type { PlanTemplate, PlanTemplateType } from '@/data/planTemplates'
+import { t } from '@/lib/translations'
+import type { AppLang } from '@/lib/languageStore'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,6 +57,20 @@ export function isValidPlanTitle(title: string): boolean {
 export function isValidPlanDateRange(startDate: string, endDate: string): boolean {
   if (!startDate || !endDate) return true
   return endDate >= startDate
+}
+
+/**
+ * Builds the checklist items a new plan starts with from a template's
+ * blueprints. Labels are translated once, at creation time, into plain
+ * strings stored on the plan — a later language switch does not touch
+ * items that already exist.
+ */
+export function createPlanItemsFromTemplate(template: PlanTemplate, lang: AppLang): PlanItem[] {
+  return template.itemBlueprints.map((bp) => ({
+    id: `${template.type}-${bp.id}`,
+    label: t(bp.titleKey, lang),
+    done: false,
+  }))
 }
 
 // ── Local pub/sub ───────────────────────────────────────────────────────────

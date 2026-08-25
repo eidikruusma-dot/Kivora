@@ -1680,6 +1680,7 @@ export type TranslationKey =
     | "plans.template.blank.title"
     | "plans.template.blank.desc"
     | "plans.modal.title"
+    | "plans.modal.createFromTemplateTitle"
     | "plans.modal.nameLabel"
     | "plans.modal.namePlaceholder"
     | "plans.modal.colorLabel"
@@ -1691,6 +1692,29 @@ export type TranslationKey =
     | "plans.modal.errorDateRange"
     | "plans.modal.errorSave"
     | "plans.card.progressLabel"
+    | "plans.item.menu.monday"
+    | "plans.item.menu.tuesday"
+    | "plans.item.menu.wednesday"
+    | "plans.item.menu.thursday"
+    | "plans.item.menu.friday"
+    | "plans.item.menu.saturday"
+    | "plans.item.menu.sunday"
+    | "plans.item.workout.1"
+    | "plans.item.workout.2"
+    | "plans.item.workout.3"
+    | "plans.item.study.1"
+    | "plans.item.study.2"
+    | "plans.item.study.3"
+    | "plans.item.study.4"
+    | "plans.item.study.5"
+    | "plans.item.cleaning.kitchen"
+    | "plans.item.cleaning.livingRoom"
+    | "plans.item.cleaning.bathroom"
+    | "plans.item.cleaning.bedroom"
+    | "plans.item.selfcare.morning"
+    | "plans.item.selfcare.movement"
+    | "plans.item.selfcare.rest"
+    | "plans.item.selfcare.evening"
     | "modules.continue"
     | "modules.selectAll"
     | "modules.clearOptional"
@@ -3603,6 +3627,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.template.blank.title": "Tühi plaan",
         "plans.template.blank.desc": "Alusta täiesti tühjalt lehelt.",
         "plans.modal.title": "Uus tühi plaan",
+        "plans.modal.createFromTemplateTitle": "Uus plaan mallist",
         "plans.modal.nameLabel": "Plaani nimi",
         "plans.modal.namePlaceholder": "Nt minu nädalaplaan",
         "plans.modal.colorLabel": "Värv",
@@ -3614,6 +3639,29 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.modal.errorDateRange": "Lõppkuupäev ei tohi olla alguskuupäevast varasem.",
         "plans.modal.errorSave": "Plaani salvestamine ebaõnnestus. Proovi uuesti.",
         "plans.card.progressLabel": "{percent}% valmis",
+        "plans.item.menu.monday": "Esmaspäev",
+        "plans.item.menu.tuesday": "Teisipäev",
+        "plans.item.menu.wednesday": "Kolmapäev",
+        "plans.item.menu.thursday": "Neljapäev",
+        "plans.item.menu.friday": "Reede",
+        "plans.item.menu.saturday": "Laupäev",
+        "plans.item.menu.sunday": "Pühapäev",
+        "plans.item.workout.1": "Treening 1",
+        "plans.item.workout.2": "Treening 2",
+        "plans.item.workout.3": "Treening 3",
+        "plans.item.study.1": "Õppeplokk 1",
+        "plans.item.study.2": "Õppeplokk 2",
+        "plans.item.study.3": "Õppeplokk 3",
+        "plans.item.study.4": "Õppeplokk 4",
+        "plans.item.study.5": "Õppeplokk 5",
+        "plans.item.cleaning.kitchen": "Köök",
+        "plans.item.cleaning.livingRoom": "Elutuba",
+        "plans.item.cleaning.bathroom": "Vannituba",
+        "plans.item.cleaning.bedroom": "Magamistuba",
+        "plans.item.selfcare.morning": "Hommikune hooldus",
+        "plans.item.selfcare.movement": "Liikumine",
+        "plans.item.selfcare.rest": "Puhkeaeg",
+        "plans.item.selfcare.evening": "Õhtune hooldus",
         "modules.continue": "Jätka",
         "modules.selectAll": "Vali kõik",
         "modules.clearOptional": "Tühista valikud",
@@ -5519,6 +5567,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.template.blank.title": "Blank plan",
         "plans.template.blank.desc": "Start completely from scratch.",
         "plans.modal.title": "New blank plan",
+        "plans.modal.createFromTemplateTitle": "New plan from template",
         "plans.modal.nameLabel": "Plan name",
         "plans.modal.namePlaceholder": "E.g. My weekly plan",
         "plans.modal.colorLabel": "Color",
@@ -5530,6 +5579,29 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.modal.errorDateRange": "End date cannot be before the start date.",
         "plans.modal.errorSave": "Could not save the plan. Please try again.",
         "plans.card.progressLabel": "{percent}% complete",
+        "plans.item.menu.monday": "Monday",
+        "plans.item.menu.tuesday": "Tuesday",
+        "plans.item.menu.wednesday": "Wednesday",
+        "plans.item.menu.thursday": "Thursday",
+        "plans.item.menu.friday": "Friday",
+        "plans.item.menu.saturday": "Saturday",
+        "plans.item.menu.sunday": "Sunday",
+        "plans.item.workout.1": "Workout 1",
+        "plans.item.workout.2": "Workout 2",
+        "plans.item.workout.3": "Workout 3",
+        "plans.item.study.1": "Study block 1",
+        "plans.item.study.2": "Study block 2",
+        "plans.item.study.3": "Study block 3",
+        "plans.item.study.4": "Study block 4",
+        "plans.item.study.5": "Study block 5",
+        "plans.item.cleaning.kitchen": "Kitchen",
+        "plans.item.cleaning.livingRoom": "Living room",
+        "plans.item.cleaning.bathroom": "Bathroom",
+        "plans.item.cleaning.bedroom": "Bedroom",
+        "plans.item.selfcare.morning": "Morning care",
+        "plans.item.selfcare.movement": "Movement",
+        "plans.item.selfcare.rest": "Rest time",
+        "plans.item.selfcare.evening": "Evening care",
         "modules.continue": "Continue",
         "modules.selectAll": "Select all",
         "modules.clearOptional": "Clear selection",
