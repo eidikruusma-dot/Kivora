@@ -6,6 +6,7 @@ import { addHabit, deleteHabit, getAllHabits } from '@/lib/habitsStore'
 import { addGoal, deleteGoal, getAllGoals } from '@/lib/goalsStore'
 import { addCalendarEvent, deleteCalendarEvent, getAllEvents } from '@/lib/calendarStore'
 import { addTransaction, getAllTransactions } from '@/lib/moneyStore'
+import { MONEY_MODULE_ENABLED } from '@/lib/featureFlags'
 import type { Transaction, TransactionCategory } from '@/types/money'
 import { getAllSchoolSubjects } from '@/lib/schoolStore'
 import {
@@ -462,6 +463,13 @@ export async function executeAction(action: AIAction, ctx?: ActionContext): Prom
       // ── Bank statement preview — client handles the actual writes ─────────
 
       case 'preview_bank_import': {
+        if (!MONEY_MODULE_ENABLED) {
+          return {
+            success: false,
+            message: 'See funktsioon pole hetkel saadaval.',
+          }
+        }
+
         // ── Canonical-first strategy ───────────────────────────────────────────
         // The AI's transaction list in action.data is UNTRUSTED: the model may
         // re-classify directions or alter amounts when re-emitting the hidden

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { MONEY_MODULE_ENABLED } from '@/lib/featureFlags'
 import { AuthProvider } from '@/context/AuthContext'
 import { Toaster } from '@/components/ui/sonner'
 import { ProtectedRoute, PublicOnlyRoute } from '@/components/auth/ProtectedRoute'
@@ -63,7 +64,11 @@ export default function App() {
           <Route path="/app/habits" element={<ProtectedRoute><AppLayout><HabitsPage /></AppLayout></ProtectedRoute>} />
           <Route path="/app/goals" element={<ProtectedRoute><AppLayout><GoalsPage /></AppLayout></ProtectedRoute>} />
           <Route path="/app/assistant" element={<ProtectedRoute><AppLayout><AIAssistantPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/app/finance" element={<ProtectedRoute><AppLayout><FinancePage /></AppLayout></ProtectedRoute>} />
+          <Route path="/app/finance" element={
+            MONEY_MODULE_ENABLED
+              ? <ProtectedRoute><AppLayout><FinancePage /></AppLayout></ProtectedRoute>
+              : <Navigate to="/app" replace />
+          } />
           <Route path="/app/school" element={<ProtectedRoute><AppLayout><SchoolPage /></AppLayout></ProtectedRoute>} />
           <Route path="/app/help" element={<ProtectedRoute><AppLayout><HelpPage /></AppLayout></ProtectedRoute>} />
           <Route path="/app/settings" element={<ProtectedRoute><AppLayout><SettingsPage /></AppLayout></ProtectedRoute>} />

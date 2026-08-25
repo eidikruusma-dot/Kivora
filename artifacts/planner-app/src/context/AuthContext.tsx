@@ -36,6 +36,7 @@ import { initSchoolStore } from '@/lib/schoolStore'
 import { initNotificationItemsStore } from '@/lib/notificationItemsStore'
 import { initEntityLinksStore } from '@/lib/entityLinksStore'
 import { initMoneyStore } from '@/lib/moneyStore'
+import { MONEY_MODULE_ENABLED } from '@/lib/featureFlags'
 import { initModulesStore } from '@/lib/modulesStore'
 import { initHabitsStore } from '@/lib/habitsStore'
 import { initDocumentsStore } from '@/lib/documentsStore'
@@ -100,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       initSchoolStore(uid)
       initNotificationItemsStore(uid)
       initEntityLinksStore(uid)
-      initMoneyStore(uid)
+      if (MONEY_MODULE_ENABLED) initMoneyStore(uid)
       initModulesStore(uid)
       initHabitsStore(uid)
       initDocumentsStore(uid)

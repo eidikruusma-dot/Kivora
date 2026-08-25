@@ -12,7 +12,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Calendar, CheckSquare, StickyNote, Activity, Flag,
-  GraduationCap, Sparkles,
+  Wallet, GraduationCap, Sparkles,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import {
@@ -22,26 +22,32 @@ import {
   saveModuleSettings,
   getModuleSettings,
 } from '@/lib/modulesStore'
+import { MONEY_MODULE_ENABLED } from '@/lib/featureFlags'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
 
 // ── Purpose → module mapping ─────────────────────────────────────────────────
 
-// Raha (finance) is intentionally excluded from this onboarding flow — it is
-// hidden app-wide for now (moving to a future Pro tier). The actual enforcement
-// is FORCE_HIDDEN_MODULES in components/layout/Sidebar.tsx; this page just
-// stops offering it as a purpose/module so onboarding doesn't promise
-// something the sidebar will immediately hide.
-const PURPOSE_MODULES: Record<string, ModuleId[]> = {
+const ALL_PURPOSE_MODULES: Record<string, ModuleId[]> = {
   personal:  ['calendar', 'tasks', 'notes', 'habits', 'goals'],
   learning:  ['calendar', 'tasks', 'notes', 'school'],
+  finance:   ['finance', 'goals', 'tasks'],
   work:      ['calendar', 'tasks', 'notes', 'goals'],
 }
 
+// Modules gated by a central feature flag are filtered out live — re-enabling
+// the flag makes the purpose/module reappear automatically, no further
+// changes to this file needed.
+export const PURPOSE_MODULES: Record<string, ModuleId[]> = Object.fromEntries(
+  Object.entries(ALL_PURPOSE_MODULES)
+    .filter(([key]) => key !== 'finance' || MONEY_MODULE_ENABLED)
+    .map(([key, ids]) => [key, ids.filter((id) => id !== 'finance' || MONEY_MODULE_ENABLED)]),
+)
+
 // ── Module metadata ──────────────────────────────────────────────────────────
 
-const MODULE_META: {
+const ALL_MODULE_META: {
   id: ModuleId
   icon: React.ReactNode
   accentColor: string
@@ -52,13 +58,19 @@ const MODULE_META: {
   { id: 'notes',     icon: <StickyNote size={20} strokeWidth={1.8} />,   accentColor: '#CA8A04', accentBg: '#FEF9C3' },
   { id: 'habits',    icon: <Activity size={20} strokeWidth={1.8} />,     accentColor: '#EA580C', accentBg: '#FFF7ED' },
   { id: 'goals',     icon: <Flag size={20} strokeWidth={1.8} />,         accentColor: '#0891B2', accentBg: '#E0F2FE' },
+  { id: 'finance',   icon: <Wallet size={20} strokeWidth={1.8} />,       accentColor: '#16A34A', accentBg: '#DCFCE7' },
   { id: 'school',    icon: <GraduationCap size={20} strokeWidth={1.8} />,accentColor: '#7C3AED', accentBg: '#EDE9FB' },
   { id: 'assistant', icon: <Sparkles size={20} strokeWidth={1.8} />,     accentColor: '#6F5AE8', accentBg: '#EDE9FB' },
 ]
 
-// Selectable module IDs for this onboarding page — ALL_MODULE_IDS minus
-// 'finance' (see note above).
-const SELECTABLE_MODULE_IDS: ModuleId[] = ALL_MODULE_IDS.filter((id) => id !== 'finance')
+export const MODULE_META = ALL_MODULE_META.filter(
+  ({ id }) => id !== 'finance' || MONEY_MODULE_ENABLED,
+)
+
+// Selectable module IDs for this onboarding page, live-filtered by the flag.
+export const SELECTABLE_MODULE_IDS: ModuleId[] = ALL_MODULE_IDS.filter(
+  (id) => id !== 'finance' || MONEY_MODULE_ENABLED,
+)
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -147,11 +159,13 @@ export default function ModuleSelectionPage() {
     }
   }
 
-  const purposes = [
+  const allPurposes = [
     { key: 'personal',  label: t('modules.purpose.personal', lang) },
     { key: 'learning',  label: t('modules.purpose.learning', lang) },
+    { key: 'finance',   label: t('modules.purpose.finance', lang) },
     { key: 'work',      label: t('modules.purpose.work', lang) },
   ]
+  const purposes = allPurposes.filter((p) => p.key !== 'finance' || MONEY_MODULE_ENABLED)
 
   return (
     <div className="min-h-[100dvh] bg-[#F4F3EF] flex items-center justify-center px-4 py-8">

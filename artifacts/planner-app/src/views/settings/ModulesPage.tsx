@@ -11,7 +11,7 @@ import { useState, useEffect } from 'react'
 import {
   ArrowLeft,
   Calendar, CheckSquare, StickyNote, Activity, Flag,
-  GraduationCap, Sparkles,
+  Wallet, GraduationCap, Sparkles,
   CheckCircle2, Loader2,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
@@ -22,19 +22,14 @@ import {
   saveModuleSettings,
   setModuleSettingsState,
 } from '@/lib/modulesStore'
+import { MONEY_MODULE_ENABLED } from '@/lib/featureFlags'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
 
 // ── Module definitions ───────────────────────────────────────────────────────
 
-// Raha (finance) is intentionally excluded here — it is hidden app-wide for
-// now (moving to a future Pro tier). See FORCE_HIDDEN_MODULES in
-// components/layout/Sidebar.tsx, which is what actually enforces the hide;
-// this list only controls what's offered as a user-toggleable module, so a
-// user can no longer flip a switch that would otherwise have no visible
-// effect (Sidebar force-hides it regardless of this setting).
-const MODULE_LIST: {
+const ALL_MODULE_META: {
   id: ModuleId
   icon: React.ReactNode
   accentColor: string
@@ -45,9 +40,17 @@ const MODULE_LIST: {
   { id: 'notes',     icon: <StickyNote size={20} strokeWidth={1.8} />,    accentColor: '#CA8A04', accentBg: '#FEF9C3' },
   { id: 'habits',    icon: <Activity size={20} strokeWidth={1.8} />,      accentColor: '#EA580C', accentBg: '#FFF7ED' },
   { id: 'goals',     icon: <Flag size={20} strokeWidth={1.8} />,          accentColor: '#0891B2', accentBg: '#E0F2FE' },
+  { id: 'finance',   icon: <Wallet size={20} strokeWidth={1.8} />,        accentColor: '#16A34A', accentBg: '#DCFCE7' },
   { id: 'school',    icon: <GraduationCap size={20} strokeWidth={1.8} />, accentColor: '#7C3AED', accentBg: '#EDE9FB' },
   { id: 'assistant', icon: <Sparkles size={20} strokeWidth={1.8} />,      accentColor: '#6F5AE8', accentBg: '#EDE9FB' },
 ]
+
+// Modules gated by a central feature flag are filtered out live from the
+// list actually offered to the user — re-enabling the flag makes the entry
+// reappear here automatically, with no further changes to this file.
+export const MODULE_LIST = ALL_MODULE_META.filter(
+  ({ id }) => id !== 'finance' || MONEY_MODULE_ENABLED,
+)
 
 // ── Toggle component ─────────────────────────────────────────────────────────
 

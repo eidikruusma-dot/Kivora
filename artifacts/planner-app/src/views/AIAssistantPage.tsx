@@ -47,6 +47,7 @@ import { useTransactions, addTransaction } from "@/lib/moneyStore";
 import type { BankTransaction, BankMeta } from "@/types/bank";
 import MoneyImportReviewCard from "@/components/MoneyImportReviewCard";
 import type { Transaction } from "@/types/money";
+import { MONEY_MODULE_ENABLED } from "@/lib/featureFlags";
 import {
   Sparkles,
   Send,
@@ -1790,7 +1791,7 @@ export default function AIAssistantPage() {
                 Positioned absolute so it is fully outside the flex flow; the chat pane's
                 overflow-hidden cannot clip the footer. top/bottom inset keeps the card
                 within the pane bounds — no viewport-fixed positioning. */}
-            {pendingMoneyImport && (
+            {MONEY_MODULE_ENABLED && pendingMoneyImport && (
               <div
                 className="absolute inset-x-0 z-10 px-4 py-2 flex flex-col justify-end pointer-events-none"
                 style={{ top: "53px", bottom: "52px" }}

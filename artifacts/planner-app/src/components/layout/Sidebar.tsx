@@ -30,6 +30,7 @@ import type { AppLang } from '@/lib/languageStore'
 import { useAuth } from '@/context/AuthContext'
 import type { ThemeMode } from '@/types'
 import { useModules, type ModuleId } from '@/lib/modulesStore'
+import { MONEY_MODULE_ENABLED } from '@/lib/featureFlags'
 
 // ── Route definitions ────────────────────────────────────────────────────────
 
@@ -52,11 +53,12 @@ const NAV_ROUTES: {
   { to: '/app/settings',  tKey: 'nav.settings'  as const, icon: Settings                             },
 ]
 
-// Raha (finance) module is hidden app-wide for now — moving to a future Pro
-// tier. Nothing under it is deleted (route, page, and all import/reconciliation
-// code stay intact); this list just force-excludes it from navigation and the
-// module-disabled redirect below, regardless of a user's stored module toggle.
-const FORCE_HIDDEN_MODULES: ModuleId[] = ['finance']
+// Modules gated by a central feature flag rather than a per-user toggle.
+// Checked in addition to (and overriding) the stored module settings below.
+export function isModuleFlaggedOff(moduleId: ModuleId): boolean {
+  if (moduleId === 'finance') return !MONEY_MODULE_ENABLED
+  return false
+}
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -97,7 +99,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     const route = NAV_ROUTES.find(r => r.to === location.pathname)
     if (
       route?.moduleId &&
-      (FORCE_HIDDEN_MODULES.includes(route.moduleId) || !modules[route.moduleId])
+      (isModuleFlaggedOff(route.moduleId) || !modules[route.moduleId])
     ) {
       navigate('/app', { replace: true })
     }
@@ -116,7 +118,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   // Filter nav items — hide module-gated items whose module is off
   const visibleRoutes = NAV_ROUTES.filter(({ moduleId }) => {
     if (!moduleId) return true                          // always visible (Home, Help, Settings)
-    if (FORCE_HIDDEN_MODULES.includes(moduleId)) return false
+    if (isModuleFlaggedOff(moduleId)) return false
     return modules[moduleId] === true                    // show only if module is enabled
   })
 
