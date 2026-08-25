@@ -180,6 +180,28 @@ service cloud.firestore {
       allow delete: if isOwner(uid);
     }
 
+    // PLANS
+    match /users/{uid}/plans/{planId} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && (
+          !('id' in request.resource.data)
+          || (
+            request.resource.data.id is string
+            && request.resource.data.id == planId
+          )
+        );
+
+      allow update: if isOwner(uid)
+        && (
+          !('id' in resource.data)
+          || request.resource.data.id == resource.data.id
+        );
+
+      allow delete: if isOwner(uid);
+    }
+
     // CALENDAR EVENTS
     match /users/{uid}/calendarEvents/{eventId} {
       allow read: if isOwner(uid);

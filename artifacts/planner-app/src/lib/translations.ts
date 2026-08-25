@@ -1679,6 +1679,18 @@ export type TranslationKey =
     | "plans.template.selfcare.desc"
     | "plans.template.blank.title"
     | "plans.template.blank.desc"
+    | "plans.modal.title"
+    | "plans.modal.nameLabel"
+    | "plans.modal.namePlaceholder"
+    | "plans.modal.colorLabel"
+    | "plans.modal.startDateLabel"
+    | "plans.modal.endDateLabel"
+    | "plans.modal.cancel"
+    | "plans.modal.create"
+    | "plans.modal.errorName"
+    | "plans.modal.errorDateRange"
+    | "plans.modal.errorSave"
+    | "plans.card.progressLabel"
     | "modules.continue"
     | "modules.selectAll"
     | "modules.clearOptional"
@@ -3590,6 +3602,18 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.template.selfcare.desc": "Pühenda aega endale ja oma heaolule.",
         "plans.template.blank.title": "Tühi plaan",
         "plans.template.blank.desc": "Alusta täiesti tühjalt lehelt.",
+        "plans.modal.title": "Uus tühi plaan",
+        "plans.modal.nameLabel": "Plaani nimi",
+        "plans.modal.namePlaceholder": "Nt minu nädalaplaan",
+        "plans.modal.colorLabel": "Värv",
+        "plans.modal.startDateLabel": "Alguskuupäev",
+        "plans.modal.endDateLabel": "Lõppkuupäev",
+        "plans.modal.cancel": "Tühista",
+        "plans.modal.create": "Loo plaan",
+        "plans.modal.errorName": "Plaani nimi ei tohi olla tühi.",
+        "plans.modal.errorDateRange": "Lõppkuupäev ei tohi olla alguskuupäevast varasem.",
+        "plans.modal.errorSave": "Plaani salvestamine ebaõnnestus. Proovi uuesti.",
+        "plans.card.progressLabel": "{percent}% valmis",
         "modules.continue": "Jätka",
         "modules.selectAll": "Vali kõik",
         "modules.clearOptional": "Tühista valikud",
@@ -5494,6 +5518,18 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.template.selfcare.desc": "Dedicate time to yourself and your wellbeing.",
         "plans.template.blank.title": "Blank plan",
         "plans.template.blank.desc": "Start completely from scratch.",
+        "plans.modal.title": "New blank plan",
+        "plans.modal.nameLabel": "Plan name",
+        "plans.modal.namePlaceholder": "E.g. My weekly plan",
+        "plans.modal.colorLabel": "Color",
+        "plans.modal.startDateLabel": "Start date",
+        "plans.modal.endDateLabel": "End date",
+        "plans.modal.cancel": "Cancel",
+        "plans.modal.create": "Create plan",
+        "plans.modal.errorName": "Plan name cannot be empty.",
+        "plans.modal.errorDateRange": "End date cannot be before the start date.",
+        "plans.modal.errorSave": "Could not save the plan. Please try again.",
+        "plans.card.progressLabel": "{percent}% complete",
         "modules.continue": "Continue",
         "modules.selectAll": "Select all",
         "modules.clearOptional": "Clear selection",

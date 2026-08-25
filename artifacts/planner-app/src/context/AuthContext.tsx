@@ -37,6 +37,7 @@ import { initNotificationItemsStore } from '@/lib/notificationItemsStore'
 import { initEntityLinksStore } from '@/lib/entityLinksStore'
 import { initMoneyStore } from '@/lib/moneyStore'
 import { MONEY_MODULE_ENABLED } from '@/lib/featureFlags'
+import { initPlansStore } from '@/lib/plansStore'
 import { initModulesStore } from '@/lib/modulesStore'
 import { initHabitsStore } from '@/lib/habitsStore'
 import { initDocumentsStore } from '@/lib/documentsStore'
@@ -102,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       initNotificationItemsStore(uid)
       initEntityLinksStore(uid)
       if (MONEY_MODULE_ENABLED) initMoneyStore(uid)
+      initPlansStore(uid)
       initModulesStore(uid)
       initHabitsStore(uid)
       initDocumentsStore(uid)
