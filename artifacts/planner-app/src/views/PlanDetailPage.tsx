@@ -6,6 +6,7 @@ import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
 import AppCard from '@/components/ui/AppCard'
 import ProgressBar from '@/components/ui/ProgressBar'
+import PlanFormModal, { type PlanFormValues } from '@/components/plans/PlanFormModal'
 import { getTemplateIcon } from '@/data/planTemplates'
 import {
   usePlan,
@@ -17,6 +18,8 @@ import {
   updatePlanItem,
   togglePlanItem,
   deletePlanItem,
+  updatePlanDetails,
+  deletePlan,
   type PlanItem,
 } from '@/lib/plansStore'
 
@@ -46,6 +49,11 @@ export default function PlanDetailPage() {
   const [newItemNote, setNewItemNote] = useState('')
   const [addItemSaving, setAddItemSaving] = useState(false)
   const [addItemError, setAddItemError] = useState('')
+
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [deletePlanConfirmOpen, setDeletePlanConfirmOpen] = useState(false)
+  const [deletingPlan, setDeletingPlan] = useState(false)
+  const [deletePlanError, setDeletePlanError] = useState('')
 
   function markSaving(id: string, saving: boolean) {
     setSavingItemIds((prev) => {
@@ -153,6 +161,19 @@ export default function PlanDetailPage() {
     }
   }
 
+  async function handleDeletePlan() {
+    if (!plan || deletingPlan) return
+    setDeletingPlan(true)
+    setDeletePlanError('')
+    try {
+      await deletePlan(plan.id)
+      navigate('/app/plans')
+    } catch {
+      setDeletePlanError(t('plans.detail.errorDeletePlan', lang))
+      setDeletingPlan(false)
+    }
+  }
+
   if (plansLoading) {
     return (
       <div className="p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto w-full flex items-center justify-center py-16">
@@ -185,7 +206,7 @@ export default function PlanDetailPage() {
     <div className="p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto w-full flex flex-col gap-5">
       <button
         onClick={() => navigate('/app/plans')}
-        className="flex items-center gap-1.5 text-sm text-[#64748B] hover:text-[#1A1F36] transition-colors w-fit focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6F5AE8] focus-visible:ring-offset-2 rounded-lg"
+        className="flex items-center gap-1.5 -ml-1 px-1 py-2 text-sm text-[#64748B] hover:text-[#1A1F36] transition-colors w-fit focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6F5AE8] focus-visible:ring-offset-2 rounded-lg"
       >
         <ArrowLeft size={16} />
         {t('plans.detail.backToPlans', lang)}
@@ -193,16 +214,34 @@ export default function PlanDetailPage() {
 
       {/* Plan header */}
       <AppCard className="border border-[#ECECF2] p-5 flex flex-col gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <div
-            className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ backgroundColor: `${plan.color}1A`, color: plan.color }}
-          >
-            <Icon size={24} strokeWidth={1.8} />
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: `${plan.color}1A`, color: plan.color }}
+            >
+              <Icon size={24} strokeWidth={1.8} />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold text-[#1A1F36] truncate">{plan.title}</h1>
+              {dateRange && <p className="text-sm text-[#94A3B8] mt-0.5">{dateRange}</p>}
+            </div>
           </div>
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold text-[#1A1F36] truncate">{plan.title}</h1>
-            {dateRange && <p className="text-sm text-[#94A3B8] mt-0.5">{dateRange}</p>}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={() => setEditModalOpen(true)}
+              aria-label={t('plans.detail.editPlan', lang)}
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6F5AE8] focus-visible:ring-offset-2"
+            >
+              <Pencil size={16} />
+            </button>
+            <button
+              onClick={() => { setDeletePlanConfirmOpen(true); setDeletePlanError('') }}
+              aria-label={t('plans.detail.deletePlan', lang)}
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#FEE2E2] hover:text-[#DC2626] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6F5AE8] focus-visible:ring-offset-2"
+            >
+              <Trash2 size={16} />
+            </button>
           </div>
         </div>
         <div>
@@ -357,6 +396,69 @@ export default function PlanDetailPage() {
           )}
         </div>
       </AppCard>
+
+      {/* Edit plan details */}
+      {editModalOpen && (
+        <PlanFormModal
+          lang={lang}
+          headerTitleKey="plans.detail.editPlan"
+          submitLabelKey="plans.detail.saveChanges"
+          saveErrorKey="plans.detail.errorSaveDetails"
+          initialValues={{
+            title: plan.title,
+            color: plan.color,
+            startDate: plan.startDate ?? '',
+            endDate: plan.endDate ?? '',
+          }}
+          onCancel={() => setEditModalOpen(false)}
+          onSubmit={async (values: PlanFormValues) => {
+            await updatePlanDetails(plan.id, values)
+          }}
+          onSuccess={() => setEditModalOpen(false)}
+        />
+      )}
+
+      {/* Delete plan confirmation */}
+      {deletePlanConfirmOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(15, 23, 42, 0.4)' }}
+          onClick={() => { if (!deletingPlan) setDeletePlanConfirmOpen(false) }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-plan-title"
+            className="kv-modal-enter bg-white rounded-2xl shadow-xl w-full max-w-sm flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-5 flex flex-col items-center text-center gap-2">
+              <p id="delete-plan-title" className="text-sm font-semibold text-[#1A1F36]">
+                {t('plans.detail.deletePlanConfirmTitle', lang).replace('{title}', plan.title)}
+              </p>
+              <p className="text-xs text-[#94A3B8]">{t('plans.detail.deletePlanConfirmDesc', lang)}</p>
+              {deletePlanError && <p className="text-xs text-[#E11D48] mt-1">{deletePlanError}</p>}
+            </div>
+            <div className="flex items-center justify-center gap-2 px-5 pb-5">
+              <button
+                onClick={() => setDeletePlanConfirmOpen(false)}
+                disabled={deletingPlan}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors disabled:opacity-50"
+              >
+                {t('plans.modal.cancel', lang)}
+              </button>
+              <button
+                onClick={handleDeletePlan}
+                disabled={deletingPlan}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#DC2626] hover:bg-[#B91C1C] transition-colors disabled:opacity-50"
+              >
+                {deletingPlan && <Loader2 size={13} className="animate-spin" />}
+                {t('plans.detail.confirmDelete', lang)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete item confirmation */}
       {deleteConfirmItemId && (

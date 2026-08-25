@@ -3,6 +3,9 @@ import {
   collection,
   doc,
   setDoc,
+  updateDoc,
+  deleteDoc,
+  deleteField,
   onSnapshot,
   runTransaction,
   type Unsubscribe,
@@ -167,6 +170,39 @@ export function initPlansStore(uid: string | null): void {
 export async function addPlan(plan: Plan): Promise<void> {
   if (!_currentUid) throw new Error('STORE_NOT_INITIALIZED: plans store has no authenticated user')
   await setDoc(planDoc(_currentUid, plan.id), sanitizeForFirestore(plan))
+}
+
+export interface PlanDetailsUpdate {
+  title: string
+  color: string
+  startDate: string
+  endDate: string
+}
+
+/**
+ * Writes only title/color/startDate/endDate/updatedAt via a Firestore
+ * partial update — never `type`, `id`, `items`, or `createdAt`, and never a
+ * full-document overwrite. Because `updateDoc` touches only the fields
+ * named in its payload, a concurrent item mutation (which runs through the
+ * `items`-only transaction above) can never be clobbered by this call, and
+ * this call can never clobber it either.
+ */
+export async function updatePlanDetails(planId: string, details: PlanDetailsUpdate): Promise<void> {
+  if (!_currentUid) throw new Error('STORE_NOT_INITIALIZED: plans store has no authenticated user')
+  if (!isValidPlanTitle(details.title)) throw new Error('INVALID_PLAN_TITLE')
+  if (!isValidPlanDateRange(details.startDate, details.endDate)) throw new Error('INVALID_DATE_RANGE')
+  await updateDoc(planDoc(_currentUid, planId), {
+    title: details.title.trim(),
+    color: details.color,
+    startDate: details.startDate ? details.startDate : deleteField(),
+    endDate: details.endDate ? details.endDate : deleteField(),
+    updatedAt: Date.now(),
+  })
+}
+
+export async function deletePlan(planId: string): Promise<void> {
+  if (!_currentUid) throw new Error('STORE_NOT_INITIALIZED: plans store has no authenticated user')
+  await deleteDoc(planDoc(_currentUid, planId))
 }
 
 function generateItemId(): string {

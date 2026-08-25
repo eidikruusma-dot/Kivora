@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Loader2, X } from 'lucide-react'
+import { Plus, Loader2 } from 'lucide-react'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t, type TranslationKey } from '@/lib/translations'
 import AppCard from '@/components/ui/AppCard'
 import ProgressBar from '@/components/ui/ProgressBar'
+import PlanFormModal, { PLAN_COLOR_SWATCHES, type PlanFormValues } from '@/components/plans/PlanFormModal'
 import { PLAN_TEMPLATES, getTemplateIcon, type PlanTemplate } from '@/data/planTemplates'
 import {
   usePlans,
@@ -14,8 +15,6 @@ import {
   computePlanProgress,
   createPlanItemsFromTemplate,
   formatDateRange,
-  isValidPlanTitle,
-  isValidPlanDateRange,
   type Plan,
 } from '@/lib/plansStore'
 
@@ -26,40 +25,12 @@ const TABS: { id: PlansTab; labelKey: TranslationKey }[] = [
   { id: 'templates', labelKey: 'plans.tab.templates' },
 ]
 
-const COLOR_SWATCHES = [
-  { color: '#6F5AE8', bg: '#EDE9FB' },
-  { color: '#16A34A', bg: '#DCFCE7' },
-  { color: '#2563EB', bg: '#DBEAFE' },
-  { color: '#CA8A04', bg: '#FEF9C3' },
-  { color: '#0D9488', bg: '#CCFBF1' },
-  { color: '#DC2626', bg: '#FEE2E2' },
-  { color: '#F97316', bg: '#FFF0E6' },
-  { color: '#64748B', bg: '#F1F5F9' },
-]
-
-interface CreateForm {
-  title: string
-  color: string
-  startDate: string
-  endDate: string
-}
-
-const EMPTY_FORM: CreateForm = {
-  title: '',
-  color: COLOR_SWATCHES[0].color,
-  startDate: '',
-  endDate: '',
-}
-
 export default function PlansPage() {
   const navigate = useNavigate()
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
   const [activeTab, setActiveTab] = useState<PlansTab>('myPlans')
   const [modalOpen, setModalOpen] = useState(false)
   const [creatingTemplate, setCreatingTemplate] = useState<PlanTemplate | null>(null)
-  const [form, setForm] = useState<CreateForm>(EMPTY_FORM)
-  const [formError, setFormError] = useState('')
-  const [saving, setSaving] = useState(false)
 
   const plans = usePlans()
   const plansLoading = usePlansLoading()
@@ -68,62 +39,17 @@ export default function PlansPage() {
 
   function openCreateModal(template: PlanTemplate | null) {
     setCreatingTemplate(template)
-    setForm(
-      template
-        ? { title: t(template.titleKey, lang), color: template.defaultColor, startDate: '', endDate: '' }
-        : EMPTY_FORM,
-    )
-    setFormError('')
     setModalOpen(true)
   }
 
   function closeCreateModal() {
-    if (saving) return
     setModalOpen(false)
     setCreatingTemplate(null)
-    setForm(EMPTY_FORM)
-    setFormError('')
   }
 
-  async function handleCreatePlan() {
-    if (saving) return
-
-    const title = form.title.trim()
-    if (!isValidPlanTitle(form.title)) {
-      setFormError(t('plans.modal.errorName', lang))
-      return
-    }
-    if (!isValidPlanDateRange(form.startDate, form.endDate)) {
-      setFormError(t('plans.modal.errorDateRange', lang))
-      return
-    }
-
-    setSaving(true)
-    setFormError('')
-    try {
-      const now = Date.now()
-      const newPlan: Plan = {
-        id: `plan-${now}-${Math.random().toString(36).slice(2, 7)}`,
-        type: creatingTemplate ? creatingTemplate.type : 'blank',
-        title,
-        color: form.color,
-        startDate: form.startDate || undefined,
-        endDate: form.endDate || undefined,
-        items: creatingTemplate ? createPlanItemsFromTemplate(creatingTemplate, lang) : [],
-        createdAt: now,
-        updatedAt: now,
-      }
-      await addPlan(newPlan)
-      setModalOpen(false)
-      setCreatingTemplate(null)
-      setForm(EMPTY_FORM)
-      setActiveTab('myPlans')
-    } catch {
-      setFormError(t('plans.modal.errorSave', lang))
-    } finally {
-      setSaving(false)
-    }
-  }
+  const createInitialValues: PlanFormValues = creatingTemplate
+    ? { title: t(creatingTemplate.titleKey, lang), color: creatingTemplate.defaultColor, startDate: '', endDate: '' }
+    : { title: '', color: PLAN_COLOR_SWATCHES[0].color, startDate: '', endDate: '' }
 
   return (
     <div className="p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto w-full flex flex-col gap-5">
@@ -249,118 +175,35 @@ export default function PlansPage() {
         </div>
       </AppCard>
 
-      {/* Create blank plan modal */}
       {modalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(15, 23, 42, 0.4)' }}
-          onClick={closeCreateModal}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="plan-modal-title"
-            className="kv-modal-enter bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[90dvh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#F4F4F0] sticky top-0 bg-white rounded-t-2xl">
-              <h2 id="plan-modal-title" className="text-base font-semibold text-[#1A1F36]">
-                {t(creatingTemplate ? 'plans.modal.createFromTemplateTitle' : 'plans.modal.title', lang)}
-              </h2>
-              <button
-                onClick={closeCreateModal}
-                aria-label="Close"
-                disabled={saving}
-                className="w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors disabled:opacity-50"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="px-5 py-4 flex flex-col gap-4">
-              {/* Name */}
-              <div>
-                <label htmlFor="plan-modal-name" className="block text-xs font-medium text-[#64748B] mb-1.5">
-                  {t('plans.modal.nameLabel', lang)} <span className="text-[#E11D48]">*</span>
-                </label>
-                <input
-                  id="plan-modal-name"
-                  type="text"
-                  value={form.title}
-                  onChange={(e) => { setForm({ ...form, title: e.target.value }); setFormError('') }}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleCreatePlan() }}
-                  placeholder={t('plans.modal.namePlaceholder', lang)}
-                  className="w-full px-3 py-2 bg-white border border-[#ECECF2] rounded-lg text-sm text-[#1A1F36] placeholder:text-[#94A3B8] focus:outline-none focus:border-[#6F5AE8] focus:ring-2 focus:ring-[#EDE9FB] transition-colors"
-                />
-              </div>
-
-              {/* Color */}
-              <div>
-                <label className="block text-xs font-medium text-[#64748B] mb-1.5">
-                  {t('plans.modal.colorLabel', lang)}
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {COLOR_SWATCHES.map((c) => (
-                    <button
-                      key={c.color}
-                      onClick={() => setForm({ ...form, color: c.color })}
-                      className={`w-8 h-8 rounded-full transition-transform ${
-                        form.color === c.color ? 'ring-2 ring-offset-2 ring-[#1A1F36] scale-110' : 'hover:scale-110'
-                      }`}
-                      style={{ background: c.color }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Dates */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-[#64748B] mb-1.5">
-                    {t('plans.modal.startDateLabel', lang)}
-                  </label>
-                  <input
-                    type="date"
-                    value={form.startDate}
-                    onChange={(e) => { setForm({ ...form, startDate: e.target.value }); setFormError('') }}
-                    className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-[#64748B] mb-1.5">
-                    {t('plans.modal.endDateLabel', lang)}
-                  </label>
-                  <input
-                    type="date"
-                    value={form.endDate}
-                    onChange={(e) => { setForm({ ...form, endDate: e.target.value }); setFormError('') }}
-                    className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] transition-colors"
-                  />
-                </div>
-              </div>
-
-              {formError && <p className="text-xs text-[#E11D48]">{formError}</p>}
-            </div>
-
-            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#F4F4F0] sticky bottom-0 bg-white rounded-b-2xl">
-              <button
-                onClick={closeCreateModal}
-                disabled={saving}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors disabled:opacity-50"
-              >
-                {t('plans.modal.cancel', lang)}
-              </button>
-              <button
-                onClick={handleCreatePlan}
-                disabled={!isValidPlanTitle(form.title) || saving}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B48D8] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {saving && <Loader2 size={14} className="animate-spin" />}
-                {t('plans.modal.create', lang)}
-              </button>
-            </div>
-          </div>
-        </div>
+        <PlanFormModal
+          lang={lang}
+          headerTitleKey={creatingTemplate ? 'plans.modal.createFromTemplateTitle' : 'plans.modal.title'}
+          submitLabelKey="plans.modal.create"
+          saveErrorKey="plans.modal.errorSave"
+          initialValues={createInitialValues}
+          onCancel={closeCreateModal}
+          onSubmit={async (values) => {
+            const now = Date.now()
+            const newPlan: Plan = {
+              id: `plan-${now}-${Math.random().toString(36).slice(2, 7)}`,
+              type: creatingTemplate ? creatingTemplate.type : 'blank',
+              title: values.title,
+              color: values.color,
+              startDate: values.startDate || undefined,
+              endDate: values.endDate || undefined,
+              items: creatingTemplate ? createPlanItemsFromTemplate(creatingTemplate, lang) : [],
+              createdAt: now,
+              updatedAt: now,
+            }
+            await addPlan(newPlan)
+          }}
+          onSuccess={() => {
+            setModalOpen(false)
+            setCreatingTemplate(null)
+            setActiveTab('myPlans')
+          }}
+        />
       )}
     </div>
   )

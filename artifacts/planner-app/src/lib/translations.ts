@@ -1735,6 +1735,13 @@ export type TranslationKey =
     | "plans.detail.errorSaveItem"
     | "plans.detail.errorDeleteItem"
     | "plans.detail.errorItemLabel"
+    | "plans.detail.editPlan"
+    | "plans.detail.saveChanges"
+    | "plans.detail.errorSaveDetails"
+    | "plans.detail.deletePlan"
+    | "plans.detail.deletePlanConfirmTitle"
+    | "plans.detail.deletePlanConfirmDesc"
+    | "plans.detail.errorDeletePlan"
     | "modules.continue"
     | "modules.selectAll"
     | "modules.clearOptional"
@@ -3702,6 +3709,13 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.detail.errorSaveItem": "Salvestamine ebaõnnestus. Proovi uuesti.",
         "plans.detail.errorDeleteItem": "Kustutamine ebaõnnestus. Proovi uuesti.",
         "plans.detail.errorItemLabel": "Elemendi nimi ei tohi olla tühi.",
+        "plans.detail.editPlan": "Muuda plaani",
+        "plans.detail.saveChanges": "Salvesta muudatused",
+        "plans.detail.errorSaveDetails": "Muudatuste salvestamine ebaõnnestus. Proovi uuesti.",
+        "plans.detail.deletePlan": "Kustuta plaan",
+        "plans.detail.deletePlanConfirmTitle": "Kas kustutada „{title}“?",
+        "plans.detail.deletePlanConfirmDesc": "Plaan ja kõik selle elemendid kustutatakse jäädavalt.",
+        "plans.detail.errorDeletePlan": "Kustutamine ebaõnnestus. Proovi uuesti.",
         "modules.continue": "Jätka",
         "modules.selectAll": "Vali kõik",
         "modules.clearOptional": "Tühista valikud",
@@ -5662,6 +5676,13 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.detail.errorSaveItem": "Could not save. Please try again.",
         "plans.detail.errorDeleteItem": "Could not delete. Please try again.",
         "plans.detail.errorItemLabel": "Item name cannot be empty.",
+        "plans.detail.editPlan": "Edit plan",
+        "plans.detail.saveChanges": "Save changes",
+        "plans.detail.errorSaveDetails": "Could not save changes. Please try again.",
+        "plans.detail.deletePlan": "Delete plan",
+        "plans.detail.deletePlanConfirmTitle": "Delete \"{title}\"?",
+        "plans.detail.deletePlanConfirmDesc": "This plan and all its items will be permanently deleted.",
+        "plans.detail.errorDeletePlan": "Could not delete. Please try again.",
         "modules.continue": "Continue",
         "modules.selectAll": "Select all",
         "modules.clearOptional": "Clear selection",
