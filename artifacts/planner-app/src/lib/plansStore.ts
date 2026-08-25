@@ -15,6 +15,7 @@ import { sanitizeForFirestore } from '@/lib/firestoreUtils'
 import type { PlanTemplate, PlanTemplateType } from '@/data/planTemplates'
 import { t } from '@/lib/translations'
 import type { AppLang } from '@/lib/languageStore'
+import type { PlanDraft } from '@/lib/planDraftValidation'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -159,6 +160,42 @@ export function isValidItemLabel(label: string): boolean {
   return label.trim().length > 0
 }
 
+/**
+ * Builds a trusted, ready-to-save Plan from an already-sanitized AI plan
+ * draft (see planDraftValidation.ts). This is the ONE place a
+ * preview_plan_creation draft is turned into a real Plan: every id, every
+ * item id, `done: false`, and both timestamps are assigned here by trusted
+ * code — none of them are ever taken from the draft, which only supplies
+ * title/type/color/dates/items. Called only from AIPlanGeneratorModal on
+ * the user's explicit "Save plan" confirmation, never during generation or
+ * preview.
+ */
+export function buildPlanFromDraft(draft: PlanDraft): Plan {
+  const now = Date.now()
+  const items: PlanItem[] = draft.items
+    .filter((item) => isValidItemLabel(item.label))
+    .map((item) => {
+      const note = item.note?.trim()
+      return {
+        id: generateItemId(),
+        label: item.label.trim(),
+        done: false,
+        ...(note ? { note } : {}),
+      }
+    })
+  return {
+    id: generatePlanId(),
+    type: draft.type,
+    title: draft.title.trim(),
+    color: draft.color,
+    startDate: draft.startDate || undefined,
+    endDate: draft.endDate || undefined,
+    items,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
 // ── Date formatting (shared by PlansPage and PlanDetailPage) ─────────────────
 
 export function formatPlanDate(dateStr: string, lang: AppLang): string {
@@ -281,7 +318,7 @@ export async function deletePlan(planId: string): Promise<void> {
   await deleteDoc(planDoc(_currentUid, planId))
 }
 
-function generateItemId(): string {
+export function generateItemId(): string {
   return `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 }
 

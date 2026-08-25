@@ -23,13 +23,14 @@ import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
 import type { Task, Priority, TaskCategory } from '@/types'
 import type { NoteFolder } from '@/data/notesData'
 import type { HabitCategory } from '@/data/habitsData'
+import { sanitizePlanDraft, type PlanDraft } from '@/lib/planDraftValidation'
 
 export interface AIAction {
   type: 'create_task' | 'create_note' | 'create_habit' | 'create_goal' | 'create_calendar_event'
     | 'delete_task' | 'delete_note' | 'delete_habit' | 'delete_goal' | 'delete_calendar_event'
     | 'save_document' | 'move_document' | 'rename_document' | 'batch_save_documents'
     | 'create_money_income' | 'create_money_expense' | 'batch_create_money_transactions'
-    | 'preview_bank_import'
+    | 'preview_bank_import' | 'preview_plan_creation'
   data: Record<string, unknown>
 }
 
@@ -81,6 +82,13 @@ export interface ActionContext {
   getCanonicalBankTransactions?: () => CanonicalBankTransaction[] | null
   /** Called by preview_bank_import — shows MoneyImportReviewCard in the UI */
   setPendingMoneyImport?: (txns: CanonicalBankTransaction[]) => void
+  /**
+   * Called by preview_plan_creation with an already-sanitized PlanDraft —
+   * shows AIPlanGeneratorModal's editable preview. Nothing is written to
+   * Firestore here; the draft is only saved once the user explicitly
+   * confirms via addPlan().
+   */
+  setPendingPlanDraft?: (draft: PlanDraft) => void
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -502,6 +510,22 @@ export async function executeAction(action: AIAction, ctx?: ActionContext): Prom
         return { success: true, message: '' }
       }
 
+      // ── Plan creation preview — client handles the actual write ───────────
+      // Mirrors preview_bank_import: nothing is written to Firestore here.
+      // action.data is untrusted model output — sanitizePlanDraft() is the
+      // frontend's own independent validation pass (the backend already ran
+      // an equivalent pass before this action ever reached the client, but
+      // that server-side check is not trusted as the only line of defence).
+      case 'preview_plan_creation': {
+        const draft = sanitizePlanDraft(action.data)
+        if (!draft) {
+          return { success: false, message: 'Genereeritud plaan oli tühi või kehtetu.' }
+        }
+        ctx?.setPendingPlanDraft?.(draft)
+        // Silent success — AIPlanGeneratorModal displays the draft; no duplicate text
+        return { success: true, message: '' }
+      }
+
       // ── Money actions ──────────────────────────────────────────────────────
 
       case 'create_money_income': {
@@ -638,7 +662,34 @@ export async function executeActionsAsync(
   ])
   const hasBankPreview = actions.some((a) => a.type === 'preview_bank_import')
 
-  for (const action of actions) {
+  // ── Hard guard: plan-creation preview isolation ─────────────────────────────
+  // When preview_plan_creation is present, it must be the ONLY action that
+  // executes from this batch — no task/note/calendar/habit/goal/school/money/
+  // document write may run alongside it, even if the model ignored the
+  // system-prompt isolation instruction and returned other actions too.
+  // Mirrors the preview_bank_import guard above; code-level, not prompt-only.
+  const hasPlanPreview = actions.some((a) => a.type === 'preview_plan_creation')
+
+  // At most ONE preview_plan_creation action may ever execute (so
+  // setPendingPlanDraft/the preview UI is invoked at most once per AI
+  // response), even if the model returned several. Pre-scan for the FIRST
+  // one whose data sanitizes to a usable draft — an earlier invalid one
+  // does not block a later valid one, but only that first valid one ever
+  // runs; every other preview_plan_creation action (before or after it,
+  // valid or invalid) is discarded without executing.
+  const firstValidPlanPreviewIndex = hasPlanPreview
+    ? actions.findIndex((a) => a.type === 'preview_plan_creation' && sanitizePlanDraft(a.data) !== null)
+    : -1
+
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i]
+    if (hasPlanPreview) {
+      if (action.type === 'preview_plan_creation') {
+        if (i !== firstValidPlanPreviewIndex) continue // discard every other plan preview, valid or not
+      } else {
+        continue // preview_plan_creation isolation — nothing else in this batch may execute
+      }
+    }
     if (hasBankPreview && MONEY_WRITE_TYPES.has(action.type)) {
       // Drop silently — the review card handles confirmed writes
       continue
@@ -653,7 +704,7 @@ export function executeActions(actions: AIAction[]): AIActionResult[] {
   const ASYNC_TYPES = [
     'save_document', 'move_document', 'rename_document', 'batch_save_documents',
     'create_money_income', 'create_money_expense', 'batch_create_money_transactions',
-    'preview_bank_import',
+    'preview_bank_import', 'preview_plan_creation',
   ]
   return actions
     .filter(a => !ASYNC_TYPES.includes(a.type))

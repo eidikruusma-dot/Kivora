@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Loader2 } from 'lucide-react'
+import { Plus, Sparkles, Loader2 } from 'lucide-react'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t, type TranslationKey } from '@/lib/translations'
 import AppCard from '@/components/ui/AppCard'
 import ProgressBar from '@/components/ui/ProgressBar'
 import PlanFormModal, { PLAN_COLOR_SWATCHES, type PlanFormValues } from '@/components/plans/PlanFormModal'
+import AIPlanGeneratorModal from '@/components/plans/AIPlanGeneratorModal'
 import { PLAN_TEMPLATES, getTemplateIcon, type PlanTemplate } from '@/data/planTemplates'
 import {
   usePlans,
@@ -32,6 +33,7 @@ export default function PlansPage() {
   const [activeTab, setActiveTab] = useState<PlansTab>('myPlans')
   const [modalOpen, setModalOpen] = useState(false)
   const [creatingTemplate, setCreatingTemplate] = useState<PlanTemplate | null>(null)
+  const [aiModalOpen, setAiModalOpen] = useState(false)
 
   const plans = usePlans()
   const plansLoading = usePlansLoading()
@@ -60,13 +62,22 @@ export default function PlansPage() {
           <h1 className="text-2xl font-bold text-[#1A1F36]">{t('plans.title', lang)}</h1>
           <p className="text-sm text-[#64748B] mt-0.5">{t('plans.subtitle', lang)}</p>
         </div>
-        <button
-          onClick={() => setActiveTab('templates')}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#6F5AE8] text-white rounded-xl text-sm font-medium hover:bg-[#5B48D8] transition-colors shadow-sm"
-        >
-          <Plus size={16} strokeWidth={2.5} />
-          {t('plans.create', lang)}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setAiModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#ECECF2] text-[#1A1F36] rounded-xl text-sm font-medium hover:border-[#6F5AE8] hover:text-[#6F5AE8] transition-colors shadow-sm"
+          >
+            <Sparkles size={16} strokeWidth={2.5} />
+            {t('plans.aiCreate', lang)}
+          </button>
+          <button
+            onClick={() => setActiveTab('templates')}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#6F5AE8] text-white rounded-xl text-sm font-medium hover:bg-[#5B48D8] transition-colors shadow-sm"
+          >
+            <Plus size={16} strokeWidth={2.5} />
+            {t('plans.create', lang)}
+          </button>
+        </div>
       </div>
 
       {/* Tabs + content */}
@@ -203,6 +214,17 @@ export default function PlansPage() {
             setModalOpen(false)
             setCreatingTemplate(null)
             setActiveTab('myPlans')
+          }}
+        />
+      )}
+
+      {aiModalOpen && (
+        <AIPlanGeneratorModal
+          lang={lang}
+          onClose={() => setAiModalOpen(false)}
+          onSaved={(planId) => {
+            setAiModalOpen(false)
+            navigate(`/app/plans/${planId}`)
           }}
         />
       )}

@@ -1744,6 +1744,22 @@ export type TranslationKey =
     | "plans.detail.errorDeletePlan"
     | "plans.detail.copyPlan"
     | "plans.copy.titlePrefix"
+    | "plans.aiCreate"
+    | "plans.ai.modalTitle"
+    | "plans.ai.promptLabel"
+    | "plans.ai.promptPlaceholder"
+    | "plans.ai.generate"
+    | "plans.ai.generating"
+    | "plans.ai.errorGenerate"
+    | "plans.ai.errorNoDraft"
+    | "plans.ai.errorEmptyDraft"
+    | "plans.ai.previewSubtitle"
+    | "plans.ai.typeLabel"
+    | "plans.ai.itemsLabel"
+    | "plans.ai.errorNoItems"
+    | "plans.ai.save"
+    | "plans.ai.saving"
+    | "plans.ai.backToPrompt"
     | "modules.continue"
     | "modules.selectAll"
     | "modules.clearOptional"
@@ -3720,6 +3736,22 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.detail.errorDeletePlan": "Kustutamine ebaõnnestus. Proovi uuesti.",
         "plans.detail.copyPlan": "Kopeeri plaan",
         "plans.copy.titlePrefix": "Koopia:",
+        "plans.aiCreate": "Loo AI-ga",
+        "plans.ai.modalTitle": "AI plaani loomine",
+        "plans.ai.promptLabel": "Kirjelda, millist plaani vajad",
+        "plans.ai.promptPlaceholder": "Nt Nädala menüü kahele inimesele, lihtsad road",
+        "plans.ai.generate": "Genereeri",
+        "plans.ai.generating": "Genereerin…",
+        "plans.ai.errorGenerate": "Genereerimine ebaõnnestus. Proovi uuesti.",
+        "plans.ai.errorNoDraft": "AI ei tagastanud plaani mustandit. Proovi kirjeldust täpsustada.",
+        "plans.ai.errorEmptyDraft": "Genereeritud plaan oli tühi või kehtetu. Proovi uuesti.",
+        "plans.ai.previewSubtitle": "Vaata mustand üle ja muuda seda enne salvestamist.",
+        "plans.ai.typeLabel": "Tüüp",
+        "plans.ai.itemsLabel": "Üksused",
+        "plans.ai.errorNoItems": "Vähemalt üks kehtiv üksus on vajalik.",
+        "plans.ai.save": "Salvesta plaan",
+        "plans.ai.saving": "Salvestan…",
+        "plans.ai.backToPrompt": "Uus kirjeldus",
         "modules.continue": "Jätka",
         "modules.selectAll": "Vali kõik",
         "modules.clearOptional": "Tühista valikud",
@@ -5689,6 +5721,22 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.detail.errorDeletePlan": "Could not delete. Please try again.",
         "plans.detail.copyPlan": "Copy plan",
         "plans.copy.titlePrefix": "Copy:",
+        "plans.aiCreate": "Create with AI",
+        "plans.ai.modalTitle": "Create plan with AI",
+        "plans.ai.promptLabel": "Describe the plan you need",
+        "plans.ai.promptPlaceholder": "E.g. A weekly menu for two, simple meals",
+        "plans.ai.generate": "Generate",
+        "plans.ai.generating": "Generating…",
+        "plans.ai.errorGenerate": "Generation failed. Please try again.",
+        "plans.ai.errorNoDraft": "The AI did not return a plan draft. Try describing it more specifically.",
+        "plans.ai.errorEmptyDraft": "The generated plan was empty or invalid. Please try again.",
+        "plans.ai.previewSubtitle": "Review and edit the draft before saving.",
+        "plans.ai.typeLabel": "Type",
+        "plans.ai.itemsLabel": "Items",
+        "plans.ai.errorNoItems": "At least one valid item is required.",
+        "plans.ai.save": "Save plan",
+        "plans.ai.saving": "Saving…",
+        "plans.ai.backToPrompt": "New description",
         "modules.continue": "Continue",
         "modules.selectAll": "Select all",
         "modules.clearOptional": "Clear selection",

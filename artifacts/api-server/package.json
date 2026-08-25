@@ -25,7 +25,10 @@
     "test:pdfModelOutputTruncation": "npx esbuild --bundle --platform=node --format=cjs src/lib/pdfModelOutputTruncation.test.ts | node",
     "test:pdfBatchedExtraction": "npx esbuild --bundle --platform=node --format=esm --packages=external src/lib/pdfBatchedExtraction.test.ts --outfile=.tmp-pdfBatchedExtraction.mjs && node .tmp-pdfBatchedExtraction.mjs",
     "test:bankImportRevalidate": "npx esbuild --bundle --platform=node --format=esm --packages=external src/lib/bankImportRevalidate.test.ts --outfile=.tmp-bankImportRevalidate.mjs && node .tmp-bankImportRevalidate.mjs",
-  "test": "pnpm run test:parseEuropeanNumber && pnpm run test:groupIntoRows && pnpm run test:extraction"
+    "test:planDraftValidation": "npx esbuild --bundle --platform=node --format=cjs src/lib/planDraftValidation.test.ts | node",
+    "test:validateChatRequest": "npx esbuild --bundle --platform=node --format=cjs src/lib/validateChatRequest.test.ts | node",
+    "test:evaluateFinishReason": "npx esbuild --bundle --platform=node --format=cjs src/lib/evaluateFinishReason.test.ts | node",
+  "test": "pnpm run test:parseEuropeanNumber && pnpm run test:groupIntoRows && pnpm run test:extraction && pnpm run test:planDraftValidation && pnpm run test:validateChatRequest && pnpm run test:evaluateFinishReason"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",

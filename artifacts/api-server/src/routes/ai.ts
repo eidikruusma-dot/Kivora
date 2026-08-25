@@ -1,5 +1,8 @@
 import { Router } from "express";
 import OpenAI from "openai";
+import { normalizeSingleValidPlanPreview } from "../lib/planDraftValidation.js";
+import { validateChatRequest } from "../lib/validateChatRequest.js";
+import { evaluateFinishReason } from "../lib/evaluateFinishReason.js";
 
 const router = Router();
 
@@ -59,6 +62,7 @@ Allowed action types and their data fields:
 - create_money_income: { "amount": number, "title": string, "date": "YYYY-MM-DD", "currency"?: string, "category"?: string, "note"?: string }
 - create_money_expense: { "amount": number, "title": string, "date": "YYYY-MM-DD", "currency"?: string, "category"?: string, "note"?: string }
 - preview_bank_import: {}
+- preview_plan_creation: { "title": string, "type": "menu"|"workout"|"study"|"cleaning"|"selfcare"|"blank", "color"?: "#RRGGBB", "startDate"?: "YYYY-MM-DD", "endDate"?: "YYYY-MM-DD", "items": [{ "label": string, "note"?: string }] }
 
 Document action rules:
 - For save_document/batch_save_documents, "fileId" is the attachment id provided in the user's hidden context (look for "attachmentId:" in the file context block).
@@ -97,6 +101,24 @@ MANUAL SINGLE ENTRIES — use create_money_income or create_money_expense:
 - If category confidence is low, omit the field — the client will use the best default.
 CRITICAL: Never claim transactions were saved — the client confirms actual Firestore write success.
 CRITICAL: Do not create a Note as a fallback for Money actions.
+
+Plan creation rules (preview_plan_creation):
+- When the user asks you to create/generate a plan, checklist, workout schedule, study plan, cleaning plan, self-care plan, or a meal/menu plan, emit exactly one preview_plan_creation action.
+- CRITICAL — isolation: when "actions" contains preview_plan_creation, it MUST be the ONLY action in the array. Never combine it with any other action.
+- CRITICAL — no writes here: this action only shows an editable draft to the user. Nothing is saved until the user explicitly confirms in the app. Do not claim the plan has been created or saved.
+- Generate several concrete, separately checkable items — never one item that contains the whole plan, and never nested subtasks. Each item is one checkbox the user will tick off individually.
+  - Menu (type "menu") — CRITICAL, read carefully:
+    - NEVER include a "note" field on a menu item. Do NOT generate ingredient lists or preparation/cooking instructions for menu items, in "note" or anywhere else — there is no Recipes feature in this app. Any recipe text you write for a menu item will be discarded server-side before the user ever sees it, so do not waste output on it.
+    - If the user explicitly asks for a weekday- or week-based menu (e.g. "weekly menu", "menu for Monday to Friday"), use weekday-based labels, e.g. { "label": "Monday – chicken pasta" }.
+    - Otherwise, do NOT assign weekdays. Generate flexible meal ideas instead, and put useful duration/quantity information directly in the label, e.g. { "label": "Chicken and rice – approximately 2 days" }. A single meal can be intended to last several days.
+  - Workout: one item per exercise, with a "note" containing clear performance instructions — exact sets/repetitions in the label and form cues + rest time in the note, e.g. { "label": "Squats – 3 × 12", "note": "Keep your back straight and knees tracking over your toes.\nRest 60 seconds between sets." }
+  - Study: one item per task/chapter, e.g. { "label": "Read chapter 3", "note": "Write down the five most important concepts." }
+  - Cleaning: one item per task, e.g. { "label": "Clean the kitchen counters", "note": "Clear items off first, wipe the surfaces, then dry them." }
+  - Self-care: one item per activity, with an optional short note.
+- Outside of menu items, "note" is optional but should carry the useful multiline detail (form cues, instructions, etc.) using \n for line breaks — keep it reasonably concise (well under 1000 characters).
+- Aim for at least 2-3 items and no more than 14. Keep "title" under 80 characters and each "label" under 100 characters.
+- Only set "startDate"/"endDate" (YYYY-MM-DD) if the user gave a concrete date range; otherwise omit both.
+- After emitting preview_plan_creation, your reply text MUST be ONLY one short sentence, e.g. "Review and edit the draft below." — do not restate the items, since the app renders the full editable draft itself.
 
 EMPTY MODULE RULE: The phrase "There are currently no records in this module" is informational only — it describes an empty list, NOT a prohibition on creating records. When the user asks to create something and the module is empty, always emit the create action. An empty module is ready to receive its first entry.
 
@@ -146,6 +168,7 @@ Lubatud toimingute tüübid ja nende data väljad:
 - create_money_income: { "amount": number, "title": string, "date": "YYYY-MM-DD", "currency"?: string, "category"?: string, "note"?: string }
 - create_money_expense: { "amount": number, "title": string, "date": "YYYY-MM-DD", "currency"?: string, "category"?: string, "note"?: string }
 - preview_bank_import: {}
+- preview_plan_creation: { "title": string, "type": "menu"|"workout"|"study"|"cleaning"|"selfcare"|"blank", "color"?: "#RRGGBB", "startDate"?: "YYYY-MM-DD", "endDate"?: "YYYY-MM-DD", "items": [{ "label": string, "note"?: string }] }
 
 Dokumentide toimingute reeglid:
 - save_document/batch_save_documents puhul on "fileId" kasutaja peidetud kontekstis olev manuse ID (otsi "attachmentId:" välja faili konteksti plokist).
@@ -185,6 +208,24 @@ KÄSITSI ÜKSIKKIRJE — kasuta create_money_income või create_money_expense:
 KRIITILINE: Ära väida, et tehingud on salvestatud — klient kinnitab tegeliku Firestore kirjutamise õnnestumise.
 KRIITILINE: Ära loo märkust (Note) Raha toimingute varuvariandina.
 
+Plaani loomise reeglid (preview_plan_creation):
+- Kui kasutaja palub luua/genereerida plaani, checklisti, treeningkava, õppeplaani, koristusplaani, enesehoolduse plaani või toidu-/menüüplaani, käivita täpselt üks preview_plan_creation toiming.
+- KRIITILINE — isolatsioon: kui "actions" sisaldab preview_plan_creation-it, peab see olema AINUS toiming massiivis. Ära kunagi kombineeri seda ühegi teise toiminguga.
+- KRIITILINE — miski ei kirjutata veel: see toiming ainult näitab kasutajale muudetavat mustandit. Midagi ei salvestata enne, kui kasutaja rakenduses selgelt kinnitab. Ära väida, et plaan on loodud või salvestatud.
+- Genereeri mitu konkreetset, eraldi märgitavat üksust — mitte kunagi üht üksust, mis sisaldab tervet plaani, ega pesastatud alamülesandeid. Iga üksus on üks märkeruut, mille kasutaja eraldi ära märgib.
+  - Menüü (tüüp "menu") — KRIITILINE, loe hoolega:
+    - ÄRA KUNAGI lisa menüü üksusele "note" välja. ÄRA genereeri koostisosade loendeid ega valmistamisjuhiseid menüü üksuste jaoks, ei "note" väljal ega kusagil mujal — sellel rakendusel ei ole Retseptide funktsiooni. Iga retseptitekst, mille menüü üksuse jaoks kirjutad, visatakse serveripoolselt minema enne, kui kasutaja seda näeb — ära raiska väljundit selle peale.
+    - Kui kasutaja palub selgelt nädalapäeva- või nädalapõhist menüüd (nt "nädala menüü", "esmaspäevast reedeni"), kasuta nädalapäevapõhiseid silte, nt { "label": "Esmaspäev – kanapasta" }.
+    - Muul juhul ÄRA määra nädalapäevi. Genereeri selle asemel paindlikke toidukorra ideid ja pane kasulik kestuse/koguse info otse sildile, nt { "label": "Kana-riisiroog – umbes 2 päevaks" }. Üks toit võib olla mõeldud mitmeks päevaks.
+  - Trenn: üks üksus harjutuse kohta koos "note" väljaga, mis sisaldab selget sooritusjuhist — täpsed seeriad/kordused sildil ning tehnikanäpunäited + puhkeaeg note väljal, nt { "label": "Kükid – 3 × 12", "note": "Hoia selg sirge ja põlved varvastega samas suunas.\nPuhka seeriate vahel 60 sekundit." }
+  - Õppimine: üks üksus ülesande/peatüki kohta, nt { "label": "Loe peatükk 3", "note": "Kirjuta välja viis olulisemat mõistet." }
+  - Koristamine: üks üksus ülesande kohta, nt { "label": "Puhasta köögi tööpinnad", "note": "Tõsta esemed eest, pühi pinnad ja kuivata." }
+  - Enesehooldus: üks üksus tegevuse kohta, valikulise lühikese note väljaga.
+- Väljaspool menüü üksusi on "note" valikuline, kuid peaks kandma kasulikku mitmerealist infot (tehnikanäpunäited, juhised jms), kasuta reavahetuseks \n — hoia see mõistlikult lühike (selgelt alla 1000 tähemärgi).
+- Kasuta vähemalt 2-3 üksust ja mitte rohkem kui 14. Hoia "title" alla 80 tähemärgi ja iga "label" alla 100 tähemärgi.
+- Sea "startDate"/"endDate" (YYYY-MM-DD) ainult siis, kui kasutaja andis konkreetse kuupäevavahemiku; muidu jäta mõlemad välja.
+- Pärast preview_plan_creation käivitamist peab sinu reply tekst olema AINULT üks lühike lause, nt "Vaata üle ja muuda allolevat mustandit." — ära kirjelda üksusi uuesti, sest rakendus kuvab kogu muudetava mustandi ise.
+
 TÜHJA MOODULI REEGEL: Tekst "Praegu ei ole selles moodulis ühtegi kirjet" on ainult informatiivne — see tähendab, et nimekiri on tühi, MITTE et loomine on keelatud. Kui kasutaja palub midagi luua ja moodul on tühi, emiteeri ALATI loomistoiming. Tühi moodul on alati valmis vastu võtma oma esimest kirjet.
 
 KINNITUSPOLIITIKA:
@@ -195,19 +236,22 @@ Küsi ÜKS kinnitus ainult: pangaväljavõtte massimpordi, massilise kustutamise
 `;
 }
 
-interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-}
-
 router.post("/ai/chat", async (req, res) => {
   try {
-    const { messages, context, lang, localDate } = req.body as {
-      messages: ChatMessage[];
+    const { context, lang, localDate } = req.body as {
       context?: string;
       lang?: string;
       localDate?: string;
     };
+
+    const validation = validateChatRequest(req.body as { messages?: unknown; mode?: unknown });
+    if (!validation.ok) {
+      // Diagnostic logging only — never message contents.
+      console.log(`[ai/chat] validation rejected code=${validation.code} status=${validation.status}`);
+      res.status(validation.status).json({ error: validation.error, code: validation.code });
+      return;
+    }
+    const { mode, messages } = validation;
 
     // Resolve current date — prefer client-supplied local date (YYYY-MM-DD), fall back to server UTC date
     let todayDate: Date;
@@ -225,11 +269,6 @@ router.post("/ai/chat", async (req, res) => {
     const tomorrowStr = fmtDate(tomorrowDate);
     const yesterdayStr = fmtDate(yesterdayDate);
 
-    if (!Array.isArray(messages) || messages.length === 0) {
-      res.status(400).json({ error: "messages on kohustuslik mittetühi massiiv." });
-      return;
-    }
-
     const resolvedLang: "et" | "en" = lang === "en" ? "en" : "et";
     const systemMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: "system", content: buildSystemPrompt(resolvedLang, todayStr, tomorrowStr, yesterdayStr) },
@@ -246,6 +285,24 @@ router.post("/ai/chat", async (req, res) => {
       });
     }
 
+    // mode: "plan_creation" — the single user message IS the raw plan
+    // description, with no client-side wrapper sentence (see
+    // AIPlanGeneratorModal/aiClient.ts: buildPlanGenerationMessages sends the
+    // trimmed description verbatim, so the length actually measured by
+    // validateChatRequest's PLAN_DRAFT_LIMITS.maxPromptLength check is
+    // exactly what the user typed). This system message supplies the
+    // "generate a plan" instruction instead, so the model treats the bare
+    // description as a plan-creation request regardless of phrasing.
+    if (mode === "plan_creation") {
+      systemMessages.push({
+        role: "system",
+        content:
+          resolvedLang === "en"
+            ? 'The user\'s next message is a plain description of a plan they want created (e.g. a topic, a goal, a short phrase) — not necessarily phrased as a request. Always treat it as a plan-creation request and respond by emitting exactly one preview_plan_creation action, per the "Plan creation rules" above.'
+            : 'Kasutaja järgmine sõnum on lihtne kirjeldus plaanist, mida ta soovib luua (nt teema, eesmärk, lühike fraas) — mitte tingimata sõnastatud palvena. Käsitle seda ALATI plaani loomise sooviavaldusena ja vasta, käivitades täpselt ühe preview_plan_creation toimingu vastavalt eespool toodud "Plaani loomise reeglid" osale.',
+      });
+    }
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -256,6 +313,23 @@ router.post("/ai/chat", async (req, res) => {
       max_tokens: 2048,
     });
 
+    const finishReason = completion.choices[0]?.finish_reason;
+    const { rejectRequest, discardActions } = evaluateFinishReason(mode, finishReason);
+
+    // Safe diagnostic logging only: mode, finish_reason, outcome status/code.
+    // Never the prompt, the reply, generated plan content, or any personal data.
+    console.log(
+      `[ai/chat] mode=${mode} finish_reason=${finishReason ?? "null"} status=${rejectRequest ? 422 : 200}`,
+    );
+
+    if (rejectRequest) {
+      res.status(422).json({
+        error: "The AI response was incomplete. Please try again.",
+        code: "PLAN_GENERATION_INCOMPLETE",
+      });
+      return;
+    }
+
     const raw = completion.choices[0]?.message?.content ?? "{}";
 
     let parsed: { reply?: string; actions?: unknown[] };
@@ -265,9 +339,20 @@ router.post("/ai/chat", async (req, res) => {
       parsed = { reply: raw, actions: [] };
     }
 
+    // Server-side constraint on preview_plan_creation: the model's JSON is
+    // untrusted, so its data is run through the same sanitizer the client
+    // will independently re-run before showing or saving it. A malformed
+    // plan draft is dropped here rather than forwarded to the client, and
+    // at most one valid preview_plan_creation action ever survives — see
+    // normalizeSingleValidPlanPreview's doc comment for the exact rule.
+    // discardActions (a non-"stop" chat-mode finish) drops every action —
+    // a truncated/filtered completion must never be allowed to execute a write.
+    const rawActions = discardActions ? [] : Array.isArray(parsed.actions) ? parsed.actions : [];
+    const actions = normalizeSingleValidPlanPreview(rawActions);
+
     res.json({
       reply: typeof parsed.reply === "string" ? parsed.reply : raw,
-      actions: Array.isArray(parsed.actions) ? parsed.actions : [],
+      actions,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Tundmatu viga.";

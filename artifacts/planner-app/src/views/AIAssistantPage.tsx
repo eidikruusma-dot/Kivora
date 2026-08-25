@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { subscribeToLanguage, getLocalLanguage } from "@/lib/languageStore";
 import type { AppLang } from "@/lib/languageStore";
 import { t } from "@/lib/translations";
@@ -11,7 +11,7 @@ import {
   type AIAction,
   type PendingFileRef,
 } from "@/lib/aiActions";
-import { buildAIContext } from "@/lib/aiContextBuilder";
+import { fetchAIReply } from "@/lib/aiClient";
 import { getAllDocuments } from "@/lib/documentsStore";
 import { auth } from "@/lib/firebase";
 import { dispatch as dispatchNotif } from "@/lib/notificationItemsStore";
@@ -48,6 +48,8 @@ import type { BankTransaction, BankMeta } from "@/types/bank";
 import MoneyImportReviewCard from "@/components/MoneyImportReviewCard";
 import type { Transaction } from "@/types/money";
 import { MONEY_MODULE_ENABLED } from "@/lib/featureFlags";
+import AIPlanGeneratorModal from "@/components/plans/AIPlanGeneratorModal";
+import type { PlanDraft } from "@/lib/planDraftValidation";
 import {
   Sparkles,
   Send,
@@ -100,38 +102,9 @@ function uid() {
 // ── Real API call via Supabase Edge Function ─────────────────────────
 // Swap this single function if the backend changes. It accepts the full
 // conversation history and returns the assistant's reply text.
-interface AIResponse {
-  reply: string;
-  actions: AIAction[];
-}
-
-async function fetchAIReply(
-  history: { role: "user" | "assistant"; content: string }[],
-  lang: AppLang,
-): Promise<AIResponse> {
-  // Build client-local date string (YYYY-MM-DD) so the server can resolve "today"/"tomorrow" correctly
-  const _now = new Date();
-  const localDate = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
-
-  const res = await fetch("/api/ai/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      messages: history,
-      context: buildAIContext(lang),
-      lang,
-      localDate,
-    }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed (${res.status}).`);
-  }
-  const data = await res.json();
-  if (!data.reply && (!data.actions || data.actions.length === 0))
-    throw new Error("AI returned no reply.");
-  return { reply: data.reply || "", actions: data.actions || [] };
-}
+// fetchAIReply lives in @/lib/aiClient — shared with the Plans module's AI
+// plan generator so there is only ever one client entry point into the
+// /api/ai/chat backend.
 
 // Chats are now persisted to Firestore via aiConversationsStore
 
@@ -390,6 +363,7 @@ export default function AIAssistantPage() {
   ];
 
   const location = useLocation();
+  const navigate = useNavigate();
   const [input, setInput] = useState("");
   const storeChats = useChats();
   useChatsLoading(); // triggers re-render after initial Firestore load completes
@@ -450,6 +424,9 @@ export default function AIAssistantPage() {
     BankTransaction[] | null
   >(null);
   const [pendingMoneyMeta, setPendingMoneyMeta] = useState<BankMeta | null>(
+    null,
+  );
+  const [pendingPlanDraft, setPendingPlanDraft] = useState<PlanDraft | null>(
     null,
   );
 
@@ -802,6 +779,9 @@ export default function AIAssistantPage() {
                 canonicalBankDataRef.current?.bankMeta ?? null,
               );
             },
+            setPendingPlanDraft: (draft: PlanDraft) => {
+              setPendingPlanDraft(draft);
+            },
           };
           const results = await executeActionsAsync(res.actions, actionCtx);
           pendingFilesRef.current = [];
@@ -1118,6 +1098,9 @@ export default function AIAssistantPage() {
           setPendingMoneyImport: (txns: BankTransaction[]) => {
             setPendingMoneyImport(txns);
             setPendingMoneyMeta(canonicalBankDataRef.current?.bankMeta ?? null);
+          },
+          setPendingPlanDraft: (draft: PlanDraft) => {
+            setPendingPlanDraft(draft);
           },
         };
         const results = await executeActionsAsync(res.actions, actionCtx);
@@ -1809,6 +1792,17 @@ export default function AIAssistantPage() {
                   />
                 </div>
               </div>
+            )}
+            {pendingPlanDraft && (
+              <AIPlanGeneratorModal
+                lang={lang}
+                initialDraft={pendingPlanDraft}
+                onClose={() => setPendingPlanDraft(null)}
+                onSaved={(planId) => {
+                  setPendingPlanDraft(null);
+                  navigate(`/app/plans/${planId}`);
+                }}
+              />
             )}
             {/* Input composer (active chat) */}
             <div className="flex items-end gap-2 bg-white border-t border-[#ECECF2] px-4 py-3">
