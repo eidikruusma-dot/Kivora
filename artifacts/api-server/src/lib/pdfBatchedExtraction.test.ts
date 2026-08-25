@@ -69,21 +69,21 @@ async function run(): Promise<void> {
 
   // ── 1. Long document splits into bounded, contiguous, non-overlapping batches ──
   {
-    const buffer = await buildBlankPdf(12); // 12 pages, default 5 pages/batch
+    const buffer = await buildBlankPdf(12); // 12 pages, default 2 pages/batch
     const batches = await splitPdfIntoPageBatches(buffer);
 
-    assert(batches.length === 3, `Expected 3 batches for 12 pages; got ${batches.length}`);
+    assert(batches.length === 6, `Expected 6 batches for 12 pages at 2/batch; got ${batches.length}`);
     assert(
-      batches[0].startPage === 1 && batches[0].endPage === 5,
-      `Batch 1 must cover pages 1-5; got ${batches[0].startPage}-${batches[0].endPage}`,
+      batches[0].startPage === 1 && batches[0].endPage === 2,
+      `Batch 1 must cover pages 1-2; got ${batches[0].startPage}-${batches[0].endPage}`,
     );
     assert(
-      batches[1].startPage === 6 && batches[1].endPage === 10,
-      `Batch 2 must cover pages 6-10; got ${batches[1].startPage}-${batches[1].endPage}`,
+      batches[1].startPage === 3 && batches[1].endPage === 4,
+      `Batch 2 must cover pages 3-4; got ${batches[1].startPage}-${batches[1].endPage}`,
     );
     assert(
-      batches[2].startPage === 11 && batches[2].endPage === 12,
-      `Batch 3 must cover pages 11-12; got ${batches[2].startPage}-${batches[2].endPage}`,
+      batches[5].startPage === 11 && batches[5].endPage === 12,
+      `Batch 6 must cover pages 11-12; got ${batches[5].startPage}-${batches[5].endPage}`,
     );
 
     // Every page of the source document must be covered exactly once.
@@ -110,16 +110,30 @@ async function run(): Promise<void> {
     passed++;
   }
 
+  // ── 1b. Odd page count → last batch is a smaller remainder, not overflow ──
+  {
+    const buffer = await buildBlankPdf(7); // 7 pages, default 2 pages/batch → 2,2,2,1
+    const batches = await splitPdfIntoPageBatches(buffer);
+
+    assert(batches.length === 4, `Expected 4 batches for 7 pages at 2/batch; got ${batches.length}`);
+    assert(
+      batches[3].startPage === 7 && batches[3].endPage === 7,
+      `Final batch must cover just the remaining page 7; got ${batches[3].startPage}-${batches[3].endPage}`,
+    );
+
+    passed++;
+  }
+
   // ── 2. Short document (fits in one batch) makes exactly one batch — no cost
   //       regression for the overwhelming majority of real statements ─────────
   {
-    const buffer = await buildBlankPdf(3);
+    const buffer = await buildBlankPdf(2);
     const batches = await splitPdfIntoPageBatches(buffer);
 
-    assert(batches.length === 1, `Expected exactly 1 batch for a 3-page document; got ${batches.length}`);
+    assert(batches.length === 1, `Expected exactly 1 batch for a 2-page document; got ${batches.length}`);
     assert(
-      batches[0].startPage === 1 && batches[0].endPage === 3,
-      "Single batch must cover the whole 3-page document",
+      batches[0].startPage === 1 && batches[0].endPage === 2,
+      "Single batch must cover the whole 2-page document",
     );
 
     passed++;
@@ -150,6 +164,27 @@ async function run(): Promise<void> {
     assert(/EXCERPT/.test(prompt), "A partial batch must be framed as an excerpt");
     assert(prompt.includes("pages 6-10"), "Prompt must state the absolute page range");
     assert(prompt.includes("12-page"), "Prompt must state the true total page count");
+    assert(
+      !/LAST page/.test(prompt),
+      "A batch that does NOT reach the document's last page must not get the final-page closing-balance note",
+    );
+
+    passed++;
+  }
+
+  // ── 4b. Prompt: the excerpt containing the document's LAST page gets an
+  //         explicit closing-balance lookup note ────────────────────────────
+  {
+    const prompt = buildBankStatementExtractionPrompt({
+      startPage: 11,
+      endPage: 12,
+      totalPages: 12,
+    });
+    assert(/EXCERPT/.test(prompt), "A partial batch must still be framed as an excerpt");
+    assert(
+      /LAST page/.test(prompt) && /closing balance/i.test(prompt),
+      "The excerpt reaching the document's final page must get an explicit closing-balance lookup note",
+    );
 
     passed++;
   }

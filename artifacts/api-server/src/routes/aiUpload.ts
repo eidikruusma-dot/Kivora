@@ -863,9 +863,14 @@ Number sourcePage starting at 1 for the first page of THIS excerpt (application 
 Document-level fields (bank name, account number, currency, period, openingBalance, closingBalance, printedIncomeTotal, printedExpenseTotal) may not all be visible on these specific pages. Return null for any field that is not explicitly visible here — never infer, estimate, or carry over a value from outside this excerpt.\n`
     : "";
 
+  const finalPageNote =
+    isExcerpt && batch.endPage === batch.totalPages
+      ? `\nThis excerpt contains the LAST page of the statement. The closing balance ("Lõppsaldo" / "Closing balance" / "Ending balance") is almost always printed in the footer or summary block of this final page — look there specifically before returning null for closingBalance.\n`
+      : "";
+
   return `\
 You are a financial document reader.  Analyze the attached PDF.
-${excerptNote}
+${excerptNote}${finalPageNote}
 Return a JSON object with EXACTLY this structure:
 {
   "document": {
@@ -949,6 +954,15 @@ Identify the transaction table.  Determine which column is:
   debit       — money leaving the account (blank on credit rows)
   credit      — money entering the account (blank on debit rows)
   balance     — running balance after the transaction (NEVER blank, changes every row)
+
+Many bank statements use a layout close to: Date | Recipient/Payer |
+Explanation | Debit (money out) | Credit (money in) | Balance — sometimes
+with debit and credit merged into a single "Amount" column plus a separate
+direction indicator (a sign, a D/C letter, or a word). Whatever the exact
+layout, apply this rule: if a transaction represents money ARRIVING in the
+account (e.g. a pension, an allowance/benefit payment, a salary, a transfer
+received, a refund), it belongs in credit/income — never debit/expense —
+regardless of which side of the page that column is printed on.
 
 KEY RULE: debit and credit are NEVER both non-null on the same row.
 If a column has a value on EVERY row → it is the running balance, not debit or credit.
@@ -1156,7 +1170,7 @@ export function normalizeBankTransaction(
 // If any batch fails for any reason, the whole extraction fails: no partial
 // merged result is ever assembled or returned.
 
-const AI_EXTRACTION_PAGES_PER_BATCH = 5;
+const AI_EXTRACTION_PAGES_PER_BATCH = 2;
 
 export interface PdfPageBatch {
   buffer: Buffer;
