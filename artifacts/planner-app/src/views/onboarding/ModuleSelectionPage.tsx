@@ -12,7 +12,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Calendar, CheckSquare, StickyNote, Activity, Flag,
-  Wallet, GraduationCap, Sparkles,
+  GraduationCap, Sparkles,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import {
@@ -28,10 +28,14 @@ import { t } from '@/lib/translations'
 
 // ── Purpose → module mapping ─────────────────────────────────────────────────
 
+// Raha (finance) is intentionally excluded from this onboarding flow — it is
+// hidden app-wide for now (moving to a future Pro tier). The actual enforcement
+// is FORCE_HIDDEN_MODULES in components/layout/Sidebar.tsx; this page just
+// stops offering it as a purpose/module so onboarding doesn't promise
+// something the sidebar will immediately hide.
 const PURPOSE_MODULES: Record<string, ModuleId[]> = {
   personal:  ['calendar', 'tasks', 'notes', 'habits', 'goals'],
   learning:  ['calendar', 'tasks', 'notes', 'school'],
-  finance:   ['finance', 'goals', 'tasks'],
   work:      ['calendar', 'tasks', 'notes', 'goals'],
 }
 
@@ -48,10 +52,13 @@ const MODULE_META: {
   { id: 'notes',     icon: <StickyNote size={20} strokeWidth={1.8} />,   accentColor: '#CA8A04', accentBg: '#FEF9C3' },
   { id: 'habits',    icon: <Activity size={20} strokeWidth={1.8} />,     accentColor: '#EA580C', accentBg: '#FFF7ED' },
   { id: 'goals',     icon: <Flag size={20} strokeWidth={1.8} />,         accentColor: '#0891B2', accentBg: '#E0F2FE' },
-  { id: 'finance',   icon: <Wallet size={20} strokeWidth={1.8} />,       accentColor: '#16A34A', accentBg: '#DCFCE7' },
   { id: 'school',    icon: <GraduationCap size={20} strokeWidth={1.8} />,accentColor: '#7C3AED', accentBg: '#EDE9FB' },
   { id: 'assistant', icon: <Sparkles size={20} strokeWidth={1.8} />,     accentColor: '#6F5AE8', accentBg: '#EDE9FB' },
 ]
+
+// Selectable module IDs for this onboarding page — ALL_MODULE_IDS minus
+// 'finance' (see note above).
+const SELECTABLE_MODULE_IDS: ModuleId[] = ALL_MODULE_IDS.filter((id) => id !== 'finance')
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -62,7 +69,7 @@ export default function ModuleSelectionPage() {
 
   const [selectedPurposes, setSelectedPurposes] = useState<Set<string>>(new Set())
   const [enabledModules, setEnabledModules] = useState<Set<ModuleId>>(
-    () => new Set(ALL_MODULE_IDS),
+    () => new Set(SELECTABLE_MODULE_IDS),
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -101,7 +108,7 @@ export default function ModuleSelectionPage() {
   }
 
   function selectAll() {
-    setEnabledModules(new Set(ALL_MODULE_IDS))
+    setEnabledModules(new Set(SELECTABLE_MODULE_IDS))
     setError('')
   }
 
@@ -143,7 +150,6 @@ export default function ModuleSelectionPage() {
   const purposes = [
     { key: 'personal',  label: t('modules.purpose.personal', lang) },
     { key: 'learning',  label: t('modules.purpose.learning', lang) },
-    { key: 'finance',   label: t('modules.purpose.finance', lang) },
     { key: 'work',      label: t('modules.purpose.work', lang) },
   ]
 

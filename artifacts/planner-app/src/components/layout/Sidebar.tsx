@@ -52,6 +52,12 @@ const NAV_ROUTES: {
   { to: '/app/settings',  tKey: 'nav.settings'  as const, icon: Settings                             },
 ]
 
+// Raha (finance) module is hidden app-wide for now — moving to a future Pro
+// tier. Nothing under it is deleted (route, page, and all import/reconciliation
+// code stay intact); this list just force-excludes it from navigation and the
+// module-disabled redirect below, regardless of a user's stored module toggle.
+const FORCE_HIDDEN_MODULES: ModuleId[] = ['finance']
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface SidebarProps {
@@ -89,7 +95,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   // redirect them to Home so they don't see a blank/broken page.
   useEffect(() => {
     const route = NAV_ROUTES.find(r => r.to === location.pathname)
-    if (route?.moduleId && !modules[route.moduleId]) {
+    if (
+      route?.moduleId &&
+      (FORCE_HIDDEN_MODULES.includes(route.moduleId) || !modules[route.moduleId])
+    ) {
       navigate('/app', { replace: true })
     }
   }, [modules, location.pathname, navigate])
@@ -106,8 +115,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   // Filter nav items — hide module-gated items whose module is off
   const visibleRoutes = NAV_ROUTES.filter(({ moduleId }) => {
-    if (!moduleId) return true         // always visible (Home, Help, Settings)
-    return modules[moduleId] === true  // show only if module is enabled
+    if (!moduleId) return true                          // always visible (Home, Help, Settings)
+    if (FORCE_HIDDEN_MODULES.includes(moduleId)) return false
+    return modules[moduleId] === true                    // show only if module is enabled
   })
 
   const handleNavClick = (to: string) => {
