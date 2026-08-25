@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { normalizeSingleValidPlanPreview } from "../lib/planDraftValidation.js";
 import { validateChatRequest } from "../lib/validateChatRequest.js";
 import { evaluateFinishReason } from "../lib/evaluateFinishReason.js";
+import { buildActionsDiagnosticLog } from "../lib/actionsDiagnosticLog.js";
 
 const router = Router();
 
@@ -349,6 +350,11 @@ router.post("/ai/chat", async (req, res) => {
     // a truncated/filtered completion must never be allowed to execute a write.
     const rawActions = discardActions ? [] : Array.isArray(parsed.actions) ? parsed.actions : [];
     const actions = normalizeSingleValidPlanPreview(rawActions);
+
+    // Diagnostic-only: action TYPE STRINGS before/after normalization, never
+    // action data (titles/labels/notes/dates/content) or reply/prompt text.
+    // See buildActionsDiagnosticLog's doc comment for why this exists.
+    console.log(buildActionsDiagnosticLog(mode, finishReason, rawActions, actions));
 
     res.json({
       reply: typeof parsed.reply === "string" ? parsed.reply : raw,
