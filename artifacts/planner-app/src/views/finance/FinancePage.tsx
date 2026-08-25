@@ -84,6 +84,7 @@ import {
   findMoneyDuplicate,
 } from "@/lib/aiActions";
 import { bankTransactionToTransaction } from "@/lib/bankImportMapping";
+import { authenticatedFetch } from "@/lib/authenticatedFetch";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Date & number helpers
@@ -2329,7 +2330,7 @@ function BankImportModal({
       const formData = new FormData();
       formData.append("file", file, file.name);
 
-      const res = await fetch("/api/ai/bank-import", {
+      const res = await authenticatedFetch("/api/ai/bank-import", {
         method: "POST",
         body: formData,
       });
@@ -2394,7 +2395,7 @@ function BankImportModal({
     }));
 
     try {
-      const res = await fetch("/api/ai/bank-import/revalidate", {
+      const res = await authenticatedFetch("/api/ai/bank-import/revalidate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ transactions: edited, bankMeta }),

@@ -12,6 +12,7 @@ import {
   type PendingFileRef,
 } from "@/lib/aiActions";
 import { fetchAIReply } from "@/lib/aiClient";
+import { authenticatedFetch } from "@/lib/authenticatedFetch";
 import { getAllDocuments } from "@/lib/documentsStore";
 import { auth } from "@/lib/firebase";
 import { dispatch as dispatchNotif } from "@/lib/notificationItemsStore";
@@ -633,7 +634,7 @@ export default function AIAssistantPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("/api/ai/upload", {
+      const res = await authenticatedFetch("/api/ai/upload", {
         method: "POST",
         body: formData,
       });

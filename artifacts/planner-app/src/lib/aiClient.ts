@@ -1,6 +1,7 @@
 import type { AppLang } from '@/lib/languageStore'
 import { buildAIContext } from '@/lib/aiContextBuilder'
 import type { AIAction } from '@/lib/aiActions'
+import { authenticatedFetch } from '@/lib/authenticatedFetch'
 
 export interface AIResponse {
   reply: string
@@ -49,7 +50,7 @@ export async function fetchAIReply(
   const _now = new Date()
   const localDate = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`
 
-  const res = await fetch('/api/ai/chat', {
+  const res = await authenticatedFetch('/api/ai/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
