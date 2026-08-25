@@ -23,6 +23,7 @@ import NotesPage from '@/views/NotesPage'
 import HabitsPage from '@/views/HabitsPage'
 import GoalsPage from '@/views/GoalsPage'
 import PlansPage from '@/views/PlansPage'
+import PlanDetailPage from '@/views/PlanDetailPage'
 import AIAssistantPage from '@/views/AIAssistantPage'
 import SchoolPage from '@/views/SchoolPage'
 import FinancePage from '@/views/finance/FinancePage'
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="/app/habits" element={<ProtectedRoute><AppLayout><HabitsPage /></AppLayout></ProtectedRoute>} />
           <Route path="/app/goals" element={<ProtectedRoute><AppLayout><GoalsPage /></AppLayout></ProtectedRoute>} />
           <Route path="/app/plans" element={<ProtectedRoute><AppLayout><PlansPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/app/plans/:planId" element={<ProtectedRoute><AppLayout><PlanDetailPage /></AppLayout></ProtectedRoute>} />
           <Route path="/app/assistant" element={<ProtectedRoute><AppLayout><AIAssistantPage /></AppLayout></ProtectedRoute>} />
           <Route path="/app/finance" element={
             MONEY_MODULE_ENABLED

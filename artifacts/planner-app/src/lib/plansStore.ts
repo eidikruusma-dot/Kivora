@@ -4,6 +4,7 @@ import {
   doc,
   setDoc,
   onSnapshot,
+  runTransaction,
   type Unsubscribe,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -71,6 +72,30 @@ export function createPlanItemsFromTemplate(template: PlanTemplate, lang: AppLan
     label: t(bp.titleKey, lang),
     done: false,
   }))
+}
+
+// ── Item validation ──────────────────────────────────────────────────────────
+
+export function isValidItemLabel(label: string): boolean {
+  return label.trim().length > 0
+}
+
+// ── Date formatting (shared by PlansPage and PlanDetailPage) ─────────────────
+
+export function formatPlanDate(dateStr: string, lang: AppLang): string {
+  return new Date(dateStr).toLocaleDateString(lang === 'et' ? 'et-EE' : 'en-GB', {
+    day: 'numeric',
+    month: 'short',
+  })
+}
+
+export function formatDateRange(plan: Plan, lang: AppLang): string | null {
+  if (plan.startDate && plan.endDate) {
+    return `${formatPlanDate(plan.startDate, lang)} – ${formatPlanDate(plan.endDate, lang)}`
+  }
+  if (plan.startDate) return formatPlanDate(plan.startDate, lang)
+  if (plan.endDate) return formatPlanDate(plan.endDate, lang)
+  return null
 }
 
 // ── Local pub/sub ───────────────────────────────────────────────────────────
@@ -144,9 +169,90 @@ export async function addPlan(plan: Plan): Promise<void> {
   await setDoc(planDoc(_currentUid, plan.id), sanitizeForFirestore(plan))
 }
 
+function generateItemId(): string {
+  return `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+}
+
+/**
+ * The one generic write path for a plan's checklist. Runs inside a Firestore
+ * transaction: reads the plan fresh from the server, applies `mutate` to
+ * that server-fresh `items` array (never the local `_plans` cache, which can
+ * be stale the instant two writes race), and writes the result back in the
+ * same transaction. Firestore retries the whole transaction automatically if
+ * another write lands on the document in between the read and the commit,
+ * so two concurrent single-item mutations (e.g. toggling item A while item B
+ * is being added) each apply cleanly instead of one clobbering the other.
+ */
+export async function mutatePlanItems(
+  planId: string,
+  mutate: (items: PlanItem[]) => PlanItem[],
+): Promise<void> {
+  if (!_currentUid) throw new Error('STORE_NOT_INITIALIZED: plans store has no authenticated user')
+  const ref = planDoc(_currentUid, planId)
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref)
+    if (!snap.exists()) throw new Error('PLAN_NOT_FOUND')
+    const plan = snap.data() as Plan
+    const items = mutate(plan.items)
+    tx.set(ref, sanitizeForFirestore({ ...plan, items, updatedAt: Date.now() }))
+  })
+}
+
+export async function addPlanItem(planId: string, label: string, note?: string): Promise<void> {
+  if (!isValidItemLabel(label)) throw new Error('INVALID_ITEM_LABEL')
+  const trimmedNote = note?.trim()
+  const newItem: PlanItem = {
+    id: generateItemId(),
+    label: label.trim(),
+    done: false,
+    ...(trimmedNote ? { note: trimmedNote } : {}),
+  }
+  await mutatePlanItems(planId, (items) => [...items, newItem])
+}
+
+export async function updatePlanItem(
+  planId: string,
+  itemId: string,
+  patch: { label?: string; note?: string },
+): Promise<void> {
+  await mutatePlanItems(planId, (items) => {
+    const index = items.findIndex((item) => item.id === itemId)
+    if (index === -1) throw new Error('ITEM_NOT_FOUND')
+    const item = items[index]
+    const nextLabel = patch.label !== undefined ? patch.label.trim() : item.label
+    if (!isValidItemLabel(nextLabel)) throw new Error('INVALID_ITEM_LABEL')
+    const nextNote = patch.note !== undefined ? patch.note.trim() : item.note
+    const next = [...items]
+    next[index] = { ...item, label: nextLabel, note: nextNote || undefined }
+    return next
+  })
+}
+
+export async function togglePlanItem(planId: string, itemId: string): Promise<void> {
+  await mutatePlanItems(planId, (items) => {
+    const index = items.findIndex((item) => item.id === itemId)
+    if (index === -1) throw new Error('ITEM_NOT_FOUND')
+    const next = [...items]
+    next[index] = { ...next[index], done: !next[index].done }
+    return next
+  })
+}
+
+export async function deletePlanItem(planId: string, itemId: string): Promise<void> {
+  await mutatePlanItems(planId, (items) => {
+    if (!items.some((item) => item.id === itemId)) throw new Error('ITEM_NOT_FOUND')
+    return items.filter((item) => item.id !== itemId)
+  })
+}
+
 // ── Sync read ────────────────────────────────────────────────────────────────
 export function getAllPlans(): Plan[] {
   return _plans
+}
+
+export function findPlanById(plans: Plan[], planId: string | undefined): Plan | undefined {
+  if (!planId) return undefined
+  return plans.find((p) => p.id === planId)
 }
 
 // ── React hooks ──────────────────────────────────────────────────────────────
@@ -160,6 +266,11 @@ export function usePlans(): Plan[] {
     return () => { _listeners.delete(l) }
   }, [])
   return state
+}
+
+export function usePlan(planId: string | undefined): Plan | undefined {
+  const plans = usePlans()
+  return findPlanById(plans, planId)
 }
 
 export function usePlansLoading(): boolean {

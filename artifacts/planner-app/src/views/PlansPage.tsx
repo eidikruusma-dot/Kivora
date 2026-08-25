@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react'
-import { Plus, Loader2, X, ClipboardList, type LucideIcon } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, Loader2, X } from 'lucide-react'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t, type TranslationKey } from '@/lib/translations'
 import AppCard from '@/components/ui/AppCard'
 import ProgressBar from '@/components/ui/ProgressBar'
-import { PLAN_TEMPLATES, type PlanTemplate, type PlanTemplateType } from '@/data/planTemplates'
+import { PLAN_TEMPLATES, getTemplateIcon, type PlanTemplate } from '@/data/planTemplates'
 import {
   usePlans,
   usePlansLoading,
   addPlan,
   computePlanProgress,
   createPlanItemsFromTemplate,
+  formatDateRange,
   isValidPlanTitle,
   isValidPlanDateRange,
   type Plan,
@@ -23,10 +25,6 @@ const TABS: { id: PlansTab; labelKey: TranslationKey }[] = [
   { id: 'myPlans', labelKey: 'plans.tab.myPlans' },
   { id: 'templates', labelKey: 'plans.tab.templates' },
 ]
-
-const TEMPLATE_ICON_BY_TYPE = Object.fromEntries(
-  PLAN_TEMPLATES.map((tpl) => [tpl.type, tpl.icon]),
-) as Record<PlanTemplateType, LucideIcon>
 
 const COLOR_SWATCHES = [
   { color: '#6F5AE8', bg: '#EDE9FB' },
@@ -53,23 +51,8 @@ const EMPTY_FORM: CreateForm = {
   endDate: '',
 }
 
-function formatPlanDate(dateStr: string, lang: AppLang): string {
-  return new Date(dateStr).toLocaleDateString(lang === 'et' ? 'et-EE' : 'en-GB', {
-    day: 'numeric',
-    month: 'short',
-  })
-}
-
-function formatDateRange(plan: Plan, lang: AppLang): string | null {
-  if (plan.startDate && plan.endDate) {
-    return `${formatPlanDate(plan.startDate, lang)} – ${formatPlanDate(plan.endDate, lang)}`
-  }
-  if (plan.startDate) return formatPlanDate(plan.startDate, lang)
-  if (plan.endDate) return formatPlanDate(plan.endDate, lang)
-  return null
-}
-
 export default function PlansPage() {
+  const navigate = useNavigate()
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
   const [activeTab, setActiveTab] = useState<PlansTab>('myPlans')
   const [modalOpen, setModalOpen] = useState(false)
@@ -194,11 +177,15 @@ export default function PlansPage() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {plans.map((plan) => {
-                  const Icon = TEMPLATE_ICON_BY_TYPE[plan.type] ?? ClipboardList
+                  const Icon = getTemplateIcon(plan.type)
                   const { percent } = computePlanProgress(plan)
                   const dateRange = formatDateRange(plan, lang)
                   return (
-                    <AppCard key={plan.id} className="p-4 border border-[#E8ECF0] flex flex-col gap-3">
+                    <button
+                      key={plan.id}
+                      onClick={() => navigate(`/app/plans/${plan.id}`)}
+                      className="bg-white rounded-2xl overflow-hidden p-4 border border-[#E8ECF0] flex flex-col gap-3 text-left transition-colors hover:border-[#6F5AE8] hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6F5AE8] focus-visible:ring-offset-2"
+                    >
                       <div className="flex items-center gap-3 min-w-0">
                         <div
                           className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -219,7 +206,7 @@ export default function PlansPage() {
                           {t('plans.card.progressLabel', lang).replace('{percent}', String(percent))}
                         </p>
                       </div>
-                    </AppCard>
+                    </button>
                   )
                 })}
               </div>

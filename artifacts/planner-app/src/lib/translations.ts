@@ -1715,6 +1715,26 @@ export type TranslationKey =
     | "plans.item.selfcare.movement"
     | "plans.item.selfcare.rest"
     | "plans.item.selfcare.evening"
+    | "plans.detail.backToPlans"
+    | "plans.detail.notFound.title"
+    | "plans.detail.notFound.desc"
+    | "plans.detail.itemsHeading"
+    | "plans.detail.addItem"
+    | "plans.detail.noItems"
+    | "plans.detail.itemLabelPlaceholder"
+    | "plans.detail.itemNotePlaceholder"
+    | "plans.detail.editItem"
+    | "plans.detail.deleteItem"
+    | "plans.detail.toggleItem"
+    | "plans.detail.save"
+    | "plans.detail.deleteConfirmTitle"
+    | "plans.detail.deleteConfirmDesc"
+    | "plans.detail.confirmDelete"
+    | "plans.detail.progressCount"
+    | "plans.detail.errorToggle"
+    | "plans.detail.errorSaveItem"
+    | "plans.detail.errorDeleteItem"
+    | "plans.detail.errorItemLabel"
     | "modules.continue"
     | "modules.selectAll"
     | "modules.clearOptional"
@@ -3662,6 +3682,26 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.item.selfcare.movement": "Liikumine",
         "plans.item.selfcare.rest": "Puhkeaeg",
         "plans.item.selfcare.evening": "Õhtune hooldus",
+        "plans.detail.backToPlans": "Tagasi plaanide juurde",
+        "plans.detail.notFound.title": "Plaani ei leitud",
+        "plans.detail.notFound.desc": "Plaan on kustutatud või sul pole selle vaatamiseks õigust.",
+        "plans.detail.itemsHeading": "Elemendid",
+        "plans.detail.addItem": "Lisa element",
+        "plans.detail.noItems": "Elemente pole veel lisatud.",
+        "plans.detail.itemLabelPlaceholder": "Nt Kana-riisiroog",
+        "plans.detail.itemNotePlaceholder": "Lisa märkus (valikuline)",
+        "plans.detail.editItem": "Muuda",
+        "plans.detail.deleteItem": "Kustuta",
+        "plans.detail.toggleItem": "Märgi tehtuks",
+        "plans.detail.save": "Salvesta",
+        "plans.detail.deleteConfirmTitle": "Kas kustutada see element?",
+        "plans.detail.deleteConfirmDesc": "Seda toimingut ei saa tagasi võtta.",
+        "plans.detail.confirmDelete": "Kustuta",
+        "plans.detail.progressCount": "{done}/{total} tehtud",
+        "plans.detail.errorToggle": "Oleku muutmine ebaõnnestus. Proovi uuesti.",
+        "plans.detail.errorSaveItem": "Salvestamine ebaõnnestus. Proovi uuesti.",
+        "plans.detail.errorDeleteItem": "Kustutamine ebaõnnestus. Proovi uuesti.",
+        "plans.detail.errorItemLabel": "Elemendi nimi ei tohi olla tühi.",
         "modules.continue": "Jätka",
         "modules.selectAll": "Vali kõik",
         "modules.clearOptional": "Tühista valikud",
@@ -5602,6 +5642,26 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.item.selfcare.movement": "Movement",
         "plans.item.selfcare.rest": "Rest time",
         "plans.item.selfcare.evening": "Evening care",
+        "plans.detail.backToPlans": "Back to plans",
+        "plans.detail.notFound.title": "Plan not found",
+        "plans.detail.notFound.desc": "This plan was deleted or you don't have access to it.",
+        "plans.detail.itemsHeading": "Items",
+        "plans.detail.addItem": "Add item",
+        "plans.detail.noItems": "No items added yet.",
+        "plans.detail.itemLabelPlaceholder": "E.g. Chicken and rice",
+        "plans.detail.itemNotePlaceholder": "Add a note (optional)",
+        "plans.detail.editItem": "Edit",
+        "plans.detail.deleteItem": "Delete",
+        "plans.detail.toggleItem": "Mark done",
+        "plans.detail.save": "Save",
+        "plans.detail.deleteConfirmTitle": "Delete this item?",
+        "plans.detail.deleteConfirmDesc": "This action cannot be undone.",
+        "plans.detail.confirmDelete": "Delete",
+        "plans.detail.progressCount": "{done}/{total} done",
+        "plans.detail.errorToggle": "Could not update status. Please try again.",
+        "plans.detail.errorSaveItem": "Could not save. Please try again.",
+        "plans.detail.errorDeleteItem": "Could not delete. Please try again.",
+        "plans.detail.errorItemLabel": "Item name cannot be empty.",
         "modules.continue": "Continue",
         "modules.selectAll": "Select all",
         "modules.clearOptional": "Clear selection",

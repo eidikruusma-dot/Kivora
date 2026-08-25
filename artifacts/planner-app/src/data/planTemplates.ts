@@ -112,3 +112,12 @@ export const PLAN_TEMPLATES: PlanTemplate[] = [
     itemBlueprints: [],
   },
 ]
+
+const ICON_BY_TYPE = Object.fromEntries(
+  PLAN_TEMPLATES.map((tpl) => [tpl.type, tpl.icon]),
+) as Record<PlanTemplateType, LucideIcon>
+
+/** Icon for a plan's type — used wherever a Plan (not just a template card) is rendered. */
+export function getTemplateIcon(type: PlanTemplateType): LucideIcon {
+  return ICON_BY_TYPE[type] ?? Plus
+}
