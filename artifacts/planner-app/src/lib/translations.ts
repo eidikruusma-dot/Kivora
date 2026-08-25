@@ -1744,7 +1744,6 @@ export type TranslationKey =
     | "plans.detail.errorDeletePlan"
     | "plans.detail.copyPlan"
     | "plans.copy.titlePrefix"
-    | "plans.aiCreate"
     | "plans.ai.modalTitle"
     | "plans.ai.promptLabel"
     | "plans.ai.promptPlaceholder"
@@ -3736,7 +3735,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.detail.errorDeletePlan": "Kustutamine ebaõnnestus. Proovi uuesti.",
         "plans.detail.copyPlan": "Kopeeri plaan",
         "plans.copy.titlePrefix": "Koopia:",
-        "plans.aiCreate": "Loo AI-ga",
         "plans.ai.modalTitle": "AI plaani loomine",
         "plans.ai.promptLabel": "Kirjelda, millist plaani vajad",
         "plans.ai.promptPlaceholder": "Nt Nädala menüü kahele inimesele, lihtsad road",
@@ -5721,7 +5719,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.detail.errorDeletePlan": "Could not delete. Please try again.",
         "plans.detail.copyPlan": "Copy plan",
         "plans.copy.titlePrefix": "Copy:",
-        "plans.aiCreate": "Create with AI",
         "plans.ai.modalTitle": "Create plan with AI",
         "plans.ai.promptLabel": "Describe the plan you need",
         "plans.ai.promptPlaceholder": "E.g. A weekly menu for two, simple meals",
