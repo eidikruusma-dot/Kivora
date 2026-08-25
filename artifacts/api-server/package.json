@@ -28,7 +28,10 @@
     "test:planDraftValidation": "npx esbuild --bundle --platform=node --format=cjs src/lib/planDraftValidation.test.ts | node",
     "test:validateChatRequest": "npx esbuild --bundle --platform=node --format=cjs src/lib/validateChatRequest.test.ts | node",
     "test:evaluateFinishReason": "npx esbuild --bundle --platform=node --format=cjs src/lib/evaluateFinishReason.test.ts | node",
-  "test": "pnpm run test:parseEuropeanNumber && pnpm run test:groupIntoRows && pnpm run test:extraction && pnpm run test:planDraftValidation && pnpm run test:validateChatRequest && pnpm run test:evaluateFinishReason"
+    "test:firebaseAdmin": "npx esbuild --bundle --platform=node --format=cjs src/lib/firebaseAdmin.test.ts | node",
+    "test:requireFirebaseAuth": "npx esbuild --bundle --platform=node --format=esm --packages=external src/middleware/requireFirebaseAuth.test.ts --outfile=.tmp-requireFirebaseAuth.mjs && node .tmp-requireFirebaseAuth.mjs",
+    "test:routesIndex": "npx esbuild --bundle --platform=node --format=cjs src/routes/index.test.ts | node",
+    "test": "pnpm run test:parseEuropeanNumber && pnpm run test:groupIntoRows && pnpm run test:extraction && pnpm run test:planDraftValidation && pnpm run test:validateChatRequest && pnpm run test:evaluateFinishReason && pnpm run test:firebaseAdmin && pnpm run test:requireFirebaseAuth && pnpm run test:routesIndex"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",
@@ -37,6 +40,7 @@
     "cors": "^2.8.6",
     "drizzle-orm": "catalog:",
     "express": "^5.2.1",
+    "firebase-admin": "^14.3.0",
     "mammoth": "^1.12.0",
     "multer": "^2.2.0",
     "nodemailer": "^9.0.3",
