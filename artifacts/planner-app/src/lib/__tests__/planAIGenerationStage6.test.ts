@@ -77,7 +77,7 @@ vi.mock('@/lib/aiContextBuilder', () => ({
 }))
 
 import { executeAction, executeActionsAsync, type AIAction, type ActionContext } from '@/lib/aiActions'
-import { sanitizePlanDraft, isPlanDraftUsable, PLAN_DRAFT_LIMITS, type PlanDraft } from '@/lib/planDraftValidation'
+import { sanitizePlanDraft, normalizeSingleValidPlanPreview, isPlanDraftUsable, PLAN_DRAFT_LIMITS, type PlanDraft } from '@/lib/planDraftValidation'
 import { initPlansStore, addPlan, buildPlanFromDraft, type Plan } from '@/lib/plansStore'
 import { buildPlanGenerationMessages } from '@/lib/aiClient'
 import { addTask } from '@/lib/tasksStore'
@@ -548,5 +548,126 @@ describe('buildPlanGenerationMessages: no hidden prefix, length matches the raw 
     const tricky = 'Loo plaan järgmise kirjelduse põhjal: midagi muud täiesti'
     expect(buildPlanGenerationMessages(tricky)[0].content).toBe(tricky)
     expect(buildPlanGenerationMessages(tricky)[0].content.length).toBe(tricky.length)
+  })
+})
+
+// ── Production defect: outer action type is a plan category (e.g. "workout") ─
+// Root cause: the model placed the PlanDraft's own `type` field into the
+// OUTER action.type instead of the canonical literal "preview_plan_creation".
+// Observed in production: [ai/chat actions] mode=chat finish_reason=stop
+// rawCount=1 rawTypes=["workout"] normalizedCount=1 normalizedTypes=["workout"]
+// (that diagnostic has since been removed — the fix below is what remains.)
+
+describe('normalizeSingleValidPlanPreview: narrow outer-type canonicalization (frontend mirror)', () => {
+  it('outer type "workout" + nested data WITHOUT inner type → canonical preview', () => {
+    const raw = [{ type: 'workout', data: { title: 'Leg day', items: [{ label: 'Squats – 3 × 12' }] } }]
+    const result = normalizeSingleValidPlanPreview(raw) as { type: string; data: PlanDraft }[]
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('preview_plan_creation')
+    expect(result[0].data.type).toBe('workout')
+  })
+
+  it('outer type "workout" + valid nested data (already has inner type) → canonical preview', () => {
+    const raw = [{ type: 'workout', data: { title: 'Leg day', type: 'workout', items: [{ label: 'Squats' }] } }]
+    const result = normalizeSingleValidPlanPreview(raw) as { type: string; data: PlanDraft }[]
+    expect(result[0].type).toBe('preview_plan_creation')
+    expect(result[0].data.type).toBe('workout')
+  })
+
+  it('flattened workout action (no "data" nesting at all) → canonical preview', () => {
+    const raw = [{ type: 'workout', title: 'Leg day', items: [{ label: 'Squats – 3 × 12' }] }]
+    const result = normalizeSingleValidPlanPreview(raw) as { type: string; data: PlanDraft }[]
+    expect(result[0].type).toBe('preview_plan_creation')
+    expect(result[0].data.title).toBe('Leg day')
+  })
+
+  it('same reconstruction for outer type "menu" (and menu notes are still stripped)', () => {
+    const raw = [{ type: 'menu', data: { title: 'Weekly menu', items: [{ label: 'Monday – chicken pasta', note: 'Ingredients: chicken.' }] } }]
+    const result = normalizeSingleValidPlanPreview(raw) as { type: string; data: PlanDraft }[]
+    expect(result[0].type).toBe('preview_plan_creation')
+    expect(result[0].data.type).toBe('menu')
+    expect(result[0].data.items[0].note).toBeUndefined()
+  })
+
+  it('same reconstruction for outer type "study"', () => {
+    const raw = [{ type: 'study', data: { title: 'Study plan', items: [{ label: 'Read chapter 3' }] } }]
+    const result = normalizeSingleValidPlanPreview(raw) as { type: string; data: PlanDraft }[]
+    expect(result[0].type).toBe('preview_plan_creation')
+    expect(result[0].data.type).toBe('study')
+  })
+
+  it('an unrelated outer type is never converted — no guessed aliases', () => {
+    for (const type of ['create_task', 'create_plan', 'generate_plan', 'plan_creation']) {
+      const raw = [{ type, data: { title: 'x', items: [{ label: 'x' }] } }]
+      const result = normalizeSingleValidPlanPreview(raw) as { type: string }[]
+      expect(result[0].type).toBe(type) // passed through untouched, never canonicalized
+    }
+  })
+
+  it('an invalid/unreconstructable draft is never converted — left unchanged, not faked', () => {
+    const raw = [{ type: 'workout', data: { items: [] } }] // no title anywhere
+    const result = normalizeSingleValidPlanPreview(raw) as { type: string }[]
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('workout')
+  })
+
+  it('two valid plan actions still produce only one preview', () => {
+    const raw = [
+      { type: 'workout', data: { title: 'First', items: [{ label: 'Squats' }] } },
+      { type: 'study', data: { title: 'Second', items: [{ label: 'Read' }] } },
+    ]
+    const result = normalizeSingleValidPlanPreview(raw) as { type: string; data: PlanDraft }[]
+    expect(result).toHaveLength(1)
+    expect(result[0].data.title).toBe('First')
+  })
+})
+
+describe('AI Assistant flow: production regression — never "Tundmatu toiming.", exactly one setPendingPlanDraft call', () => {
+  it('outer type "workout" through executeActionsAsync opens exactly one editable plan preview and never returns "Tundmatu toiming."', async () => {
+    const setPendingPlanDraft = vi.fn()
+    const actions: AIAction[] = [
+      { type: 'workout' as AIAction['type'], data: { title: 'Leg day', items: [{ label: 'Squats – 3 × 12', note: 'Keep your back straight.' }] } },
+    ]
+    const results = await executeActionsAsync(actions, baseCtx({ setPendingPlanDraft }))
+
+    expect(setPendingPlanDraft).toHaveBeenCalledTimes(1)
+    expect(setPendingPlanDraft.mock.calls[0][0].title).toBe('Leg day')
+    expect(results.some((r) => r.message === 'Tundmatu toiming.')).toBe(false)
+    expect(setDocMock).not.toHaveBeenCalled() // no Firestore write before explicit confirmation
+  })
+
+  it('plan preview (outer-type form) plus create_task produces one preview and zero task writes', async () => {
+    const setPendingPlanDraft = vi.fn()
+    const actions: AIAction[] = [
+      { type: 'workout' as AIAction['type'], data: { title: 'Leg day', items: [{ label: 'Squats' }] } },
+      { type: 'create_task', data: { title: 'Should not be created' } },
+    ]
+    await executeActionsAsync(actions, baseCtx({ setPendingPlanDraft }))
+
+    expect(setPendingPlanDraft).toHaveBeenCalledTimes(1)
+    expect(addTask).not.toHaveBeenCalled()
+  })
+
+  it('a single direct executeAction call on an outer-type-as-category action also canonicalizes (not just the batch path)', async () => {
+    const setPendingPlanDraft = vi.fn()
+    const action: AIAction = { type: 'workout' as AIAction['type'], data: { title: 'Leg day', items: [{ label: 'Squats' }] } }
+    const result = await executeAction(action, baseCtx({ setPendingPlanDraft }))
+
+    expect(result.success).toBe(true)
+    expect(result.message).not.toBe('Tundmatu toiming.')
+    expect(setPendingPlanDraft).toHaveBeenCalledTimes(1)
+  })
+
+  it('existing preview_bank_import isolation remains unchanged by the outer-type canonicalization', async () => {
+    const setPendingMoneyImport = vi.fn()
+    const actions: AIAction[] = [
+      { type: 'preview_bank_import', data: {} },
+      { type: 'create_money_income', data: { amount: 10, title: 'Should not be created', date: '2026-09-01' } },
+    ]
+    const result = await executeActionsAsync(
+      actions,
+      baseCtx({ getCanonicalBankTransactions: () => [], setPendingMoneyImport }),
+    )
+    expect(result).toHaveLength(1) // the money-write action is still dropped, unaffected by the new guard
   })
 })

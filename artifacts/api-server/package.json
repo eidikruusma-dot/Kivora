@@ -28,8 +28,7 @@
     "test:planDraftValidation": "npx esbuild --bundle --platform=node --format=cjs src/lib/planDraftValidation.test.ts | node",
     "test:validateChatRequest": "npx esbuild --bundle --platform=node --format=cjs src/lib/validateChatRequest.test.ts | node",
     "test:evaluateFinishReason": "npx esbuild --bundle --platform=node --format=cjs src/lib/evaluateFinishReason.test.ts | node",
-    "test:actionsDiagnosticLog": "npx esbuild --bundle --platform=node --format=cjs src/lib/actionsDiagnosticLog.test.ts | node",
-  "test": "pnpm run test:parseEuropeanNumber && pnpm run test:groupIntoRows && pnpm run test:extraction && pnpm run test:planDraftValidation && pnpm run test:validateChatRequest && pnpm run test:evaluateFinishReason && pnpm run test:actionsDiagnosticLog"
+  "test": "pnpm run test:parseEuropeanNumber && pnpm run test:groupIntoRows && pnpm run test:extraction && pnpm run test:planDraftValidation && pnpm run test:validateChatRequest && pnpm run test:evaluateFinishReason"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",

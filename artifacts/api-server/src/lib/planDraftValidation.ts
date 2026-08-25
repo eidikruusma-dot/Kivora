@@ -135,29 +135,101 @@ export function sanitizePlanDraft(raw: unknown): PlanDraft | null {
   };
 }
 
+const CANONICAL_PLAN_PREVIEW_TYPE = "preview_plan_creation";
+
+/**
+ * Attempts to reconstruct a usable PlanDraft when the OUTER action type is
+ * not the canonical "preview_plan_creation" but IS one of the six known
+ * PlanTemplateType category values — the production defect this exists
+ * for: a model placed the draft's own `type` (e.g. "workout") into the
+ * outer action.type instead of the canonical literal.
+ *
+ * Three strict attempts, in this exact order, the first success wins:
+ *   1. sanitize action.data exactly as given (data.type may already be
+ *      correct even though the outer type is wrong);
+ *   2. sanitize action.data with `type` forced to the observed outer type
+ *      (handles a model omitting the inner type field entirely);
+ *   3. sanitize the action object itself, flattened, with `type` forced to
+ *      the observed outer type (handles a model putting title/items
+ *      directly on the action instead of nesting them under `data`).
+ * Returns null — never guesses further — when every attempt fails strict
+ * sanitizePlanDraft validation. No aliases (e.g. "create_plan",
+ * "generate_plan") are ever recognized; only the six real PlanDraftType
+ * values are treated as reconstruction candidates.
+ */
+function tryReconstructPlanDraft(action: Record<string, unknown>, outerType: string): PlanDraft | null {
+  const data = action.data;
+
+  // Attempt 1 only counts as "as-is" success when data.type is ALREADY one
+  // of the six real values — not merely because sanitizePlanDraft's own
+  // safe fallback silently defaults a missing/invalid type to "blank".
+  // Accepting that fallback here would mislabel a reconstructed plan (e.g.
+  // an outer "workout" whose data omits `type`) as "blank" instead of
+  // recovering the category we actually know from the outer type.
+  if (data && typeof data === "object") {
+    const dataType = (data as Record<string, unknown>).type;
+    if (typeof dataType === "string" && VALID_PLAN_TYPES.includes(dataType as PlanDraftType)) {
+      const asIs = sanitizePlanDraft(data);
+      if (asIs) return asIs;
+    }
+  }
+
+  if (data && typeof data === "object") {
+    const withForcedType = sanitizePlanDraft({ ...(data as Record<string, unknown>), type: outerType });
+    if (withForcedType) return withForcedType;
+  }
+
+  return sanitizePlanDraft({ ...action, type: outerType });
+}
+
 /**
  * Normalizes a raw actions array (still-untrusted, straight from the
  * model's parsed JSON) so that AT MOST ONE preview_plan_creation action
- * ever survives — every other action passes through unchanged.
+ * ever survives — every unrelated action passes through unchanged.
  *
- * Rule: the FIRST preview_plan_creation action (in array order) whose data
- * sanitizes to a usable draft wins; every other preview_plan_creation
- * action — before or after it, itself valid or invalid — is discarded.
- * (An invalid one earlier in the array does not block a valid one later —
- * "first valid" is scanned left to right and stops at the first success.)
+ * An action is considered a plan-preview candidate ONLY when its outer
+ * `type` is either the canonical literal "preview_plan_creation" or one of
+ * the six known PlanDraftType category values (see
+ * tryReconstructPlanDraft). Anything else is untouched, no exceptions —
+ * no guessed aliases are ever recognized.
+ *
+ * Rule: the FIRST candidate (in array order) that resolves to a usable
+ * draft wins and is canonicalized to { type: "preview_plan_creation", data
+ * }; every other candidate — before or after it, itself valid or invalid —
+ * is discarded (a broken literal preview_plan_creation) or left unchanged
+ * (a category-typed action whose data cannot be strictly reconstructed —
+ * never canonicalize an invalid draft). An invalid one earlier in the
+ * array does not block a valid one later — "first valid" is scanned left
+ * to right and stops at the first success.
+ *
  * This is the server-side half of the same guarantee re-applied
  * independently, client-side, in aiActions.ts's executeActionsAsync.
  */
 export function normalizeSingleValidPlanPreview(rawActions: unknown[]): unknown[] {
   let planPreviewEmitted = false;
   return rawActions.flatMap((a) => {
-    if (a && typeof a === "object" && (a as Record<string, unknown>).type === "preview_plan_creation") {
-      if (planPreviewEmitted) return [];
-      const sanitized = sanitizePlanDraft((a as Record<string, unknown>).data);
-      if (!sanitized) return [];
-      planPreviewEmitted = true;
-      return [{ type: "preview_plan_creation", data: sanitized }];
+    if (!a || typeof a !== "object") return [a];
+    const action = a as Record<string, unknown>;
+    const outerType = action.type;
+
+    const isCanonical = outerType === CANONICAL_PLAN_PREVIEW_TYPE;
+    const isPlanCategory =
+      !isCanonical && typeof outerType === "string" && VALID_PLAN_TYPES.includes(outerType as PlanDraftType);
+
+    if (!isCanonical && !isPlanCategory) return [a]; // unrelated action — never touched
+
+    if (planPreviewEmitted) return []; // at most one plan preview per response, canonical or reconstructed
+
+    const sanitized = isCanonical ? sanitizePlanDraft(action.data) : tryReconstructPlanDraft(action, outerType as string);
+
+    if (!sanitized) {
+      // Invalid: a broken literal preview_plan_creation is dropped (existing
+      // behavior). A category-typed action that fails strict reconstruction
+      // is left completely unchanged — never canonicalize an invalid draft.
+      return isCanonical ? [] : [a];
     }
-    return [a];
+
+    planPreviewEmitted = true;
+    return [{ type: CANONICAL_PLAN_PREVIEW_TYPE, data: sanitized }];
   });
 }

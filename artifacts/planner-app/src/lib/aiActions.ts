@@ -23,7 +23,7 @@ import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
 import type { Task, Priority, TaskCategory } from '@/types'
 import type { NoteFolder } from '@/data/notesData'
 import type { HabitCategory } from '@/data/habitsData'
-import { sanitizePlanDraft, type PlanDraft } from '@/lib/planDraftValidation'
+import { sanitizePlanDraft, normalizeSingleValidPlanPreview, type PlanDraft } from '@/lib/planDraftValidation'
 
 export interface AIAction {
   type: 'create_task' | 'create_note' | 'create_habit' | 'create_goal' | 'create_calendar_event'
@@ -218,7 +218,26 @@ function destLabel(module: DocumentModule, folder?: string, subjectName?: string
 
 // ── Core action executor (async) ──────────────────────────────────────────────
 
-export async function executeAction(action: AIAction, ctx?: ActionContext): Promise<AIActionResult> {
+/**
+ * Canonicalizes a single action to `preview_plan_creation` when its outer
+ * type is a plan-category value (e.g. "workout") instead of the canonical
+ * literal — the production defect where a model placed the PlanDraft's own
+ * `type` into the outer action type. Delegates to
+ * normalizeSingleValidPlanPreview (treating the single action as a
+ * one-element batch); an unrelated action, or a category-typed action that
+ * cannot be strictly reconstructed, is returned unchanged. This runs ahead
+ * of the switch below so any direct caller of executeAction — not just
+ * executeActionsAsync, which also canonicalizes its whole batch upfront —
+ * benefits, independent of whether the backend has already been redeployed
+ * with the equivalent server-side fix.
+ */
+function canonicalizeSinglePlanPreviewAction(action: AIAction): AIAction {
+  const [normalized] = normalizeSingleValidPlanPreview([action]) as AIAction[]
+  return normalized ?? action
+}
+
+export async function executeAction(rawAction: AIAction, ctx?: ActionContext): Promise<AIActionResult> {
+  const action = canonicalizeSinglePlanPreviewAction(rawAction)
   try {
     switch (action.type) {
 
@@ -644,10 +663,22 @@ export async function executeAction(action: AIAction, ctx?: ActionContext): Prom
 
 /** Execute a list of actions asynchronously. Requires ActionContext for document actions. */
 export async function executeActionsAsync(
-  actions: AIAction[],
+  rawActions: AIAction[],
   ctx?: ActionContext,
 ): Promise<AIActionResult[]> {
   const results: AIActionResult[] = []
+
+  // Canonicalize plan-preview actions FIRST, before any isolation-guard
+  // detection — so a model that placed the plan category (e.g. "workout")
+  // into the outer action.type instead of "preview_plan_creation" is
+  // recognized as a plan preview here too, independently of whether the
+  // backend has already been redeployed with the equivalent server-side fix
+  // (rolling-deploy order must not be able to recreate "Tundmatu toiming.").
+  // Narrow and deterministic — only the canonical literal type or one of
+  // the six known PlanDraftType values is ever considered; no aliases.
+  // After this call, at most one action can have type 'preview_plan_creation',
+  // and it is already guaranteed to have sanitized successfully.
+  const actions = normalizeSingleValidPlanPreview(rawActions) as AIAction[]
 
   // ── Hard guard: bank-import preview ─────────────────────────────────────────
   // When preview_bank_import is present in the batch, money write actions MUST NOT
@@ -670,25 +701,10 @@ export async function executeActionsAsync(
   // Mirrors the preview_bank_import guard above; code-level, not prompt-only.
   const hasPlanPreview = actions.some((a) => a.type === 'preview_plan_creation')
 
-  // At most ONE preview_plan_creation action may ever execute (so
-  // setPendingPlanDraft/the preview UI is invoked at most once per AI
-  // response), even if the model returned several. Pre-scan for the FIRST
-  // one whose data sanitizes to a usable draft — an earlier invalid one
-  // does not block a later valid one, but only that first valid one ever
-  // runs; every other preview_plan_creation action (before or after it,
-  // valid or invalid) is discarded without executing.
-  const firstValidPlanPreviewIndex = hasPlanPreview
-    ? actions.findIndex((a) => a.type === 'preview_plan_creation' && sanitizePlanDraft(a.data) !== null)
-    : -1
-
-  for (let i = 0; i < actions.length; i++) {
-    const action = actions[i]
-    if (hasPlanPreview) {
-      if (action.type === 'preview_plan_creation') {
-        if (i !== firstValidPlanPreviewIndex) continue // discard every other plan preview, valid or not
-      } else {
-        continue // preview_plan_creation isolation — nothing else in this batch may execute
-      }
+  for (const action of actions) {
+    if (hasPlanPreview && action.type !== 'preview_plan_creation') {
+      // Drop silently — only the (already-unique, already-valid) plan preview may execute from this batch
+      continue
     }
     if (hasBankPreview && MONEY_WRITE_TYPES.has(action.type)) {
       // Drop silently — the review card handles confirmed writes

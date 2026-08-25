@@ -327,6 +327,122 @@ group("27. normalizeSingleValidPlanPreview: a batch with no preview_plan_creatio
   assert(result.length === 1 && (result[0] as { type: string }).type === "create_task", "non-preview actions pass through unchanged");
 });
 
+// ── Production defect: outer action type is a plan category (e.g. "workout") ─
+// Root cause: the model placed the PlanDraft's own `type` field into the
+// OUTER action.type instead of the canonical literal "preview_plan_creation".
+// Observed in production: [ai/chat actions] mode=chat finish_reason=stop
+// rawCount=1 rawTypes=["workout"] normalizedCount=1 normalizedTypes=["workout"]
+
+group('28. outer type "workout" + nested data WITHOUT inner type → canonical preview', () => {
+  const raw = [
+    {
+      type: "workout",
+      data: { title: "Leg day", items: [{ label: "Squats – 3 × 12", note: "Keep your back straight." }] },
+    },
+  ];
+  const result = normalizeSingleValidPlanPreview(raw) as { type: string; data: PlanDraft }[];
+  assert(result.length === 1, "exactly one action survives");
+  assert(result[0].type === "preview_plan_creation", "outer type canonicalized to the literal preview_plan_creation");
+  assert(result[0].data.type === "workout", "inner draft type forced from the observed outer type");
+  assert(result[0].data.title === "Leg day", "title reconstructed from data");
+});
+
+group('29. outer type "workout" + valid nested data (already has inner type "workout") → canonical preview', () => {
+  const raw = [
+    {
+      type: "workout",
+      data: { title: "Leg day", type: "workout", items: [{ label: "Squats – 3 × 12" }] },
+    },
+  ];
+  const result = normalizeSingleValidPlanPreview(raw) as { type: string; data: PlanDraft }[];
+  assert(result.length === 1, "exactly one action survives");
+  assert(result[0].type === "preview_plan_creation", "outer type canonicalized");
+  assert(result[0].data.type === "workout", "inner type preserved (attempt 1: data sanitized as-is already succeeds)");
+});
+
+group('30. flattened workout action (title/items directly on the action, no "data" at all) → canonical preview', () => {
+  const raw = [
+    { type: "workout", title: "Leg day", items: [{ label: "Squats – 3 × 12", note: "Form cue." }] },
+  ];
+  const result = normalizeSingleValidPlanPreview(raw) as { type: string; data: PlanDraft }[];
+  assert(result.length === 1, "exactly one action survives — reconstructed from the flattened action object itself");
+  assert(result[0].type === "preview_plan_creation", "outer type canonicalized");
+  assert(result[0].data.title === "Leg day", "title recovered from the flattened action");
+  assert(result[0].data.items[0].label === "Squats – 3 × 12", "items recovered from the flattened action");
+});
+
+group('31. outer type "menu" — same three reconstruction paths, and menu notes are still stripped after canonicalization', () => {
+  const withoutInnerType = normalizeSingleValidPlanPreview([
+    { type: "menu", data: { title: "Weekly menu", items: [{ label: "Monday – chicken pasta", note: "Ingredients: chicken, pasta." }] } },
+  ]) as { type: string; data: PlanDraft }[];
+  assert(withoutInnerType[0]?.type === "preview_plan_creation", "menu: reconstructed from data without inner type");
+  assert(withoutInnerType[0]?.data.type === "menu", "menu: inner type forced correctly");
+  assert(withoutInnerType[0]?.data.items[0].note === undefined, "menu: note still stripped by sanitizePlanDraft even after canonicalization");
+
+  const flattened = normalizeSingleValidPlanPreview([
+    { type: "menu", title: "Weekly menu", items: [{ label: "Monday – chicken pasta" }] },
+  ]) as { type: string; data: PlanDraft }[];
+  assert(flattened[0]?.type === "preview_plan_creation", "menu: reconstructed from a flattened action");
+});
+
+group('32. outer type "study" — same three reconstruction paths', () => {
+  const asIs = normalizeSingleValidPlanPreview([
+    { type: "study", data: { title: "Study plan", type: "study", items: [{ label: "Read chapter 3" }] } },
+  ]) as { type: string; data: PlanDraft }[];
+  assert(asIs[0]?.type === "preview_plan_creation", "study: data sanitized as-is (already has correct inner type)");
+
+  const withoutInnerType = normalizeSingleValidPlanPreview([
+    { type: "study", data: { title: "Study plan", items: [{ label: "Read chapter 3" }] } },
+  ]) as { type: string; data: PlanDraft }[];
+  assert(withoutInnerType[0]?.type === "preview_plan_creation", "study: reconstructed with type forced from outer");
+  assert(withoutInnerType[0]?.data.type === "study", "study: inner type forced correctly");
+
+  const flattened = normalizeSingleValidPlanPreview([
+    { type: "study", title: "Study plan", items: [{ label: "Read chapter 3" }] },
+  ]) as { type: string; data: PlanDraft }[];
+  assert(flattened[0]?.type === "preview_plan_creation", "study: reconstructed from a flattened action");
+});
+
+group("33. an unrelated outer type is never converted, even if it superficially resembles a plan action", () => {
+  const cases = [
+    { type: "create_task", data: { title: "A task" } },
+    { type: "create_plan", data: { title: "Should NOT be aliased — not one of the six PlanDraftType values", items: [{ label: "x" }] } },
+    { type: "generate_plan", data: { title: "Should also NOT be aliased", items: [{ label: "x" }] } },
+    { type: "plan_creation", data: { title: "Also not a recognized alias", items: [{ label: "x" }] } },
+  ];
+  for (const c of cases) {
+    const result = normalizeSingleValidPlanPreview([c]) as { type: string }[];
+    assert(result.length === 1 && result[0].type === c.type, `"${c.type}" passes through completely untouched — no guessed aliases`);
+  }
+});
+
+group("34. an invalid draft (unreconstructable) is never converted — passed through unchanged, not silently dropped or faked", () => {
+  const raw = [{ type: "workout", data: { items: [] } }]; // no title anywhere, empty items — every reconstruction attempt fails
+  const result = normalizeSingleValidPlanPreview(raw) as { type: string }[];
+  assert(result.length === 1, "the action still survives (untouched)");
+  assert(result[0].type === "workout", "outer type is left exactly as the model sent it — never canonicalized from invalid data");
+});
+
+group("35. two valid plan actions (both outer-type-as-category) still produce only one preview", () => {
+  const raw = [
+    { type: "workout", data: { title: "First", items: [{ label: "Squats" }] } },
+    { type: "study", data: { title: "Second", items: [{ label: "Read" }] } },
+  ];
+  const result = normalizeSingleValidPlanPreview(raw) as { type: string; data: PlanDraft }[];
+  assert(result.length === 1, "exactly one preview survives");
+  assert(result[0].data.title === "First", "the first valid one wins");
+});
+
+group("36. a mix of the canonical literal type and a category-outer-type action still produces only one preview", () => {
+  const raw = [
+    { type: "workout", data: { title: "Category-typed first", items: [{ label: "Squats" }] } },
+    { type: "preview_plan_creation", data: { title: "Canonical second", type: "study", items: [{ label: "Read" }] } },
+  ];
+  const result = normalizeSingleValidPlanPreview(raw) as { type: string; data: PlanDraft }[];
+  assert(result.length === 1, "exactly one preview survives across the two forms");
+  assert(result[0].data.title === "Category-typed first", "first-in-array-order wins regardless of which form it took");
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 
 console.log(`\n${"═".repeat(48)}`);

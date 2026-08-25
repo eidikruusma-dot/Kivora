@@ -3,7 +3,6 @@ import OpenAI from "openai";
 import { normalizeSingleValidPlanPreview } from "../lib/planDraftValidation.js";
 import { validateChatRequest } from "../lib/validateChatRequest.js";
 import { evaluateFinishReason } from "../lib/evaluateFinishReason.js";
-import { buildActionsDiagnosticLog } from "../lib/actionsDiagnosticLog.js";
 
 const router = Router();
 
@@ -120,6 +119,16 @@ Plan creation rules (preview_plan_creation):
 - Aim for at least 2-3 items and no more than 14. Keep "title" under 80 characters and each "label" under 100 characters.
 - Only set "startDate"/"endDate" (YYYY-MM-DD) if the user gave a concrete date range; otherwise omit both.
 - After emitting preview_plan_creation, your reply text MUST be ONLY one short sentence, e.g. "Review and edit the draft below." — do not restate the items, since the app renders the full editable draft itself.
+- CRITICAL — outer action type vs. inner plan type, do NOT confuse them. Example:
+{
+  "type": "preview_plan_creation",
+  "data": {
+    "title": "Leg day",
+    "type": "workout",
+    "items": [{ "label": "Squats – 3 × 12", "note": "Keep your back straight." }]
+  }
+}
+The OUTER "type" (the action's own type, at the top level next to "data") is ALWAYS the exact literal string "preview_plan_creation" — never "workout", "menu", "study", "cleaning", "selfcare", or "blank". Those six values are the PLAN's own category and belong ONLY inside "data.type". NEVER place a plan category directly as the outer action type.
 
 EMPTY MODULE RULE: The phrase "There are currently no records in this module" is informational only — it describes an empty list, NOT a prohibition on creating records. When the user asks to create something and the module is empty, always emit the create action. An empty module is ready to receive its first entry.
 
@@ -226,6 +235,16 @@ Plaani loomise reeglid (preview_plan_creation):
 - Kasuta vähemalt 2-3 üksust ja mitte rohkem kui 14. Hoia "title" alla 80 tähemärgi ja iga "label" alla 100 tähemärgi.
 - Sea "startDate"/"endDate" (YYYY-MM-DD) ainult siis, kui kasutaja andis konkreetse kuupäevavahemiku; muidu jäta mõlemad välja.
 - Pärast preview_plan_creation käivitamist peab sinu reply tekst olema AINULT üks lühike lause, nt "Vaata üle ja muuda allolevat mustandit." — ära kirjelda üksusi uuesti, sest rakendus kuvab kogu muudetava mustandi ise.
+- KRIITILINE — välimine toimingu tüüp vs. sisemine plaani tüüp, ÄRA aja neid segi. Näide:
+{
+  "type": "preview_plan_creation",
+  "data": {
+    "title": "Jalgade trenn",
+    "type": "workout",
+    "items": [{ "label": "Kükid – 3 × 12", "note": "Hoia selg sirge." }]
+  }
+}
+VÄLIMINE "type" (toimingu enda tüüp, ülataseme väljal "data" kõrval) on ALATI täpselt see literal string "preview_plan_creation" — mitte kunagi "workout", "menu", "study", "cleaning", "selfcare" ega "blank". Need kuus väärtust on PLAANI enda kategooria ja kuuluvad AINULT "data.type" sisse. ÄRA KUNAGI pane plaani kategooriat otse välimiseks toimingu tüübiks.
 
 TÜHJA MOODULI REEGEL: Tekst "Praegu ei ole selles moodulis ühtegi kirjet" on ainult informatiivne — see tähendab, et nimekiri on tühi, MITTE et loomine on keelatud. Kui kasutaja palub midagi luua ja moodul on tühi, emiteeri ALATI loomistoiming. Tühi moodul on alati valmis vastu võtma oma esimest kirjet.
 
@@ -350,11 +369,6 @@ router.post("/ai/chat", async (req, res) => {
     // a truncated/filtered completion must never be allowed to execute a write.
     const rawActions = discardActions ? [] : Array.isArray(parsed.actions) ? parsed.actions : [];
     const actions = normalizeSingleValidPlanPreview(rawActions);
-
-    // Diagnostic-only: action TYPE STRINGS before/after normalization, never
-    // action data (titles/labels/notes/dates/content) or reply/prompt text.
-    // See buildActionsDiagnosticLog's doc comment for why this exists.
-    console.log(buildActionsDiagnosticLog(mode, finishReason, rawActions, actions));
 
     res.json({
       reply: typeof parsed.reply === "string" ? parsed.reply : raw,
