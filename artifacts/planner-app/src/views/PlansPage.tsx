@@ -12,6 +12,7 @@ import {
   usePlans,
   usePlansLoading,
   addPlan,
+  generatePlanId,
   computePlanProgress,
   createPlanItemsFromTemplate,
   formatDateRange,
@@ -186,7 +187,7 @@ export default function PlansPage() {
           onSubmit={async (values) => {
             const now = Date.now()
             const newPlan: Plan = {
-              id: `plan-${now}-${Math.random().toString(36).slice(2, 7)}`,
+              id: generatePlanId(),
               type: creatingTemplate ? creatingTemplate.type : 'blank',
               title: values.title,
               color: values.color,

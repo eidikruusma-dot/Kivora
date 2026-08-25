@@ -1742,6 +1742,8 @@ export type TranslationKey =
     | "plans.detail.deletePlanConfirmTitle"
     | "plans.detail.deletePlanConfirmDesc"
     | "plans.detail.errorDeletePlan"
+    | "plans.detail.copyPlan"
+    | "plans.copy.titlePrefix"
     | "modules.continue"
     | "modules.selectAll"
     | "modules.clearOptional"
@@ -3716,6 +3718,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.detail.deletePlanConfirmTitle": "Kas kustutada „{title}“?",
         "plans.detail.deletePlanConfirmDesc": "Plaan ja kõik selle elemendid kustutatakse jäädavalt.",
         "plans.detail.errorDeletePlan": "Kustutamine ebaõnnestus. Proovi uuesti.",
+        "plans.detail.copyPlan": "Kopeeri plaan",
+        "plans.copy.titlePrefix": "Koopia:",
         "modules.continue": "Jätka",
         "modules.selectAll": "Vali kõik",
         "modules.clearOptional": "Tühista valikud",
@@ -5683,6 +5687,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.detail.deletePlanConfirmTitle": "Delete \"{title}\"?",
         "plans.detail.deletePlanConfirmDesc": "This plan and all its items will be permanently deleted.",
         "plans.detail.errorDeletePlan": "Could not delete. Please try again.",
+        "plans.detail.copyPlan": "Copy plan",
+        "plans.copy.titlePrefix": "Copy:",
         "modules.continue": "Continue",
         "modules.selectAll": "Select all",
         "modules.clearOptional": "Clear selection",

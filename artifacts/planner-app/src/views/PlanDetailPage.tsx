@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Pencil, Trash2, Check, Loader2 } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, Check, Loader2, Copy } from 'lucide-react'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
@@ -20,7 +20,10 @@ import {
   deletePlanItem,
   updatePlanDetails,
   deletePlan,
+  addPlan,
+  clonePlanForCreation,
   type PlanItem,
+  type Plan,
 } from '@/lib/plansStore'
 
 const inputClass =
@@ -54,6 +57,9 @@ export default function PlanDetailPage() {
   const [deletePlanConfirmOpen, setDeletePlanConfirmOpen] = useState(false)
   const [deletingPlan, setDeletingPlan] = useState(false)
   const [deletePlanError, setDeletePlanError] = useState('')
+
+  const [copyModalOpen, setCopyModalOpen] = useState(false)
+  const [copyDraft, setCopyDraft] = useState<Plan | null>(null)
 
   function markSaving(id: string, saving: boolean) {
     setSavingItemIds((prev) => {
@@ -174,6 +180,20 @@ export default function PlanDetailPage() {
     }
   }
 
+  function openCopyModal() {
+    if (!plan) return
+    // Computed once up front (fresh ids, cloned items, shifted dates) — the
+    // modal only lets the user adjust title/color/dates before this exact
+    // draft is written; nothing is saved to Firestore yet.
+    setCopyDraft(clonePlanForCreation(plan, lang))
+    setCopyModalOpen(true)
+  }
+
+  function closeCopyModal() {
+    setCopyModalOpen(false)
+    setCopyDraft(null)
+  }
+
   if (plansLoading) {
     return (
       <div className="p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto w-full flex items-center justify-center py-16">
@@ -228,6 +248,13 @@ export default function PlanDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={openCopyModal}
+              aria-label={t('plans.detail.copyPlan', lang)}
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6F5AE8] focus-visible:ring-offset-2"
+            >
+              <Copy size={16} />
+            </button>
             <button
               onClick={() => setEditModalOpen(true)}
               aria-label={t('plans.detail.editPlan', lang)}
@@ -396,6 +423,38 @@ export default function PlanDetailPage() {
           )}
         </div>
       </AppCard>
+
+      {/* Copy plan */}
+      {copyModalOpen && copyDraft && (
+        <PlanFormModal
+          lang={lang}
+          headerTitleKey="plans.detail.copyPlan"
+          submitLabelKey="plans.modal.create"
+          saveErrorKey="plans.modal.errorSave"
+          initialValues={{
+            title: copyDraft.title,
+            color: copyDraft.color,
+            startDate: copyDraft.startDate ?? '',
+            endDate: copyDraft.endDate ?? '',
+          }}
+          onCancel={closeCopyModal}
+          onSubmit={async (values: PlanFormValues) => {
+            const finalPlan: Plan = {
+              ...copyDraft,
+              title: values.title,
+              color: values.color,
+              startDate: values.startDate || undefined,
+              endDate: values.endDate || undefined,
+            }
+            await addPlan(finalPlan)
+          }}
+          onSuccess={() => {
+            const newPlanId = copyDraft.id
+            closeCopyModal()
+            navigate(`/app/plans/${newPlanId}`)
+          }}
+        />
+      )}
 
       {/* Edit plan details */}
       {editModalOpen && (

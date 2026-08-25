@@ -63,6 +63,82 @@ export function isValidPlanDateRange(startDate: string, endDate: string): boolea
   return endDate >= startDate
 }
 
+export function generatePlanId(): string {
+  return `plan-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+}
+
+// ── Date-only arithmetic (UTC, no timezone/DST drift) ─────────────────────────
+// `startDate`/`endDate` are plain YYYY-MM-DD strings with no time component.
+// All shifting is done via Date.UTC + getUTC* so the host machine's timezone
+// and DST transitions can never shift a date by a day either direction.
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+function isoDateToUTCms(dateStr: string): number {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return Date.UTC(y, m - 1, d)
+}
+
+function utcMsToISODate(ms: number): string {
+  const dt = new Date(ms)
+  const y = dt.getUTCFullYear()
+  const m = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(dt.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function shiftISODate(dateStr: string, days: number): string {
+  return utcMsToISODate(isoDateToUTCms(dateStr) + days * MS_PER_DAY)
+}
+
+/**
+ * Shifts a start/end date pair forward to the next equal-length period,
+ * starting the day after the original period ends — e.g. 24–30 Aug becomes
+ * 31 Aug–6 Sep. Month/year boundaries fall out of Date.UTC's own
+ * normalisation, so no special-casing is needed for them. Only a real pair
+ * (both dates present) is shifted; a missing start or end yields no dates,
+ * matching "no dates on the original → no dates on the copy".
+ */
+export function shiftPlanDatesForward(
+  startDate: string | undefined,
+  endDate: string | undefined,
+): { startDate?: string; endDate?: string } {
+  if (!startDate || !endDate) return {}
+  const periodDays = Math.round((isoDateToUTCms(endDate) - isoDateToUTCms(startDate)) / MS_PER_DAY)
+  const newStart = shiftISODate(endDate, 1)
+  const newEnd = shiftISODate(newStart, periodDays)
+  return { startDate: newStart, endDate: newEnd }
+}
+
+/**
+ * The one generic clone helper — builds a brand-new, ready-to-save Plan from
+ * an existing one: fresh plan id, fresh item ids, every item reset to
+ * done: false, dates shifted forward one period, and a translated
+ * "Copy: " title prefix. Never mutates `original`; PlanFormModal (already
+ * shared by create/edit) is reused to let the user adjust title/color/dates
+ * before this is actually written via addPlan().
+ */
+export function clonePlanForCreation(original: Plan, lang: AppLang): Plan {
+  const now = Date.now()
+  const { startDate, endDate } = shiftPlanDatesForward(original.startDate, original.endDate)
+  return {
+    id: generatePlanId(),
+    type: original.type,
+    title: `${t('plans.copy.titlePrefix', lang)} ${original.title}`,
+    color: original.color,
+    startDate,
+    endDate,
+    items: original.items.map((item) => ({
+      id: generateItemId(),
+      label: item.label,
+      done: false,
+      ...(item.note ? { note: item.note } : {}),
+    })),
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
 /**
  * Builds the checklist items a new plan starts with from a template's
  * blueprints. Labels are translated once, at creation time, into plain
