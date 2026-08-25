@@ -11,7 +11,7 @@ import { useState, useEffect } from 'react'
 import {
   ArrowLeft,
   Calendar, CheckSquare, StickyNote, Activity, Flag,
-  Wallet, GraduationCap, Sparkles,
+  Wallet, GraduationCap, Sparkles, ClipboardList,
   CheckCircle2, Loader2,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
@@ -41,6 +41,7 @@ const ALL_MODULE_META: {
   { id: 'habits',    icon: <Activity size={20} strokeWidth={1.8} />,      accentColor: '#EA580C', accentBg: '#FFF7ED' },
   { id: 'goals',     icon: <Flag size={20} strokeWidth={1.8} />,          accentColor: '#0891B2', accentBg: '#E0F2FE' },
   { id: 'finance',   icon: <Wallet size={20} strokeWidth={1.8} />,        accentColor: '#16A34A', accentBg: '#DCFCE7' },
+  { id: 'plans',     icon: <ClipboardList size={20} strokeWidth={1.8} />,accentColor: '#4F46E5', accentBg: '#E0E7FF' },
   { id: 'school',    icon: <GraduationCap size={20} strokeWidth={1.8} />, accentColor: '#7C3AED', accentBg: '#EDE9FB' },
   { id: 'assistant', icon: <Sparkles size={20} strokeWidth={1.8} />,      accentColor: '#6F5AE8', accentBg: '#EDE9FB' },
 ]

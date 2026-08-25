@@ -9,6 +9,7 @@ export type TranslationKey =
     | "nav.notes"
     | "nav.habits"
     | "nav.goals"
+    | "nav.plans"
     | "nav.assistant"
     | "nav.school"
     | "nav.help"
@@ -1655,6 +1656,29 @@ export type TranslationKey =
     | "modules.desc.finance"
     | "modules.desc.school"
     | "modules.desc.assistant"
+    | "modules.name.plans"
+    | "modules.desc.plans"
+    // ── Plans module ──────────────────────────────────────────────────────────
+    | "plans.title"
+    | "plans.subtitle"
+    | "plans.create"
+    | "plans.tab.myPlans"
+    | "plans.tab.templates"
+    | "plans.empty.title"
+    | "plans.empty.desc"
+    | "plans.templates.heading"
+    | "plans.template.menu.title"
+    | "plans.template.menu.desc"
+    | "plans.template.workout.title"
+    | "plans.template.workout.desc"
+    | "plans.template.study.title"
+    | "plans.template.study.desc"
+    | "plans.template.cleaning.title"
+    | "plans.template.cleaning.desc"
+    | "plans.template.selfcare.title"
+    | "plans.template.selfcare.desc"
+    | "plans.template.blank.title"
+    | "plans.template.blank.desc"
     | "modules.continue"
     | "modules.selectAll"
     | "modules.clearOptional"
@@ -1674,6 +1698,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "nav.notes": "Märkmed",
         "nav.habits": "Harjumused",
         "nav.goals": "Eesmärgid",
+        "nav.plans": "Plaanid",
         "nav.assistant": "AI assistent",
         "nav.school": "Kool",
         "nav.help": "Abi ja tugi",
@@ -3542,6 +3567,29 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "modules.desc.finance": "Halda sissetulekuid, kulusid ja arveid",
         "modules.desc.school": "Jälgi õppekava, hinnanguid ja aineid",
         "modules.desc.assistant": "AI-põhine abi plaanimiseks ja küsimustele vastamiseks",
+        "modules.name.plans": "Plaanid",
+        "modules.desc.plans": "Loo plaane oma nädala, treeningute või õppimise jaoks",
+        // Plans module
+        "plans.title": "Plaanid",
+        "plans.subtitle": "Loo endale sobiv plaan ja vii see samm-sammult ellu.",
+        "plans.create": "Loo uus plaan",
+        "plans.tab.myPlans": "Minu plaanid",
+        "plans.tab.templates": "Mallid",
+        "plans.empty.title": "Plaane pole veel lisatud",
+        "plans.empty.desc": "Alusta mallist või loo täiesti uus plaan.",
+        "plans.templates.heading": "Alusta mallist",
+        "plans.template.menu.title": "Nädala menüü",
+        "plans.template.menu.desc": "Planeeri oma nädala toidukorrad lihtsalt.",
+        "plans.template.workout.title": "Treeningkava",
+        "plans.template.workout.desc": "Loo treeningkava ja jälgi oma edenemist.",
+        "plans.template.study.title": "Õppimiskava",
+        "plans.template.study.desc": "Planeeri õppetööd ja saavuta oma eesmärgid.",
+        "plans.template.cleaning.title": "Koristusplaan",
+        "plans.template.cleaning.desc": "Hoia oma kodu korras ja planeeri lihtsasti.",
+        "plans.template.selfcare.title": "Enesehooldus",
+        "plans.template.selfcare.desc": "Pühenda aega endale ja oma heaolule.",
+        "plans.template.blank.title": "Tühi plaan",
+        "plans.template.blank.desc": "Alusta täiesti tühjalt lehelt.",
         "modules.continue": "Jätka",
         "modules.selectAll": "Vali kõik",
         "modules.clearOptional": "Tühista valikud",
@@ -3559,6 +3607,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "nav.notes": "Notes",
         "nav.habits": "Habits",
         "nav.goals": "Goals",
+        "nav.plans": "Plans",
         "nav.assistant": "AI Assistant",
         "nav.school": "School",
         "nav.help": "Help & Support",
@@ -5422,6 +5471,29 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "modules.desc.finance": "Manage income, expenses and bills",
         "modules.desc.school": "Track curriculum, grades and subjects",
         "modules.desc.assistant": "AI-powered help for planning and questions",
+        "modules.name.plans": "Plans",
+        "modules.desc.plans": "Create plans for your week, workouts or studying",
+        // Plans module
+        "plans.title": "Plans",
+        "plans.subtitle": "Create a plan that fits you and follow it step by step.",
+        "plans.create": "Create new plan",
+        "plans.tab.myPlans": "My plans",
+        "plans.tab.templates": "Templates",
+        "plans.empty.title": "No plans yet",
+        "plans.empty.desc": "Start from a template or create a brand new plan.",
+        "plans.templates.heading": "Start from a template",
+        "plans.template.menu.title": "Weekly menu",
+        "plans.template.menu.desc": "Plan your week's meals with ease.",
+        "plans.template.workout.title": "Workout plan",
+        "plans.template.workout.desc": "Build a workout plan and track your progress.",
+        "plans.template.study.title": "Study plan",
+        "plans.template.study.desc": "Plan your studies and reach your goals.",
+        "plans.template.cleaning.title": "Cleaning plan",
+        "plans.template.cleaning.desc": "Keep your home tidy with an easy plan.",
+        "plans.template.selfcare.title": "Self-care",
+        "plans.template.selfcare.desc": "Dedicate time to yourself and your wellbeing.",
+        "plans.template.blank.title": "Blank plan",
+        "plans.template.blank.desc": "Start completely from scratch.",
         "modules.continue": "Continue",
         "modules.selectAll": "Select all",
         "modules.clearOptional": "Clear selection",

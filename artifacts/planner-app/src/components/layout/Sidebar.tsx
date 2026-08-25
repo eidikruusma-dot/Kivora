@@ -12,6 +12,7 @@ import {
   HelpCircle,
   Settings,
   Wallet,
+  ClipboardList,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import {
@@ -47,6 +48,7 @@ const NAV_ROUTES: {
   { to: '/app/habits',    tKey: 'nav.habits'    as const, icon: Activity,      moduleId: 'habits'    },
   { to: '/app/finance',   tKey: 'nav.finance'   as const, icon: Wallet,        moduleId: 'finance'   },
   { to: '/app/goals',     tKey: 'nav.goals'     as const, icon: Flag,          moduleId: 'goals'     },
+  { to: '/app/plans',     tKey: 'nav.plans'     as const, icon: ClipboardList, moduleId: 'plans'     },
   { to: '/app/assistant', tKey: 'nav.assistant' as const, icon: Sparkles,      moduleId: 'assistant' },
   { to: '/app/school',    tKey: 'nav.school'    as const, icon: GraduationCap, moduleId: 'school'    },
   { to: '/app/help',      tKey: 'nav.help'      as const, icon: HelpCircle                           },

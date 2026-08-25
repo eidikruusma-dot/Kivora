@@ -12,7 +12,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Calendar, CheckSquare, StickyNote, Activity, Flag,
-  Wallet, GraduationCap, Sparkles,
+  Wallet, GraduationCap, Sparkles, ClipboardList,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import {
@@ -30,7 +30,7 @@ import { t } from '@/lib/translations'
 // ── Purpose → module mapping ─────────────────────────────────────────────────
 
 const ALL_PURPOSE_MODULES: Record<string, ModuleId[]> = {
-  personal:  ['calendar', 'tasks', 'notes', 'habits', 'goals'],
+  personal:  ['calendar', 'tasks', 'notes', 'habits', 'goals', 'plans'],
   learning:  ['calendar', 'tasks', 'notes', 'school'],
   finance:   ['finance', 'goals', 'tasks'],
   work:      ['calendar', 'tasks', 'notes', 'goals'],
@@ -59,6 +59,7 @@ const ALL_MODULE_META: {
   { id: 'habits',    icon: <Activity size={20} strokeWidth={1.8} />,     accentColor: '#EA580C', accentBg: '#FFF7ED' },
   { id: 'goals',     icon: <Flag size={20} strokeWidth={1.8} />,         accentColor: '#0891B2', accentBg: '#E0F2FE' },
   { id: 'finance',   icon: <Wallet size={20} strokeWidth={1.8} />,       accentColor: '#16A34A', accentBg: '#DCFCE7' },
+  { id: 'plans',     icon: <ClipboardList size={20} strokeWidth={1.8} />,accentColor: '#4F46E5', accentBg: '#E0E7FF' },
   { id: 'school',    icon: <GraduationCap size={20} strokeWidth={1.8} />,accentColor: '#7C3AED', accentBg: '#EDE9FB' },
   { id: 'assistant', icon: <Sparkles size={20} strokeWidth={1.8} />,     accentColor: '#6F5AE8', accentBg: '#EDE9FB' },
 ]
@@ -145,6 +146,7 @@ export default function ModuleSelectionPage() {
         habits:    enabledModules.has('habits'),
         goals:     enabledModules.has('goals'),
         finance:   enabledModules.has('finance'),
+        plans:     enabledModules.has('plans'),
         school:    enabledModules.has('school'),
         assistant: enabledModules.has('assistant'),
         onboardingComplete: true,

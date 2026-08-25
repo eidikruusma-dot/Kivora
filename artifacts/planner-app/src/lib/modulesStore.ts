@@ -23,11 +23,12 @@ export type ModuleId =
   | 'habits'
   | 'goals'
   | 'finance'
+  | 'plans'
   | 'school'
   | 'assistant'
 
 export const ALL_MODULE_IDS: ModuleId[] = [
-  'calendar', 'tasks', 'notes', 'habits', 'goals', 'finance', 'school', 'assistant',
+  'calendar', 'tasks', 'notes', 'habits', 'goals', 'finance', 'plans', 'school', 'assistant',
 ]
 
 export interface ModuleSettings {
@@ -37,6 +38,7 @@ export interface ModuleSettings {
   habits: boolean
   goals: boolean
   finance: boolean
+  plans: boolean
   school: boolean
   assistant: boolean
   onboardingComplete: boolean
@@ -50,6 +52,7 @@ export const DEFAULT_MODULE_SETTINGS: ModuleSettings = {
   habits: true,
   goals: true,
   finance: true,
+  plans: true,
   school: true,
   assistant: true,
   onboardingComplete: true,
