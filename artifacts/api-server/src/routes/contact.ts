@@ -48,7 +48,6 @@ router.post("/contact", async (req, res) => {
 
   try {
     await transporter.sendMail({
-      from:    `"Kivora" <${process.env.SMTP_USER}>`,
       to:      recipient,
       replyTo: `"${name}" <${email}>`,
       subject: mailSubject,

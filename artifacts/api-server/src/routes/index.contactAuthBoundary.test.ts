@@ -34,7 +34,7 @@
  *   npx esbuild --bundle --platform=node --format=esm \
  *       --external:express --external:cors --external:pino-http --external:pino \
  *       --external:pino-pretty --external:firebase-admin --external:firebase-admin/* \
- *       --external:openai --external:web-push --external:nodemailer --external:multer \
+ *       --external:openai --external:web-push --external:multer \
  *       --external:pdf-lib --external:pdf-parse --external:pdfjs-dist --external:xlsx \
  *       --external:mammoth --external:@napi-rs/canvas \
  *       src/routes/index.contactAuthBoundary.test.ts \
