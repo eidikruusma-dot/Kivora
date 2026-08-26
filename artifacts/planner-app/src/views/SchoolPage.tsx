@@ -8,6 +8,8 @@ import AllExamsModal, {
 import ScheduleTab, {
   type ScheduleMode,
   type ScheduleLesson,
+  DAYS_ET,
+  filterLessonsForToday,
 } from "@/components/school/ScheduleTab";
 import {
   BookOpen,
@@ -75,6 +77,7 @@ import { removeLinksForEntity } from "@/lib/entityLinksStore";
 import PostSaveLinkSuggestionsDialog from "@/components/links/PostSaveLinkSuggestionsDialog";
 import AutoLinkToast from "@/components/links/AutoLinkToast";
 import { runAutomaticLinking, type AutoLinkResult } from "@/lib/automaticLinking";
+import { getLocalDateString, getLocalWeekdayIndex, formatDateWithWeekday, msUntilNextLocalMidnight } from "@/lib/dateUtils";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -529,6 +532,31 @@ export default function SchoolPage() {
   };
   const scheduleLessons = useSchoolLessons();
 
+  // Bumped once at each local midnight so "today" (date label + which
+  // lessons count as today) updates live without needing a reload — a
+  // single one-shot timer rescheduled after each fire, not polling.
+  const [, forceMidnightTick] = useState(0);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const scheduleNext = () => {
+      timer = setTimeout(() => {
+        forceMidnightTick((n) => n + 1);
+        scheduleNext();
+      }, msUntilNextLocalMidnight());
+    };
+    scheduleNext();
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Real local calendar "today" — never derived via toISOString() (UTC),
+  // so it always matches the user's actual local day. Recomputed on every
+  // render (including the midnight tick above), so display and filtering
+  // below always agree.
+  const todayISO = getLocalDateString();
+  const todayWeekdayET = DAYS_ET[getLocalWeekdayIndex()];
+  const todayLabel = formatDateWithWeekday(todayISO, lang);
+  const todayLessons = filterLessonsForToday(scheduleLessons, todayISO, todayWeekdayET);
+
   // Compute real study hours from scheduled lessons (startTime/endTime pairs)
   const liveStudyHours = useMemo(
     () => computeStudyHoursFromLessons(scheduleLessons),
@@ -783,7 +811,8 @@ export default function SchoolPage() {
 
         {/* Today's timetable */}
         <TodaySchedule
-          lessons={scheduleLessons}
+          lessons={todayLessons}
+          todayLabel={todayLabel}
           mode={scheduleMode}
           onNavigate={setActiveTab}
         />
@@ -2234,10 +2263,15 @@ function PlaceholderTab({ label }: { label: string }) {
 
 function TodaySchedule({
   lessons,
+  todayLabel,
   mode,
   onNavigate,
 }: {
   lessons: ScheduleLesson[];
+  /** Real local calendar date + weekday, e.g. "26. august 2026, kolmapäev" —
+   *  computed once by the caller (SchoolPage) via getLocalDateString +
+   *  formatDateWithWeekday, the same source used to filter `lessons`. */
+  todayLabel: string;
   mode: ScheduleMode;
   onNavigate: (tab: TabId) => void;
 }) {
@@ -2276,7 +2310,7 @@ function TodaySchedule({
             <p className="text-sm font-semibold text-[#1A1F36]">
               {tr("school.schedule.titleTraditional", lang)}
             </p>
-            <p className="text-xs text-[#94A3B8]">27. juuli 2026, esmaspäev</p>
+            <p className="text-xs text-[#94A3B8]">{todayLabel}</p>
           </div>
         </div>
       </div>

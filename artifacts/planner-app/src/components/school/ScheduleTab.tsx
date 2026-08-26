@@ -34,6 +34,29 @@ export const DAYS_ET = ['Esmaspäev', 'Teisipäev', 'Kolmapäev', 'Neljapäev', 
 /** Legacy export for components that still reference the ET constant */
 export const DAYS = DAYS_ET
 
+/**
+ * Filters lessons/blocks down to the ones that count as "today":
+ *   - a one-time entry (explicit `date`) counts only if `date` === `todayISO`;
+ *   - a recurring entry (only `day` set) counts only if `day` === `todayWeekdayET`
+ *     (one of the canonical DAYS_ET strings above — the existing data model
+ *     always stores `day` in this ET form regardless of display language).
+ * An entry with neither `date` nor `day` set is excluded — there is no
+ * anchor to decide whether it's "today".
+ *
+ * Pure and exported so SchoolPage.tsx's "Today's schedule" filtering is
+ * directly testable without a React rendering harness, and so display and
+ * filtering can share the exact same today/weekday inputs.
+ */
+export function filterLessonsForToday(
+  lessons: ScheduleLesson[],
+  todayISO: string,
+  todayWeekdayET: string,
+): ScheduleLesson[] {
+  return lessons.filter((l) =>
+    l.date ? l.date === todayISO : l.day ? l.day === todayWeekdayET : false,
+  )
+}
+
 const SUBJECT_COLORS = [
   { dot: '#6F5AE8', bg: '#EDE9FB' },
   { dot: '#16A34A', bg: '#F0FDF4' },
