@@ -321,6 +321,7 @@ function LessonModal({
   const [showCreateNew, setShowCreateNew] = useState(false)
   const [newSubjectName, setNewSubjectName] = useState('')
   const [newSubjectColorIdx, setNewSubjectColorIdx] = useState(0)
+  const [savingSubject, setSavingSubject] = useState(false)
 
   const DAYS_DISPLAY = getDays(lang)
   const optional = <span className="text-[#CBD5E1] font-normal">({t('sched.field.optional', lang)})</span>
@@ -346,18 +347,36 @@ function LessonModal({
     setError('')
   }
 
-  /** Saves a new subject to Firestore and auto-selects it */
+  /**
+   * Saves a new subject to Firestore and auto-selects it as this
+   * learning-block form's subject — without closing this LessonModal and
+   * without opening SubjectDetailModal (that belongs to the separate,
+   * standalone "Ained" subject-management flow in SchoolPage.tsx).
+   */
   const handleCreateSubject = async () => {
     const name = newSubjectName.trim()
-    if (!name) return
+    if (!name || savingSubject) return // guards against double submission
     const newId = `sub-${Date.now()}`
     const color = SUBJECT_COLORS[newSubjectColorIdx % SUBJECT_COLORS.length]
-    await addSchoolSubject({ id: newId, name, color: color.dot, bg: color.bg, icon: null })
-    setSubjectId(newId)
-    setSubject(name)
-    setShowCreateNew(false)
-    setNewSubjectName('')
     setError('')
+    setSavingSubject(true)
+    try {
+      await addSchoolSubject({ id: newId, name, color: color.dot, bg: color.bg, icon: null })
+      setSubjectId(newId)
+      setSubject(name)
+      setShowCreateNew(false)
+      setNewSubjectName('')
+      setError('')
+    } catch {
+      // Keep the inline creator open and usable — never claim success on a failed write.
+      setError(
+        lang === 'et'
+          ? 'Aine loomine ebaõnnestus. Proovi uuesti.'
+          : 'Failed to create the subject. Please try again.',
+      )
+    } finally {
+      setSavingSubject(false)
+    }
   }
 
   const handleSave = () => {
@@ -450,7 +469,8 @@ function LessonModal({
                   }}
                   placeholder={lang === 'et' ? 'Aine nimi' : 'Subject name'}
                   autoFocus
-                  className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] bg-white"
+                  disabled={savingSubject}
+                  className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] bg-white disabled:opacity-60"
                 />
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-[#64748B] mr-1">{lang === 'et' ? 'Värv:' : 'Color:'}</span>
@@ -459,11 +479,12 @@ function LessonModal({
                       key={i}
                       type="button"
                       onClick={() => setNewSubjectColorIdx(i)}
+                      disabled={savingSubject}
                       style={{
                         background: c.bg,
                         borderColor: newSubjectColorIdx === i ? c.dot : 'transparent',
                       }}
-                      className="w-6 h-6 rounded-full border-2 transition-all"
+                      className="w-6 h-6 rounded-full border-2 transition-all disabled:opacity-60"
                     />
                   ))}
                 </div>
@@ -471,15 +492,18 @@ function LessonModal({
                   <button
                     type="button"
                     onClick={() => void handleCreateSubject()}
-                    disabled={!newSubjectName.trim()}
+                    disabled={!newSubjectName.trim() || savingSubject}
                     className="flex-1 px-3 py-1.5 rounded-lg bg-[#6F5AE8] text-white text-sm font-medium disabled:opacity-40 hover:bg-[#5B48D8] transition-colors"
                   >
-                    {lang === 'et' ? 'Loo aine' : 'Create subject'}
+                    {savingSubject
+                      ? (lang === 'et' ? 'Loomine…' : 'Creating…')
+                      : (lang === 'et' ? 'Loo aine' : 'Create subject')}
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowCreateNew(false)}
-                    className="px-3 py-1.5 rounded-lg border border-[#ECECF2] text-sm text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+                    disabled={savingSubject}
+                    className="px-3 py-1.5 rounded-lg border border-[#ECECF2] text-sm text-[#64748B] hover:bg-[#F8F7F4] transition-colors disabled:opacity-40"
                   >
                     {lang === 'et' ? 'Tühista' : 'Cancel'}
                   </button>

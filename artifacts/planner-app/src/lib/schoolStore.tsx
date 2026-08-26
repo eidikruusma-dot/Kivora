@@ -104,7 +104,7 @@ interface SchoolExam {
 }
 
 // Mirrors SchoolPage's Subject interface
-interface SchoolSubject {
+export interface SchoolSubject {
   id: string
   name: string
   teacher?: string
@@ -115,7 +115,7 @@ interface SchoolSubject {
 }
 
 // Mirrors ScheduleTab's ScheduleLesson interface
-interface SchoolLesson {
+export interface SchoolLesson {
   id: string
   subject: string
   subjectId?: string
@@ -554,9 +554,66 @@ const LESSON_SUBJECT_COLORS = [
 ]
 
 /**
- * Single source of truth for School subject selectors and the overview count.
- * Derives unique subjects from timetable lessons — no separate subject documents needed.
- * Merges color/id from any explicit kind='subject' Firestore records when they exist.
+ * Merges two subject sources, by case-insensitive name:
+ *   1. Real, explicitly-created `kind='subject'` Firestore documents
+ *      (`subjects`) — these ALWAYS appear, even when zero lessons reference
+ *      them yet (e.g. a subject just created via "Add subject", or one
+ *      whose lessons haven't been added yet). This is what makes a
+ *      freshly-created subject visible and selectable immediately (BUG-03).
+ *   2. Subjects that only exist implicitly as a `lesson.subject` string
+ *      with no matching stored document — synthesized so legacy/lesson-only
+ *      subjects (pre-dating the dedicated subject store) keep working.
+ *
+ * Stored real subjects always take precedence over a lesson-derived entry of
+ * the same (case-insensitively compared) name, so there is never a duplicate
+ * "ghost" entry for a subject that has both a stored document and lessons.
+ *
+ * Extracted as a plain function (rather than inlined in the hook below) so
+ * it is directly unit-testable without a React rendering harness.
+ */
+export function mergeStoredAndLessonSubjects(
+  lessons: SchoolLesson[],
+  subjects: SchoolSubject[],
+): SchoolSubject[] {
+  const seen = new Map<string, SchoolSubject>()
+  let colorIdx = 0
+
+  // Pass 1: synthesize lesson-only subjects so legacy timetables that
+  // predate real subject documents keep showing their subjects.
+  for (const lesson of lessons) {
+    if (!lesson.subject) continue
+    const key = lesson.subject.toLowerCase().trim()
+    if (seen.has(key)) continue
+
+    // Prefer an explicit subject record matched by id, then by name
+    const matched = lesson.subjectId
+      ? (subjects.find(s => s.id === lesson.subjectId) ?? subjects.find(s => s.name.toLowerCase().trim() === key))
+      : subjects.find(s => s.name.toLowerCase().trim() === key)
+
+    if (matched) {
+      seen.set(key, matched)
+    } else {
+      // Stable synthetic id derived from normalised name — consistent across re-renders
+      const stableId = `lsub-${key.replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')}`
+      const color = LESSON_SUBJECT_COLORS[colorIdx % LESSON_SUBJECT_COLORS.length]
+      colorIdx++
+      seen.set(key, { id: stableId, name: lesson.subject, color: color.dot, bg: color.bg, icon: null })
+    }
+  }
+
+  // Pass 2: every real stored subject always wins and always appears,
+  // including ones with zero referencing lessons.
+  for (const subject of subjects) {
+    const key = subject.name.toLowerCase().trim()
+    seen.set(key, subject)
+  }
+
+  return [...seen.values()]
+}
+
+/**
+ * Single source of truth for School subject selectors and the overview
+ * count. See mergeStoredAndLessonSubjects for the merge semantics.
  */
 export function useSchoolSubjectsFromLessons(): SchoolSubject[] {
   const [lessons,  setLessons]  = useState<SchoolLesson[]>(_lessons)
@@ -575,31 +632,10 @@ export function useSchoolSubjectsFromLessons(): SchoolSubject[] {
     }
   }, [])
 
-  return useMemo(() => {
-    const seen = new Map<string, SchoolSubject>()
-    let colorIdx = 0
-    for (const lesson of lessons) {
-      if (!lesson.subject) continue
-      const key = lesson.subject.toLowerCase().trim()
-      if (seen.has(key)) continue
-
-      // Prefer an explicit subject record matched by id, then by name
-      const matched = lesson.subjectId
-        ? (subjects.find(s => s.id === lesson.subjectId) ?? subjects.find(s => s.name.toLowerCase().trim() === key))
-        : subjects.find(s => s.name.toLowerCase().trim() === key)
-
-      if (matched) {
-        seen.set(key, matched)
-      } else {
-        // Stable synthetic id derived from normalised name — consistent across re-renders
-        const stableId = `lsub-${key.replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')}`
-        const color = LESSON_SUBJECT_COLORS[colorIdx % LESSON_SUBJECT_COLORS.length]
-        colorIdx++
-        seen.set(key, { id: stableId, name: lesson.subject, color: color.dot, bg: color.bg, icon: null })
-      }
-    }
-    return [...seen.values()]
-  }, [lessons, subjects])
+  return useMemo(
+    () => mergeStoredAndLessonSubjects(lessons, subjects),
+    [lessons, subjects],
+  )
 }
 
 export function useSchoolLoading(): boolean {

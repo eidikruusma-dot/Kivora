@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { toast } from "sonner";
 import { useIsDark, darkBg, darkText } from "@/lib/themeColors";
 import { useNavigate, useLocation } from "react-router-dom";
 import AllExamsModal, {
@@ -951,9 +952,14 @@ export default function SchoolPage() {
         <SubjectFormModal
           subjects={subjects}
           onClose={() => setAddingSubject(false)}
-          onSave={(subject) => {
-            addSubject(subject);
+          onSave={async (subject) => {
+            // Awaited: the modal only closes/reports success once this
+            // resolves. A rejection propagates back to the modal, which
+            // keeps itself open and shows the error — see SubjectFormModal.
+            await addSubject(subject);
             setAddingSubject(false);
+            setSelectedSubject(subject);
+            toast.success(lang === 'et' ? 'Aine loodud' : 'Subject created');
           }}
         />
       )}
@@ -1230,7 +1236,7 @@ function SubjectFormModal({
 }: {
   subjects: Subject[];
   onClose: () => void;
-  onSave: (s: Subject) => void;
+  onSave: (s: Subject) => Promise<void>;
 }) {
   const lang = getLocalLanguage();
   const [name, setName] = useState("");
@@ -1240,8 +1246,9 @@ function SubjectFormModal({
     subjects.length % SUBJECT_PALETTE.length,
   );
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim()) {
       setError(tr("school.field.subjectName", lang) + " on kohustuslik.");
       return;
@@ -1254,15 +1261,29 @@ function SubjectFormModal({
       return;
     }
     const palette = SUBJECT_PALETTE[colorIdx];
-    onSave({
-      id: `sub-${Date.now()}`,
-      name: name.trim(),
-      teacher: teacher.trim() || undefined,
-      room: room.trim() || undefined,
-      color: palette.color,
-      bg: palette.bg,
-      icon: palette.icon,
-    });
+    setError("");
+    setSaving(true);
+    try {
+      await onSave({
+        id: `sub-${Date.now()}`,
+        name: name.trim(),
+        teacher: teacher.trim() || undefined,
+        room: room.trim() || undefined,
+        color: palette.color,
+        bg: palette.bg,
+        icon: palette.icon,
+      });
+      // On success the parent closes this modal (onSave resolving unmounts
+      // it), so there is nothing further to do here.
+    } catch {
+      // Keep the form open and usable — never claim success on a failed write.
+      setError(
+        lang === "et"
+          ? "Aine salvestamine ebaõnnestus. Proovi uuesti."
+          : "Failed to save the subject. Please try again.",
+      );
+      setSaving(false);
+    }
   };
 
   return (
@@ -1359,15 +1380,19 @@ function SubjectFormModal({
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2] flex-shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+            disabled={saving}
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors disabled:opacity-50"
           >
             {tr("school.action.cancel", lang)}
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
+            disabled={saving}
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {tr("school.action.save", lang)}
+            {saving
+              ? (lang === "et" ? "Salvestamine…" : "Saving…")
+              : tr("school.action.save", lang)}
           </button>
         </div>
       </div>
