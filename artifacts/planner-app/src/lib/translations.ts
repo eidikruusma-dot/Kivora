@@ -3203,8 +3203,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "sched.modal.addLesson": "Lisa tund",
         "sched.modal.addBlock": "Lisa õppimisblokk",
         "sched.field.subject": "Aine või tegevus",
-        "sched.field.subjectPh":
-            "nt Matemaatika, Iseseisev õppimine, Moodle ülesanne või Projektitöö",
+        "sched.field.subjectPh": "Vali aine või tegevus",
         "sched.field.day": "Nädalapäev",
         "sched.field.dayPh": "Vali päev",
         "sched.field.dayNone": "Pole määratud",
@@ -5189,8 +5188,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "sched.modal.addLesson": "Add lesson",
         "sched.modal.addBlock": "Add study block",
         "sched.field.subject": "Subject or activity",
-        "sched.field.subjectPh":
-            "e.g. Maths, Self-study, Moodle task or Project work",
+        "sched.field.subjectPh": "Select a subject or activity",
         "sched.field.day": "Day of week",
         "sched.field.dayPh": "Select day",
         "sched.field.dayNone": "Not set",

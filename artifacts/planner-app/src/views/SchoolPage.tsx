@@ -57,6 +57,7 @@ import {
   deleteSchoolExam as storeDeleteSchoolExam,
   addSchoolSubject,
   deleteSchoolSubject as storeDeleteSchoolSubject,
+  classifySubject,
   addSchoolLesson,
   updateSchoolLesson as storeUpdateSchoolLesson,
   deleteSchoolLesson as storeDeleteSchoolLesson,
@@ -1242,9 +1243,10 @@ function SubjectFormModal({
   const [name, setName] = useState("");
   const [teacher, setTeacher] = useState("");
   const [room, setRoom] = useState("");
-  const [colorIdx, setColorIdx] = useState(
-    subjects.length % SUBJECT_PALETTE.length,
-  );
+  // Auto-suggested from the name via classifySubject (schoolStore.tsx) until
+  // the user manually picks a swatch — see colorManuallySet below.
+  const [colorIdx, setColorIdx] = useState(classifySubject("").colorIndex);
+  const [colorManuallySet, setColorManuallySet] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -1317,8 +1319,15 @@ function SubjectFormModal({
               type="text"
               value={name}
               onChange={(e) => {
-                setName(e.target.value);
+                const value = e.target.value;
+                setName(value);
                 setError("");
+                // Keep suggesting a color while the user hasn't manually
+                // picked one — once they do, typing must not silently
+                // replace their choice.
+                if (!colorManuallySet) {
+                  setColorIdx(classifySubject(value).colorIndex);
+                }
               }}
               placeholder={tr("school.subject.placeholder", lang)}
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
@@ -1366,7 +1375,10 @@ function SubjectFormModal({
               {SUBJECT_PALETTE.map((p, i) => (
                 <button
                   key={i}
-                  onClick={() => setColorIdx(i)}
+                  onClick={() => {
+                    setColorIdx(i);
+                    setColorManuallySet(true);
+                  }}
                   className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${colorIdx === i ? "ring-2 ring-offset-2 ring-[#1A1F36]" : ""}`}
                   style={{ background: p.bg, color: p.color }}
                 >

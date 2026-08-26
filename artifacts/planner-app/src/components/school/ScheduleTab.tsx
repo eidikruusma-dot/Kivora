@@ -4,7 +4,7 @@ import { t } from '@/lib/translations'
 import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { useEffect } from 'react'
-import { useSchoolSubjectsFromLessons, addSchoolSubject } from '@/lib/schoolStore'
+import { useSchoolSubjectsFromLessons, addSchoolSubject, classifySubject } from '@/lib/schoolStore'
 
 export type ScheduleMode = 'traditional' | 'elearning' | 'none'
 
@@ -320,7 +320,10 @@ function LessonModal({
   // ── Inline "create new subject" state ──────────────────────────────────────
   const [showCreateNew, setShowCreateNew] = useState(false)
   const [newSubjectName, setNewSubjectName] = useState('')
-  const [newSubjectColorIdx, setNewSubjectColorIdx] = useState(0)
+  // Auto-suggested from the name via classifySubject (schoolStore.tsx) until
+  // the user manually picks a swatch — see newSubjectColorManuallySet below.
+  const [newSubjectColorIdx, setNewSubjectColorIdx] = useState(classifySubject('').colorIndex)
+  const [newSubjectColorManuallySet, setNewSubjectColorManuallySet] = useState(false)
   const [savingSubject, setSavingSubject] = useState(false)
 
   const DAYS_DISPLAY = getDays(lang)
@@ -333,6 +336,11 @@ function LessonModal({
       setSubjectId('')
       setSubject('')
       setError('')
+      // Fresh inline-creator state each time it's (re)opened — "starts a
+      // new subject" resets the color-auto-suggestion override rule.
+      setNewSubjectName('')
+      setNewSubjectColorIdx(classifySubject('').colorIndex)
+      setNewSubjectColorManuallySet(false)
       return
     }
     const matched = subjects.find((s) => s.id === value)
@@ -366,6 +374,8 @@ function LessonModal({
       setSubject(name)
       setShowCreateNew(false)
       setNewSubjectName('')
+      setNewSubjectColorIdx(classifySubject('').colorIndex)
+      setNewSubjectColorManuallySet(false)
       setError('')
     } catch {
       // Keep the inline creator open and usable — never claim success on a failed write.
@@ -448,7 +458,9 @@ function LessonModal({
               onChange={(e) => handleSubjectChange(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] bg-white"
             >
-              <option value="">{t('sched.field.subjectPh', lang)}</option>
+              {/* disabled+hidden: describes the closed field without being a
+                  selectable dropdown choice — see BUG-04 (long example option) */}
+              <option value="" disabled hidden>{t('sched.field.subjectPh', lang)}</option>
               {subjects.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
@@ -463,7 +475,16 @@ function LessonModal({
                 <input
                   type="text"
                   value={newSubjectName}
-                  onChange={(e) => setNewSubjectName(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setNewSubjectName(value)
+                    // Keep suggesting a color while the user hasn't manually
+                    // picked one — once they do, typing must not silently
+                    // replace their choice.
+                    if (!newSubjectColorManuallySet) {
+                      setNewSubjectColorIdx(classifySubject(value).colorIndex)
+                    }
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') { e.preventDefault(); void handleCreateSubject() }
                   }}
@@ -478,7 +499,10 @@ function LessonModal({
                     <button
                       key={i}
                       type="button"
-                      onClick={() => setNewSubjectColorIdx(i)}
+                      onClick={() => {
+                        setNewSubjectColorIdx(i)
+                        setNewSubjectColorManuallySet(true)
+                      }}
                       disabled={savingSubject}
                       style={{
                         background: c.bg,

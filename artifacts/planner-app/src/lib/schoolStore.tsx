@@ -25,6 +25,143 @@ function iconFromColor(color: string): React.ReactNode {
   }
 }
 
+// ── Automatic subject categorization & color ─────────────────────────────────
+//
+// One shared, deterministic helper reused by both subject-creation UIs —
+// SchoolPage.tsx's standalone "Ained" form and ScheduleTab.tsx's inline
+// "Add learning block" creator — to suggest a category + color as the user
+// types a subject name. Reuses the SAME 5-color palette every stored
+// subject's color already round-trips through via iconFromColor above; no
+// new color system is introduced.
+
+// Canonical (color, bg) pairs. Order and values match SchoolPage.tsx's
+// SUBJECT_PALETTE exactly — that is the array iconFromColor's switch above
+// was built against, so picking indices into this array keeps icon
+// reconstruction working for every color this classifier can suggest.
+export const SUBJECT_COLOR_PALETTE: { color: string; bg: string }[] = [
+  { color: '#6F5AE8', bg: '#EDE9FB' }, // 0 purple
+  { color: '#16A34A', bg: '#DCFCE7' }, // 1 green
+  { color: '#CA8A04', bg: '#FEF9C3' }, // 2 yellow
+  { color: '#DC2626', bg: '#FEE2E2' }, // 3 red
+  { color: '#2563EB', bg: '#EFF6FF' }, // 4 blue
+]
+
+export type SubjectCategory =
+  | 'mathematics'
+  | 'estonian'
+  | 'english'
+  | 'other_languages'
+  | 'natural_sciences'
+  | 'humanities_social'
+  | 'information_technology'
+  | 'arts'
+  | 'music'
+  | 'physical_education'
+  | 'general_study'
+  | 'other'
+
+export interface SubjectClassification {
+  category: SubjectCategory
+  colorIndex: number // index into SUBJECT_COLOR_PALETTE — stable per category
+  color: string
+  bg: string
+}
+
+// Documented category → palette-index mapping. Only 5 real colors exist, so
+// categories intentionally share a color where that reads sensibly (e.g.
+// natural sciences and physical education both read as "active/green").
+// This table is the single source of truth for "known" category colors —
+// change the mapping here, not per call site.
+const CATEGORY_COLOR_INDEX: Record<Exclude<SubjectCategory, 'other'>, number> = {
+  mathematics: 0,             // purple
+  estonian: 3,                // red
+  english: 4,                 // blue
+  other_languages: 4,         // blue — grouped with English as "languages"
+  natural_sciences: 1,        // green
+  humanities_social: 2,       // yellow
+  information_technology: 4,  // blue
+  arts: 0,                    // purple — creative cluster
+  music: 0,                   // purple — creative cluster
+  physical_education: 1,      // green
+  general_study: 2,           // yellow
+}
+
+// Keyword lists — checked in this order; the first category with a matching
+// keyword wins. Multi-word phrases are matched as substrings of the
+// normalized text; single words are matched as whole tokens only (never a
+// bare substring), so a short keyword like "it" can't accidentally match
+// inside an unrelated word (e.g. Estonian "käsitöö" contains the letters
+// "it" but is an arts subject, not information technology).
+const CATEGORY_KEYWORDS: { category: Exclude<SubjectCategory, 'other'>; keywords: string[] }[] = [
+  { category: 'mathematics',            keywords: ['matemaatika', 'math', 'algebra', 'geomeetria'] },
+  { category: 'estonian',               keywords: ['eesti keel', 'eesti kirjandus'] },
+  { category: 'english',                keywords: ['inglise keel', 'english'] },
+  { category: 'other_languages',        keywords: ['vene keel', 'saksa keel', 'prantsuse keel', 'russian', 'german', 'french'] },
+  { category: 'natural_sciences',       keywords: ['loodusõpetus', 'bioloogia', 'keemia', 'füüsika', 'geography', 'geograafia'] },
+  { category: 'humanities_social',      keywords: ['ajalugu', 'ühiskonnaõpetus', 'inimeseõpetus', 'history', 'social studies'] },
+  { category: 'information_technology', keywords: ['informaatika', 'arvutiõpetus', 'programmeerimine', 'it'] },
+  { category: 'arts',                   keywords: ['kunst', 'käsitöö', 'art'] },
+  { category: 'music',                  keywords: ['muusika', 'music'] },
+  { category: 'physical_education',     keywords: ['kehaline kasvatus', 'sport', 'physical education'] },
+  { category: 'general_study',          keywords: ['iseseisev õppimine', 'moodle ülesanne', 'projektitöö', 'homework', 'project work'] },
+]
+
+function normalizeSubjectText(s: string): string {
+  return s.toLowerCase().trim().replace(/\s+/g, ' ')
+}
+
+/** Words in `text`, splitting on anything that isn't a Latin/Estonian letter or digit. */
+function wordsOf(text: string): Set<string> {
+  return new Set(text.split(/[^a-zäöüõšž0-9]+/i).filter(Boolean))
+}
+
+function matchesKeyword(normalized: string, words: Set<string>, keyword: string): boolean {
+  const kw = keyword.toLowerCase()
+  if (kw.includes(' ')) return normalized.includes(kw) // phrase — substring match
+  return words.has(kw)                                  // single word — whole-token match
+}
+
+/**
+ * Deterministic fallback index for an unrecognised subject: the same
+ * normalized name always produces the same index (stable), spread across
+ * the palette by a simple string hash instead of always landing on one
+ * fixed "unknown" color.
+ */
+function fallbackColorIndex(normalized: string): number {
+  let hash = 0
+  for (let i = 0; i < normalized.length; i++) {
+    hash = (hash * 31 + normalized.charCodeAt(i)) >>> 0
+  }
+  return hash % SUBJECT_COLOR_PALETTE.length
+}
+
+/**
+ * Classifies a subject name — optionally with a description/activity text,
+ * for callers that have one — into a semantic category and a stable color
+ * from the existing SUBJECT_COLOR_PALETTE. None of the current
+ * subject-creation forms have a description field, so both current call
+ * sites classify from the name only (see the implementation report).
+ *
+ * Pure and deterministic: the same input always produces the same output.
+ * Shared by both subject-creation UIs so automatic color suggestion behaves
+ * identically in SchoolPage.tsx's standalone form and ScheduleTab.tsx's
+ * inline "Add learning block" creator.
+ */
+export function classifySubject(name: string, description?: string): SubjectClassification {
+  const normalized = normalizeSubjectText(`${name} ${description ?? ''}`)
+  const words = wordsOf(normalized)
+
+  for (const { category, keywords } of CATEGORY_KEYWORDS) {
+    if (keywords.some((kw) => matchesKeyword(normalized, words, kw))) {
+      const colorIndex = CATEGORY_COLOR_INDEX[category]
+      return { category, colorIndex, ...SUBJECT_COLOR_PALETTE[colorIndex] }
+    }
+  }
+
+  const colorIndex = fallbackColorIndex(normalized)
+  return { category: 'other', colorIndex, ...SUBJECT_COLOR_PALETTE[colorIndex] }
+}
+
 // ── Date utilities ───────────────────────────────────────────────────────────
 // daysLeft is computed fresh on every snapshot read — never stored in Firestore.
 const MONTHS: Record<string, number> = {
