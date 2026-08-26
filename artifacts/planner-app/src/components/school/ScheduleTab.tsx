@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Calendar, Clock, Pencil, Trash2, Plus, X, MapPin, User, CheckCircle2 } from 'lucide-react'
+import { Calendar, Clock, Pencil, Trash2, Plus, X, MapPin, User } from 'lucide-react'
 import { t } from '@/lib/translations'
 import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
@@ -121,30 +121,19 @@ export default function ScheduleTab({ mode, lessons, onModeChange, onAdd, onUpda
 
       {/* Content by mode */}
       {mode === 'none' ? (
-        <div className="bg-white rounded-2xl border border-[#ECECF2] p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-[#F8F7FC] flex items-center justify-center">
-              <Calendar size={20} strokeWidth={1.8} className="text-[#94A3B8]" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-[#1A1F36]">{t('sched.none.title', lang)}</p>
-              <p className="text-xs text-[#94A3B8]">{t('sched.none.sub', lang)}</p>
-            </div>
+        // Compact informational panel — no bullet list (Tasks/Tests/Exams/AI
+        // already have their own tabs) and no "Enable timetable" button (it
+        // contradicted the user's deliberate "No timetable" choice; the mode
+        // selector above is the only way to switch modes). The calendar icon
+        // is purely decorative (no onClick), matching its informational role.
+        <div className="bg-white rounded-2xl border border-[#ECECF2] p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#F8F7FC] flex items-center justify-center flex-shrink-0">
+            <Calendar size={20} strokeWidth={1.8} className="text-[#94A3B8]" />
           </div>
-          <div className="flex flex-col gap-2 mb-5">
-            {(['sched.none.feat1', 'sched.none.feat2', 'sched.none.feat3', 'sched.none.feat4'] as const).map((key) => (
-              <div key={key} className="flex items-center gap-2">
-                <CheckCircle2 size={15} strokeWidth={2} className="text-[#6F5AE8] flex-shrink-0" />
-                <span className="text-xs text-[#64748B]">{t(key, lang)}</span>
-              </div>
-            ))}
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-[#1A1F36]">{t('sched.none.title', lang)}</p>
+            <p className="text-xs text-[#94A3B8] mt-0.5">{t('sched.none.sub', lang)}</p>
           </div>
-          <button
-            onClick={() => onModeChange('traditional')}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
-          >
-            {t('sched.none.enable', lang)}
-          </button>
         </div>
       ) : (
         <>

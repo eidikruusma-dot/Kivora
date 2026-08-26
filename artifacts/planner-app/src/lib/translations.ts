@@ -1216,11 +1216,6 @@ export type TranslationKey =
     | "sched.mode.none"
     | "sched.none.title"
     | "sched.none.sub"
-    | "sched.none.enable"
-    | "sched.none.feat1"
-    | "sched.none.feat2"
-    | "sched.none.feat3"
-    | "sched.none.feat4"
     | "sched.traditional.title"
     | "sched.elearning.title"
     | "sched.add.lesson"
@@ -3183,13 +3178,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "sched.mode.traditional": "Tavapärane tunniplaan",
         "sched.mode.elearning": "E-õpe / paindlik õpe",
         "sched.mode.none": "Tunniplaani ei kasuta",
-        "sched.none.title": "Sa ei kasuta tunniplaani",
-        "sched.none.sub": "Kivorat saab kasutada ka ilma tunniplaanita.",
-        "sched.none.enable": "Lülita tunniplaan sisse",
-        "sched.none.feat1": "Ülesandeid",
-        "sched.none.feat2": "Kontrolltöid",
-        "sched.none.feat3": "Eksameid",
-        "sched.none.feat4": "AI Õpiabi",
+        "sched.none.title": "Tunniplaan on välja lülitatud",
+        "sched.none.sub":
+            "Aineid, ülesandeid, kontrolltöid ja eksameid saad endiselt kasutada.",
         "sched.traditional.title": "Minu tunniplaan",
         "sched.elearning.title": "Õppimisplaan",
         "sched.add.lesson": "Lisa tund",
@@ -5170,13 +5161,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "sched.mode.traditional": "Traditional schedule",
         "sched.mode.elearning": "E-learning / flexible",
         "sched.mode.none": "No schedule",
-        "sched.none.title": "You are not using a schedule",
-        "sched.none.sub": "Kivora works great without a schedule too.",
-        "sched.none.enable": "Enable schedule",
-        "sched.none.feat1": "Tasks",
-        "sched.none.feat2": "Tests",
-        "sched.none.feat3": "Exams",
-        "sched.none.feat4": "AI Study Help",
+        "sched.none.title": "Timetable is turned off",
+        "sched.none.sub": "You can still use subjects, tasks, tests, and exams.",
         "sched.traditional.title": "My timetable",
         "sched.elearning.title": "Study plan",
         "sched.add.lesson": "Add lesson",
