@@ -4,13 +4,15 @@ import {
   doc,
   setDoc,
   updateDoc,
-  deleteDoc,
+  writeBatch,
   onSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { Task } from '@/types'
 import { sanitizeForFirestore } from '@/lib/firestoreUtils'
+import { getLinksForEntity, linkDoc as entityLinkDoc } from '@/lib/entityLinksStore'
+import { eventDoc as calendarEventDoc } from '@/lib/calendarStore'
 
 // ── Local pub/sub types ─────────────────────────────────────────────────────
 type TaskListener = (tasks: Task[]) => void
@@ -115,9 +117,56 @@ export async function toggleTask(id: string): Promise<void> {
   })
 }
 
+// The auto-linking service (automaticLinking.ts) stamps every calendar event
+// it creates automatically with this id prefix. It is the only place in the
+// codebase that generates ids with this prefix — every other calendar-event
+// creation path (manual "link to calendar" flows, the AI assistant, the
+// Calendar page itself) uses a different prefix. A `scheduled` EntityLink
+// alone does NOT prove a calendar event was auto-created — the same
+// relationType is used when a user manually links a task to a pre-existing
+// event (see LinkPickerModal, PostSaveLinkSuggestionsDialog). Checking this
+// prefix on the link's toId is what distinguishes "owned by this task" from
+// "independently created and merely linked."
+const AUTO_CREATED_CALENDAR_EVENT_PREFIX = 'cal-auto-'
+
+/**
+ * Deletes a task and cascades to the calendar event it automatically
+ * created (if any) plus every EntityLink referencing it, all in a single
+ * atomic Firestore batch — the task, its owned calendar event, and its
+ * links either all disappear together or none of them do.
+ *
+ * Calendar events the task is merely linked to (not auto-created for it)
+ * are left untouched, as are links/events belonging to other entities.
+ *
+ * This is the single shared deletion path — every task-deletion entry point
+ * (TasksPage, the AI assistant's delete_task action, useTaskActions) calls
+ * this same exported function, so the cascade applies everywhere uniformly.
+ */
 export async function deleteTask(id: string): Promise<void> {
   if (!_currentUid) return
-  await deleteDoc(taskDoc(_currentUid, id))
+  const uid = _currentUid
+
+  const links = getLinksForEntity('task', id)
+  const ownedCalendarEventIds = links
+    .filter(
+      (l) =>
+        l.relationType === 'scheduled' &&
+        l.fromType === 'task' &&
+        l.fromId === id &&
+        l.toType === 'calendar' &&
+        l.toId.startsWith(AUTO_CREATED_CALENDAR_EVENT_PREFIX),
+    )
+    .map((l) => l.toId)
+
+  const batch = writeBatch(db)
+  batch.delete(taskDoc(uid, id))
+  for (const eventId of ownedCalendarEventIds) {
+    batch.delete(calendarEventDoc(uid, eventId))
+  }
+  for (const link of links) {
+    batch.delete(entityLinkDoc(uid, link.id))
+  }
+  await batch.commit()
 }
 
 // ── Synchronous read ────────────────────────────────────────────────────────

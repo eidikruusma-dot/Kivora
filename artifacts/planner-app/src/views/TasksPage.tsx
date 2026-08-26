@@ -13,7 +13,6 @@ import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { useIsDark } from '@/lib/themeColors'
 import { t } from '@/lib/translations'
-import { removeLinksForEntity } from '@/lib/entityLinksStore'
 
 export default function TasksPage() {
   const tasks = useTasks()
@@ -52,10 +51,16 @@ export default function TasksPage() {
     }
     storeToggleTask(id)
   }
-  const deleteTask = (id: string) => {
-    removeLinksForEntity('task', id)
-    storeDeleteTask(id)
-    toast.success(lang === 'et' ? 'Ülesanne kustutatud' : 'Task deleted')
+  const deleteTask = async (id: string) => {
+    try {
+      // storeDeleteTask cascades to the task's auto-created calendar event
+      // and its EntityLinks in one atomic batch (tasksStore.ts) — awaited so
+      // we only report success once the whole operation has actually landed.
+      await storeDeleteTask(id)
+      toast.success(lang === 'et' ? 'Ülesanne kustutatud' : 'Task deleted')
+    } catch {
+      toast.error(lang === 'et' ? 'Ülesande kustutamine ebaõnnestus' : 'Failed to delete task')
+    }
   }
 
   const handleAddTask = async (task: Task) => {

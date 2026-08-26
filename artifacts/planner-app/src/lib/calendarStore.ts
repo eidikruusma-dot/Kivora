@@ -37,7 +37,10 @@ function eventsCol(uid: string) {
   return collection(db, "users", uid, "calendarEvents");
 }
 
-function eventDoc(uid: string, id: string) {
+// Exported so other stores (e.g. tasksStore's delete cascade) can build a
+// reference to a calendar event doc to include in their own writeBatch,
+// without duplicating this collection's path segments.
+export function eventDoc(uid: string, id: string) {
   return doc(db, "users", uid, "calendarEvents", id);
 }
 

@@ -41,7 +41,10 @@ function col(uid: string) {
   return collection(db, 'users', uid, 'entityLinks')
 }
 
-function linkDoc(uid: string, id: string) {
+// Exported so other stores (e.g. tasksStore's delete cascade) can build a
+// reference to a link doc to include in their own writeBatch, without
+// duplicating this collection's path segments.
+export function linkDoc(uid: string, id: string) {
   return doc(db, 'users', uid, 'entityLinks', id)
 }
 
