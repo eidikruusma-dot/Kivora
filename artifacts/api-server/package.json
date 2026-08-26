@@ -31,7 +31,8 @@
     "test:firebaseAdmin": "npx esbuild --bundle --platform=node --format=cjs src/lib/firebaseAdmin.test.ts | node",
     "test:requireFirebaseAuth": "npx esbuild --bundle --platform=node --format=esm --packages=external src/middleware/requireFirebaseAuth.test.ts --outfile=.tmp-requireFirebaseAuth.mjs && node .tmp-requireFirebaseAuth.mjs",
     "test:routesIndex": "npx esbuild --bundle --platform=node --format=cjs src/routes/index.test.ts | node",
-    "test": "pnpm run test:parseEuropeanNumber && pnpm run test:groupIntoRows && pnpm run test:extraction && pnpm run test:planDraftValidation && pnpm run test:validateChatRequest && pnpm run test:evaluateFinishReason && pnpm run test:firebaseAdmin && pnpm run test:requireFirebaseAuth && pnpm run test:routesIndex"
+    "test:contactAuthBoundary": "npx esbuild --bundle --platform=node --format=esm --external:express --external:cors --external:pino-http --external:pino --external:pino-pretty --external:firebase-admin --external:firebase-admin/* --external:openai --external:web-push --external:nodemailer --external:multer --external:pdf-lib --external:pdf-parse --external:pdfjs-dist --external:xlsx --external:mammoth --external:@napi-rs/canvas src/routes/index.contactAuthBoundary.test.ts --outfile=.tmp-contactAuthBoundary.mjs && node .tmp-contactAuthBoundary.mjs",
+    "test": "pnpm run test:parseEuropeanNumber && pnpm run test:groupIntoRows && pnpm run test:extraction && pnpm run test:planDraftValidation && pnpm run test:validateChatRequest && pnpm run test:evaluateFinishReason && pnpm run test:firebaseAdmin && pnpm run test:requireFirebaseAuth && pnpm run test:routesIndex && pnpm run test:contactAuthBoundary"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",

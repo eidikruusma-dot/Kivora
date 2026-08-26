@@ -1,9 +1,17 @@
 /**
  * Structural test for routes/index.ts — proves requireFirebaseAuth is
- * mounted exactly once, wraps every current /api/ai router, and never
- * wraps any non-AI router. Source-level rather than a live Express
- * integration test, matching this file's role as pure route wiring with
- * no logic of its own to exercise at runtime.
+ * mounted exactly once, explicitly scoped to the "/ai" path, wraps every
+ * current /api/ai router, and never wraps any non-AI router.
+ *
+ * This is source-level, not a live Express integration test — which is
+ * exactly why the original version of this file (asserting an unscoped
+ * `.use(requireFirebaseAuth)`, with no path argument) did not catch the
+ * production regression where requireFirebaseAuth 401'd every /api
+ * request, including /api/contact: a regex over the source text can't see
+ * that Router#use(middlewareFn) without a path applies to every request
+ * that reaches that router. See routes/index.contactAuthBoundary.test.ts
+ * for the live-request regression test that proves the actual runtime
+ * behavior this file can only assert structurally.
  *
  * Compile and run:
  *   cd artifacts/api-server
@@ -40,16 +48,18 @@ function group(name: string, fn: () => void): void {
 
 const src = readFileSync(ROUTES_INDEX_PATH, "utf8");
 
-group("1. requireFirebaseAuth is imported and mounted exactly once", () => {
+group("1. requireFirebaseAuth is imported and mounted exactly once, explicitly scoped to the \"/ai\" path", () => {
   assert(/import\s*\{\s*requireFirebaseAuth\s*\}\s*from\s*["']\.\.\/middleware\/requireFirebaseAuth\.js["']/.test(src), "imports requireFirebaseAuth from the middleware module");
   const useCount = (src.match(/\.use\(requireFirebaseAuth\)/g) ?? []).length;
-  assert(useCount === 1, `requireFirebaseAuth is applied via .use() exactly once (found ${useCount})`);
+  assert(useCount === 0, `requireFirebaseAuth is never mounted unscoped, with no path argument (found ${useCount} unscoped use(s))`);
+  const scopedUseCount = (src.match(/\.use\(\s*["']\/ai["']\s*,\s*requireFirebaseAuth\s*\)/g) ?? []).length;
+  assert(scopedUseCount === 1, `requireFirebaseAuth is applied via .use("/ai", requireFirebaseAuth) exactly once (found ${scopedUseCount})`);
 });
 
 group("2. all current AI routers are mounted on the same boundary as requireFirebaseAuth", () => {
-  // Everything between "aiBoundary.use(requireFirebaseAuth)" and the next
+  // Everything between the scoped requireFirebaseAuth mount and the next
   // "router.use(aiBoundary)" (or end of file) is the protected boundary's body.
-  const boundaryStart = src.indexOf(".use(requireFirebaseAuth)");
+  const boundaryStart = src.indexOf('.use("/ai", requireFirebaseAuth)');
   assert(boundaryStart !== -1, "found the requireFirebaseAuth mount point");
   const afterBoundary = src.slice(boundaryStart);
   const boundaryEnd = afterBoundary.indexOf("router.use(aiBoundary)");
@@ -60,7 +70,7 @@ group("2. all current AI routers are mounted on the same boundary as requireFire
 });
 
 group("3. non-AI routers are mounted directly on the top-level router — never behind requireFirebaseAuth", () => {
-  const boundaryStart = src.indexOf(".use(requireFirebaseAuth)");
+  const boundaryStart = src.indexOf('.use("/ai", requireFirebaseAuth)');
   const afterBoundary = src.slice(boundaryStart);
   const boundaryEnd = afterBoundary.indexOf("router.use(aiBoundary)");
   const boundaryBody = boundaryEnd === -1 ? afterBoundary : afterBoundary.slice(0, boundaryEnd);

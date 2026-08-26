@@ -21,8 +21,16 @@ router.use(healthRouter);
 // happens inside each individual route handler, which only runs after this
 // middleware calls next(). No individual route inside ai.ts/aiUpload.ts
 // duplicates this check.
+//
+// requireFirebaseAuth is mounted with the explicit "/ai" path so it only
+// runs for requests under /api/ai — Router#use(middlewareFn) with NO path
+// (the previous form) applies to every request that reaches this router,
+// which silently 401'd /api/contact, /api/support, /api/feedback, and
+// /api/push too, since aiBoundary is mounted ahead of them below. Express
+// restores req.url after this path-scoped layer, so aiRouter/aiUploadRouter
+// still see the full "/ai/..." paths unchanged — no route URL moved.
 const aiBoundary: IRouter = Router();
-aiBoundary.use(requireFirebaseAuth);
+aiBoundary.use("/ai", requireFirebaseAuth);
 aiBoundary.use(aiRouter);
 aiBoundary.use(aiUploadRouter);
 router.use(aiBoundary);
