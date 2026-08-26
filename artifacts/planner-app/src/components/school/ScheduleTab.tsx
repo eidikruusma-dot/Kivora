@@ -162,11 +162,12 @@ export default function ScheduleTab({ mode, lessons, onModeChange, onAdd, onUpda
           </div>
 
           {lessons.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="w-11 h-11 rounded-2xl bg-[#EDE9FB] flex items-center justify-center mb-3">
-                <Plus size={20} strokeWidth={1.8} className="text-[#6F5AE8]" />
-              </div>
-              <p className="text-sm font-semibold text-[#1A1F36]">{t('sched.empty.title', lang)}</p>
+            // Compact empty state — no decorative "+" (it had no onClick;
+            // the working add control is the header button above, openAdd).
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <p className="text-sm font-semibold text-[#1A1F36]">
+                {mode === 'traditional' ? t('sched.empty.title', lang) : t('sched.empty.titleBlock', lang)}
+              </p>
               <p className="text-xs text-[#94A3B8] mt-1">
                 {mode === 'traditional'
                   ? t('sched.empty.subLesson', lang)

@@ -1226,6 +1226,7 @@ export type TranslationKey =
     | "sched.add.lesson"
     | "sched.add.block"
     | "sched.empty.title"
+    | "sched.empty.titleBlock"
     | "sched.empty.subLesson"
     | "sched.empty.subBlock"
     | "sched.confirm.delete"
@@ -3194,10 +3195,11 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "sched.add.lesson": "Lisa tund",
         "sched.add.block": "Lisa õppimisblokk",
         "sched.empty.title": "Kirjed puuduvad",
+        "sched.empty.titleBlock": "Õppimisblokke pole veel lisatud",
         "sched.empty.subLesson":
             "Lisa oma esimene tund nädalapäeva ja kellaaja järgi.",
         "sched.empty.subBlock":
-            "Lisa oma esimene õppimisblokk või iseseisva õppimise aeg.",
+            "Planeeri iseseisev õppimine kuupäeva või nädalapäeva järgi.",
         "sched.confirm.delete": "Kustuta see kirje?",
         "sched.modal.editLesson": "Muuda kirjet",
         "sched.modal.addLesson": "Lisa tund",
@@ -5180,9 +5182,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "sched.add.lesson": "Add lesson",
         "sched.add.block": "Add study block",
         "sched.empty.title": "No entries yet",
+        "sched.empty.titleBlock": "No learning blocks added yet",
         "sched.empty.subLesson": "Add your first lesson by day and time.",
         "sched.empty.subBlock":
-            "Add your first study block or self-study session.",
+            "Plan independent study by date or weekday.",
         "sched.confirm.delete": "Delete this entry?",
         "sched.modal.editLesson": "Edit entry",
         "sched.modal.addLesson": "Add lesson",
