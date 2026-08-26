@@ -42,6 +42,7 @@ router.post("/support", async (req, res) => {
 
   try {
     await transporter.sendMail({
+      from:    `"Kivora Support" <${process.env.SMTP_USER}>`,
       to:      recipient,
       subject: "[Support] New message from Help & Support",
       text:    textBody,

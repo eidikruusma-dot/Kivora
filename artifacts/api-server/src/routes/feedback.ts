@@ -60,6 +60,7 @@ router.post("/feedback", async (req, res) => {
 
   try {
     await transporter.sendMail({
+      from:    `"Kivora Feedback" <${process.env.SMTP_USER}>`,
       to:      recipient,
       ...(email && mayContact ? { replyTo: email } : {}),
       subject: mailSubject,
