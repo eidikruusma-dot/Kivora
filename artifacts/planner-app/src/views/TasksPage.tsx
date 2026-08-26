@@ -111,16 +111,18 @@ export default function TasksPage() {
   return (
     <div className="flex flex-col md:flex-row gap-6 p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto w-full">
       <div className="flex-1 min-w-0 flex flex-col gap-5">
-        {/* Page header */}
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-[#1A1F36]">{t('tasks.title', lang)}</h1>
+        {/* Page header — stacks vertically below sm: so the title never gets
+            clipped and the Add-task button never overflows on narrow phones;
+            reverts to the original single-row layout at sm: and up. */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-[#1A1F36] break-words">{t('tasks.title', lang)}</h1>
             <p className="text-sm text-[#64748B] mt-0.5">
               {t('tasks.subtitle', lang).replace('{active}', String(activeCount)).replace('{done}', String(completedCount))}
             </p>
           </div>
           <button
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#6F5AE8] text-white rounded-xl text-sm font-medium hover:bg-[#5B48D8] transition-colors shadow-sm"
+            className="flex w-full items-center justify-center gap-2 px-4 py-2.5 bg-[#6F5AE8] text-white rounded-xl text-sm font-medium hover:bg-[#5B48D8] transition-colors shadow-sm sm:w-auto"
             onClick={() => setModalOpen(true)}
           >
             <span className="text-lg leading-none">+</span>
@@ -184,29 +186,34 @@ export default function TasksPage() {
                 const p   = PRIORITY_CONFIG[task.priority]
                 const cat = task.category ? catMap[task.category] : null
                 return (
+                  // Mobile: two deliberate stacked rows (checkbox+title, then
+                  // wrapping metadata+actions). At sm: and up, both wrapper
+                  // rows become `display:contents` and dissolve, so their
+                  // children flatten back into one flex row in the exact
+                  // original order/classes — desktop layout is unchanged.
                   <div
                     key={task.id}
-                    className={`flex items-center gap-3 px-5 py-4 hover:bg-[#FAFAF8] transition-colors group ${
+                    className={`flex flex-col gap-2 px-4 py-3.5 hover:bg-[#FAFAF8] transition-colors group sm:flex-row sm:items-center sm:gap-3 sm:px-5 sm:py-4 ${
                       idx !== filteredTasks.length - 1 ? 'border-b border-[#F0F0F0]' : ''
                     }`}
                   >
-                    <button
-                      onClick={() => toggleTask(task.id)}
-                      aria-label={task.completed ? (lang === 'et' ? 'Märgi lõpetamata' : 'Mark incomplete') : (lang === 'et' ? 'Märgi lõpetatuks' : 'Mark complete')}
-                      className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
-                        task.completed ? 'bg-[#6F5AE8] border-[#6F5AE8]' : 'border-[#D1D5DB] hover:border-[#6F5AE8]'
-                      } ${flashId === task.id ? 'kv-flash-complete' : ''}`}
-                    >
-                      {task.completed && (
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      )}
-                    </button>
+                    <div className="flex items-start gap-3 sm:contents">
+                      <button
+                        onClick={() => toggleTask(task.id)}
+                        aria-label={task.completed ? (lang === 'et' ? 'Märgi lõpetamata' : 'Mark incomplete') : (lang === 'et' ? 'Märgi lõpetatuks' : 'Mark complete')}
+                        className={`flex-shrink-0 w-5 h-5 mt-0.5 sm:mt-0 rounded-md border-2 flex items-center justify-center transition-colors ${
+                          task.completed ? 'bg-[#6F5AE8] border-[#6F5AE8]' : 'border-[#D1D5DB] hover:border-[#6F5AE8]'
+                        } ${flashId === task.id ? 'kv-flash-complete' : ''}`}
+                      >
+                        {task.completed && (
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </button>
 
-                    <div className="flex-1 min-w-0 flex items-center gap-3">
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium ${task.completed ? 'text-[#94A3B8] line-through' : 'text-[#1A1F36]'}`}>
+                        <p className={`text-sm font-medium break-words ${task.completed ? 'text-[#94A3B8] line-through' : 'text-[#1A1F36]'}`}>
                           {task.title}
                         </p>
                         {task.time && (
@@ -215,6 +222,9 @@ export default function TasksPage() {
                           </p>
                         )}
                       </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 pl-8 sm:pl-0 sm:contents">
                       {cat && (
                         <span
                           className="flex-shrink-0 flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
@@ -224,33 +234,33 @@ export default function TasksPage() {
                           {cat.label}
                         </span>
                       )}
+
+                      <span
+                        className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium"
+                        style={{ color: p.text, background: p.bg, border: `1px solid ${p.border}` }}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: p.dot }} />
+                        {p.label}
+                      </span>
+
+                      <button
+                        onClick={() => openEdit(task)}
+                        aria-label={t('tasks.action.edit', lang)}
+                        className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:text-[#6F5AE8] hover:bg-[#EDE9FB] transition-colors ml-auto sm:ml-0 sm:opacity-0 sm:group-hover:opacity-100"
+                      >
+                        <Pencil size={14} />
+                      </button>
+
+                      <button
+                        onClick={() => deleteTask(task.id)}
+                        aria-label={t('tasks.action.delete', lang)}
+                        className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:text-red-500 hover:bg-red-50 transition-colors sm:opacity-0 sm:group-hover:opacity-100"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                      </button>
                     </div>
-
-                    <span
-                      className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium"
-                      style={{ color: p.text, background: p.bg, border: `1px solid ${p.border}` }}
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: p.dot }} />
-                      {p.label}
-                    </span>
-
-                    <button
-                      onClick={() => openEdit(task)}
-                      aria-label={t('tasks.action.edit', lang)}
-                      className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:text-[#6F5AE8] hover:bg-[#EDE9FB] transition-colors sm:opacity-0 sm:group-hover:opacity-100"
-                    >
-                      <Pencil size={14} />
-                    </button>
-
-                    <button
-                      onClick={() => deleteTask(task.id)}
-                      aria-label={t('tasks.action.delete', lang)}
-                      className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:text-red-500 hover:bg-red-50 transition-colors sm:opacity-0 sm:group-hover:opacity-100"
-                    >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                      </svg>
-                    </button>
                   </div>
                 )
               })}
