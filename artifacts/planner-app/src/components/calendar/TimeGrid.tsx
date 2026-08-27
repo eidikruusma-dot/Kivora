@@ -13,6 +13,12 @@ interface TimeGridProps {
 
 const START_HOUR = 0
 const END_HOUR = 22
+// Mirrors the identical constant already duplicated in DayView.tsx and
+// CalendarGrid.tsx — this is the fixed pixel height their TimeGrid is
+// rendered at, needed here only to convert our %-based layout into an
+// actual pixel height for EventCard's compact/stacked decision.
+const HOUR_HEIGHT = 48
+const TIME_GRID_HEIGHT_PX = (END_HOUR - START_HOUR) * HOUR_HEIGHT
 
 export default function TimeGrid({
   date,
@@ -63,7 +69,12 @@ export default function TimeGrid({
             width: `calc(${widthPercent}% - 2px)`,
           }}
         >
-          <EventCard event={event} onClick={onEventClick} timeFormat={timeFormat} />
+          <EventCard
+            event={event}
+            onClick={onEventClick}
+            timeFormat={timeFormat}
+            heightPx={heightFraction * TIME_GRID_HEIGHT_PX}
+          />
         </div>
       ))}
 
