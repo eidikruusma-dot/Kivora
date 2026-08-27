@@ -32,6 +32,7 @@ import { useAuth } from '@/context/AuthContext'
 import type { ThemeMode } from '@/types'
 import { useModules, type ModuleId } from '@/lib/modulesStore'
 import { MONEY_MODULE_ENABLED } from '@/lib/featureFlags'
+import KivoraLogo from '@/components/brand/KivoraLogo'
 
 // ── Route definitions ────────────────────────────────────────────────────────
 
@@ -148,8 +149,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         className="px-5 py-3 flex items-center w-full hover:opacity-80 transition-opacity"
       >
         <span className="inline-flex items-center" style={{ gap: 8, height: 40 }}>
-          <img src="/kivora-symbol.png" alt="" aria-hidden style={{ height: 40, width: 'auto', flexShrink: 0 }} draggable={false} />
-          <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.015em', lineHeight: 1, color: '#1A1F36' }}>Kivora</span>
+          <KivoraLogo symbolOnly height={40} />
+          <span
+            className="text-[#1A1F36]"
+            style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.015em', lineHeight: 1 }}
+          >
+            Kivora
+          </span>
         </span>
       </button>
 

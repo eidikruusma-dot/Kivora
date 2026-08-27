@@ -26,6 +26,7 @@ import { MONEY_MODULE_ENABLED } from '@/lib/featureFlags'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
+import KivoraLogo from '@/components/brand/KivoraLogo'
 
 // ── Purpose → module mapping ─────────────────────────────────────────────────
 
@@ -175,10 +176,7 @@ export default function ModuleSelectionPage() {
 
         {/* Logo */}
         <div className="flex items-center gap-2.5 justify-center mb-8">
-          <div className="w-9 h-9 rounded-xl bg-[#6F5AE8] flex items-center justify-center">
-            <span className="text-white font-bold text-sm tracking-tight">K</span>
-          </div>
-          <span className="text-xl font-bold text-[#1A1F36] tracking-tight">kivora</span>
+          <KivoraLogo height={36} />
         </div>
 
         <div className="bg-white rounded-2xl border border-[#EBEBEB] shadow-lg p-8">

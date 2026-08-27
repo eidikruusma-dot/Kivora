@@ -4,6 +4,7 @@ import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
 import LanguageToggle from '@/components/layout/LanguageToggle'
+import KivoraLogo from '@/components/brand/KivoraLogo'
 
 interface AuthShellProps {
   title: string
@@ -15,7 +16,7 @@ interface AuthShellProps {
 function Logo() {
   return (
     <Link to="/" className="inline-flex items-center">
-      <img src="/kivora-logo.png" alt="Kivora" height={28} style={{ height: 28, width: 'auto', objectFit: 'contain' }} draggable={false} />
+      <KivoraLogo height={28} />
     </Link>
   )
 }

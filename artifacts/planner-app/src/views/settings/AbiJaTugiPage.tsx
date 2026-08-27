@@ -15,6 +15,7 @@ import { auth, db } from '@/lib/firebase'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
+import KivoraLogo from '@/components/brand/KivoraLogo'
 
 // ── Shared sub-components ──────────────────────────────────────────────────
 
@@ -291,7 +292,7 @@ export default function AbiJaTugiPage({ onBack }: Props) {
           description={t('help.version.desc', lang)}
         >
           <div className="flex items-center gap-3">
-            <img src="/kivora-logo.png" alt="Kivora" height={28} style={{ height: 28, width: 'auto', objectFit: 'contain' }} draggable={false} />
+            <KivoraLogo height={28} />
             <p className="text-xs text-[#94A3B8]">
               {t('help.version.label', lang)} {APP_VERSION}
             </p>

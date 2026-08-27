@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useInstallPrompt } from '@/hooks/useInstallPrompt'
 import { t } from '@/lib/translations'
 import type { AppLang } from '@/lib/languageStore'
+import KivoraLogo from '@/components/brand/KivoraLogo'
 
 interface InstallButtonProps {
   lang: AppLang
@@ -86,7 +87,7 @@ function IOSDialog({ lang, onClose }: { lang: AppLang; onClose: () => void }) {
   return (
     <Modal onClose={onClose}>
       <div className="flex items-center gap-3 mb-5">
-        <img src="/kivora-symbol.png" alt="" aria-hidden style={{ height: 28, width: 'auto' }} />
+        <KivoraLogo symbolOnly height={28} />
         <h3 className="text-base font-bold text-[#1A1F36]">{t('pub.install.ios.title', lang)}</h3>
       </div>
       <div className="space-y-4">
@@ -118,7 +119,7 @@ function NotReadyDialog({
   return (
     <Modal onClose={onClose}>
       <div className="flex items-center gap-3 mb-4">
-        <img src="/kivora-symbol.png" alt="" aria-hidden style={{ height: 28, width: 'auto' }} />
+        <KivoraLogo symbolOnly height={28} />
         <h3 className="text-base font-bold text-[#1A1F36]">{t('pub.install.notready.title', lang)}</h3>
       </div>
       <p className="text-sm text-[#64748B] leading-relaxed mb-5">
@@ -148,7 +149,7 @@ function UnsupportedDialog({ lang, onClose }: { lang: AppLang; onClose: () => vo
   return (
     <Modal onClose={onClose}>
       <div className="flex items-center gap-3 mb-4">
-        <img src="/kivora-symbol.png" alt="" aria-hidden style={{ height: 28, width: 'auto' }} />
+        <KivoraLogo symbolOnly height={28} />
         <h3 className="text-base font-bold text-[#1A1F36]">{t('pub.install.other.title', lang)}</h3>
       </div>
       <p className="text-sm text-[#64748B] leading-relaxed mb-5">

@@ -5,6 +5,7 @@ import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
 import LanguageToggle from '@/components/layout/LanguageToggle'
 import InstallButton from '@/components/landing/InstallButton'
+import KivoraLogo from '@/components/brand/KivoraLogo'
 
 export default function PublicHeader() {
   const navigate = useNavigate()
@@ -33,7 +34,7 @@ export default function PublicHeader() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         {/* Logo */}
         <button onClick={handleLogoClick} className="inline-flex items-center hover:opacity-80 transition-opacity">
-          <img src="/kivora-logo.png" alt="Kivora" height={28} style={{ height: 28, width: 'auto', objectFit: 'contain' }} draggable={false} />
+          <KivoraLogo height={28} />
         </button>
 
         {/* Desktop nav */}
