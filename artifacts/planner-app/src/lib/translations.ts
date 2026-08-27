@@ -336,6 +336,8 @@ export type TranslationKey =
     | "taskModal.descPlaceholder"
     | "taskModal.dateLabel"
     | "taskModal.timeLabel"
+    | "taskModal.allDayLabel"
+    | "taskModal.error.timeRequired"
     | "taskModal.priorityLabel"
     | "taskModal.categoryLabel"
     | "taskModal.save"
@@ -2151,6 +2153,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "taskModal.descPlaceholder": "Valikuline kirjeldus",
         "taskModal.dateLabel": "Kuupäev",
         "taskModal.timeLabel": "Kellaaeg",
+        "taskModal.allDayLabel": "Kogu päev",
+        "taskModal.error.timeRequired": "Vali kellaaeg või märgi «Kogu päev».",
         "taskModal.priorityLabel": "Prioriteet",
         "taskModal.categoryLabel": "Kategooria",
         "taskModal.save": "Salvesta",
@@ -4144,6 +4148,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "taskModal.descPlaceholder": "Optional description",
         "taskModal.dateLabel": "Date",
         "taskModal.timeLabel": "Time",
+        "taskModal.allDayLabel": "All day",
+        "taskModal.error.timeRequired": "Choose a time or check “All day”.",
         "taskModal.priorityLabel": "Priority",
         "taskModal.categoryLabel": "Category",
         "taskModal.save": "Save",

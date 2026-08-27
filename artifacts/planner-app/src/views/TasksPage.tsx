@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Sparkles, Pencil, Loader2, Plus, CheckSquare } from 'lucide-react'
+import { Sparkles, Pencil, Loader2, Plus, CheckSquare, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTasks, useTasksLoading, addTask, updateTask as storeUpdateTask, toggleTask as storeToggleTask, deleteTask as storeDeleteTask } from '@/lib/tasksStore'
 import type { Task, Priority, TaskCategory } from '@/types'
@@ -13,6 +13,16 @@ import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { useIsDark } from '@/lib/themeColors'
 import { t } from '@/lib/translations'
+
+// Compact "26 Aug" / "26. aug" style date for the task row — parsed via
+// local midnight (never UTC) to match the calendar day the string
+// represents, same convention as dateUtils.ts's other formatters.
+export function formatTaskDate(dateStr: string, lang: AppLang): string {
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString(lang === 'et' ? 'et-EE' : 'en-GB', {
+    day: 'numeric',
+    month: 'short',
+  })
+}
 
 export default function TasksPage() {
   const tasks = useTasks()
@@ -221,9 +231,17 @@ export default function TasksPage() {
                         <p className={`text-sm font-medium break-words ${task.completed ? 'text-[#94A3B8] line-through' : 'text-[#1A1F36]'}`}>
                           {task.title}
                         </p>
-                        {task.time && (
-                          <p className={`text-xs mt-0.5 ${task.completed ? 'text-[#CBD5E1]' : 'text-[#94A3B8]'}`}>
-                            {task.time}
+                        {task.date && (
+                          <p className={`flex items-center gap-1 text-xs mt-0.5 ${task.completed ? 'text-[#CBD5E1]' : 'text-[#94A3B8]'}`}>
+                            <Calendar size={11} className="flex-shrink-0" />
+                            <span>{formatTaskDate(task.date, lang)}</span>
+                            {task.time ? (
+                              <span>· {task.time}</span>
+                            ) : (
+                              <span className="ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-[#EDE9FB] text-[#6F5AE8]">
+                                {t('taskModal.allDayLabel', lang)}
+                              </span>
+                            )}
                           </p>
                         )}
                       </div>

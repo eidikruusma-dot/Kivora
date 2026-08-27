@@ -25,10 +25,15 @@ export default function AddTaskModal({ open, onClose, onSave, initialTask, lang:
   const [description, setDescription] = useState('')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
+  // Derived from the task model, not stored on it (a task's "all day" state
+  // is just "has a date but no time" — see requirement 9). Editing a dated
+  // task with no time opens with this checked; a timed task opens unchecked.
+  const [allDay, setAllDay] = useState(false)
   const [priority, setPriority] = useState<Priority>('medium')
   const [category, setCategory] = useState<TaskCategory>('Töö')
   const [categoryOpen, setCategoryOpen] = useState(false)
   const [error, setError] = useState('')
+  const [timeError, setTimeError] = useState('')
   const [saving, setSaving] = useState(false)
   const categoryRef = useRef<HTMLDivElement>(null)
 
@@ -38,10 +43,12 @@ export default function AddTaskModal({ open, onClose, onSave, initialTask, lang:
       setDescription(initialTask?.description ?? '')
       setDate(initialTask?.date ?? '')
       setTime(initialTask?.time ?? '')
+      setAllDay(Boolean(initialTask?.date) && !initialTask?.time)
       setPriority(initialTask?.priority ?? 'medium')
       setCategory(initialTask?.category ?? 'Töö')
       setCategoryOpen(false)
       setError('')
+      setTimeError('')
     }
   }, [open, initialTask])
 
@@ -79,6 +86,10 @@ export default function AddTaskModal({ open, onClose, onSave, initialTask, lang:
       setError(t('taskModal.error', lang))
       return
     }
+    if (date && !allDay && !time) {
+      setTimeError(t('taskModal.error.timeRequired', lang))
+      return
+    }
     setSaving(true)
     try {
       await (onSave as (task: Parameters<typeof onSave>[0]) => void | Promise<void>)({
@@ -87,12 +98,22 @@ export default function AddTaskModal({ open, onClose, onSave, initialTask, lang:
         title: title.trim(),
         description: description.trim() || undefined,
         date: date || undefined,
-        time: time || undefined,
+        // All-day is never stored as its own field — an all-day task is
+        // simply a dated task with no time (requirement 9).
+        time: allDay ? undefined : (time || undefined),
         priority,
         category,
       })
     } catch { /* parent handles errors */ } finally {
       setSaving(false)
+    }
+  }
+
+  const handleAllDayChange = (checked: boolean) => {
+    setAllDay(checked)
+    if (checked) {
+      setTime('')
+      setTimeError('')
     }
   }
 
@@ -167,10 +188,24 @@ export default function AddTaskModal({ open, onClose, onSave, initialTask, lang:
               <input
                 type="time"
                 value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
+                disabled={allDay}
+                onChange={(e) => { setTime(e.target.value); setTimeError('') }}
+                className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-[#F8F7F4]"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={allDay}
+                onChange={(e) => handleAllDayChange(e.target.checked)}
+                className="w-4 h-4 rounded accent-[#6F5AE8]"
+              />
+              <span className="text-sm text-[#1A1F36]">{t('taskModal.allDayLabel', lang)}</span>
+            </label>
+            {timeError && <p className="text-xs text-red-500 mt-1">{timeError}</p>}
           </div>
 
           <div>
