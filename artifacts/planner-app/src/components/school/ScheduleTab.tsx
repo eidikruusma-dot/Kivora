@@ -5,6 +5,7 @@ import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { useEffect } from 'react'
 import { useSchoolSubjectsFromLessons, addSchoolSubject, classifySubject } from '@/lib/schoolStore'
+import { formatDateRange } from '@/lib/dateUtils'
 
 export type ScheduleMode = 'traditional' | 'elearning' | 'none'
 
@@ -12,10 +13,15 @@ export interface ScheduleLesson {
   id: string
   subject: string
   subjectId?: string
+  /** Traditional (recurring) timetable fields */
   day?: string
-  date?: string
   startTime?: string
   endTime?: string
+  /** Legacy single-date field for old flexible/e-learning blocks (pre-dates startDate/endDate) */
+  date?: string
+  /** Flexible/e-learning block fields — inclusive local-date range */
+  startDate?: string
+  endDate?: string
   room?: string
   teacher?: string
   dotColor: string
@@ -36,12 +42,18 @@ export const DAYS = DAYS_ET
 
 /**
  * Filters lessons/blocks down to the ones that count as "today":
- *   - a one-time entry (explicit `date`) counts only if `date` === `todayISO`;
+ *   - a flexible block with `startDate`+`endDate` counts if todayISO falls
+ *     inclusively within that range (works for a same-day block too, since
+ *     startDate === endDate then);
+ *   - a one-time entry (legacy single `date`) counts only if `date` === `todayISO`;
  *   - a recurring entry (only `day` set) counts only if `day` === `todayWeekdayET`
  *     (one of the canonical DAYS_ET strings above — the existing data model
  *     always stores `day` in this ET form regardless of display language).
- * An entry with neither `date` nor `day` set is excluded — there is no
- * anchor to decide whether it's "today".
+ * An entry with none of the above set is excluded — there is no anchor to
+ * decide whether it's "today".
+ *
+ * ISO YYYY-MM-DD strings compare correctly with plain string >=/<= (no Date
+ * arithmetic, no UTC conversion risk).
  *
  * Pure and exported so SchoolPage.tsx's "Today's schedule" filtering is
  * directly testable without a React rendering harness, and so display and
@@ -52,9 +64,12 @@ export function filterLessonsForToday(
   todayISO: string,
   todayWeekdayET: string,
 ): ScheduleLesson[] {
-  return lessons.filter((l) =>
-    l.date ? l.date === todayISO : l.day ? l.day === todayWeekdayET : false,
-  )
+  return lessons.filter((l) => {
+    if (l.startDate && l.endDate) return todayISO >= l.startDate && todayISO <= l.endDate
+    if (l.date) return l.date === todayISO
+    if (l.day) return l.day === todayWeekdayET
+    return false
+  })
 }
 
 const SUBJECT_COLORS = [
@@ -76,8 +91,8 @@ type Props = {
   mode: ScheduleMode
   lessons: ScheduleLesson[]
   onModeChange: (mode: ScheduleMode) => void
-  onAdd: (lesson: ScheduleLesson) => void
-  onUpdate: (id: string, patch: Partial<ScheduleLesson>) => void
+  onAdd: (lesson: ScheduleLesson) => void | Promise<void>
+  onUpdate: (id: string, patch: Partial<ScheduleLesson>) => void | Promise<void>
   onDelete: (id: string) => void
   onQuickAddAssignment?: (subjectName: string) => void
 }
@@ -100,11 +115,13 @@ export default function ScheduleTab({ mode, lessons, onModeChange, onAdd, onUpda
     setModalOpen(true)
   }
 
-  const handleSave = (lesson: ScheduleLesson) => {
+  // Awaited so LessonModal can keep itself open and show an inline error on
+  // a failed write, instead of this closing the modal unconditionally.
+  const handleSave = async (lesson: ScheduleLesson) => {
     if (editingLesson) {
-      onUpdate(editingLesson.id, lesson)
+      await onUpdate(editingLesson.id, lesson)
     } else {
-      onAdd(lesson)
+      await onAdd(lesson)
     }
     setModalOpen(false)
     setEditingLesson(null)
@@ -211,9 +228,13 @@ export default function ScheduleTab({ mode, lessons, onModeChange, onAdd, onUpda
                           {lesson.day && (
                             <span className="text-[11px] text-[#64748B] font-medium">{lesson.day}</span>
                           )}
-                          {lesson.date && (
+                          {lesson.startDate && lesson.endDate ? (
+                            <span className="text-[11px] text-[#64748B] font-medium">
+                              {formatDateRange(lesson.startDate, lesson.endDate, lang)}
+                            </span>
+                          ) : lesson.date ? (
                             <span className="text-[11px] text-[#64748B] font-medium">{lesson.date}</span>
-                          )}
+                          ) : null}
                           {lesson.startTime && (
                             <span className="text-[11px] text-[#94A3B8] flex items-center gap-0.5">
                               <Clock size={10} strokeWidth={2} />
@@ -310,7 +331,7 @@ function LessonModal({
   lesson: ScheduleLesson | null
   lang: AppLang
   onClose: () => void
-  onSave: (lesson: ScheduleLesson) => void
+  onSave: (lesson: ScheduleLesson) => Promise<void>
 }) {
   const isTraditional = mode === 'traditional'
   const subjects = useSchoolSubjectsFromLessons()
@@ -323,12 +344,17 @@ function LessonModal({
   const [subject, setSubject] = useState(lesson?.subject ?? '')
   const [subjectId, setSubjectId] = useState(initialSubjectId)
   const [day, setDay] = useState(lesson?.day ?? '')
-  const [date, setDate] = useState(lesson?.date ?? '')
   const [startTime, setStartTime] = useState(lesson?.startTime ?? '')
   const [endTime, setEndTime] = useState(lesson?.endTime ?? '')
+  // Old flexible-block records only have a single `date` field — map it to
+  // both startDate and endDate so editing an old block pre-fills a valid
+  // (same-day) range instead of leaving the pickers empty.
+  const [startDate, setStartDate] = useState(lesson?.startDate ?? lesson?.date ?? '')
+  const [endDate, setEndDate] = useState(lesson?.endDate ?? lesson?.date ?? '')
   const [room, setRoom] = useState(lesson?.room ?? '')
   const [teacher, setTeacher] = useState(lesson?.teacher ?? '')
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
 
   // ── Inline "create new subject" state ──────────────────────────────────────
   const [showCreateNew, setShowCreateNew] = useState(false)
@@ -402,10 +428,25 @@ function LessonModal({
     }
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (saving) return // guards against double submission
     if (!subject.trim()) {
       setError(t('sched.field.error.subject', lang))
       return
+    }
+    if (!isTraditional) {
+      if (!startDate) {
+        setError(t('sched.field.error.startDate', lang))
+        return
+      }
+      if (!endDate) {
+        setError(t('sched.field.error.endDate', lang))
+        return
+      }
+      if (endDate < startDate) {
+        setError(t('sched.field.error.dateRange', lang))
+        return
+      }
     }
     // Derive color from matched subject; fall back to existing lesson color or round-robin
     const matched =
@@ -424,19 +465,37 @@ function LessonModal({
       dotColor = c.dot
       cardBg = c.bg
     }
-    onSave({
-      id: lesson?.id ?? crypto.randomUUID(),
-      subject: subject.trim(),
-      subjectId: subjectId || undefined,
-      day: day || undefined,
-      date: date || undefined,
-      startTime: startTime || undefined,
-      endTime: endTime || undefined,
-      room: room || undefined,
-      teacher: teacher || undefined,
-      dotColor,
-      cardBg,
-    })
+    setError('')
+    setSaving(true)
+    try {
+      await onSave({
+        id: lesson?.id ?? crypto.randomUUID(),
+        subject: subject.trim(),
+        subjectId: subjectId || undefined,
+        // Traditional and flexible fields are mode-exclusive on save — an
+        // explicit `undefined` (not an omitted key) is required so a stale
+        // value from the other mode can't survive updateSchoolLesson's
+        // merge-then-replace write and leak into filtering/display.
+        day: isTraditional ? (day || undefined) : undefined,
+        date: undefined,
+        startDate: isTraditional ? undefined : startDate,
+        endDate: isTraditional ? undefined : endDate,
+        startTime: isTraditional ? (startTime || undefined) : undefined,
+        endTime: isTraditional ? (endTime || undefined) : undefined,
+        room: room || undefined,
+        teacher: teacher || undefined,
+        dotColor,
+        cardBg,
+      })
+    } catch {
+      setError(
+        lang === 'et'
+          ? 'Salvestamine ebaõnnestus. Proovi uuesti.'
+          : 'Failed to save. Please try again.',
+      )
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -568,57 +627,58 @@ function LessonModal({
           )}
 
           {!isTraditional && (
-            <>
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-[#64748B] mb-1.5">{t('sched.field.day', lang)} {optional}</label>
-                <select
-                  value={day}
-                  onChange={(e) => setDay(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] bg-white"
-                >
-                  <option value="">{t('sched.field.dayNone', lang)}</option>
-                  {DAYS_ET.map((etDay, i) => (
-                    <option key={etDay} value={etDay}>{DAYS_DISPLAY[i]}</option>
-                  ))}
-                </select>
+                <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+                  {t('sched.field.startDate', lang)} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => { setStartDate(e.target.value); setError('') }}
+                  className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] transition-colors"
+                />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#64748B] mb-1.5">{t('sched.field.date', lang)} {optional}</label>
+                <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+                  {t('sched.field.endDate', lang)} <span className="text-red-500">*</span>
+                </label>
                 <input
-                  type="text"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  placeholder={t('sched.field.datePh', lang)}
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => { setEndDate(e.target.value); setError('') }}
+                  className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] transition-colors"
+                />
+              </div>
+            </div>
+          )}
+
+          {isTraditional && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+                  {t('sched.field.start', lang)}
+                </label>
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
                 />
               </div>
-            </>
+              <div>
+                <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+                  {t('sched.field.end', lang)}
+                </label>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
+                />
+              </div>
+            </div>
           )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-[#64748B] mb-1.5">
-                {t('sched.field.start', lang)} {isTraditional ? '' : optional}
-              </label>
-              <input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[#64748B] mb-1.5">
-                {t('sched.field.end', lang)} {isTraditional ? '' : optional}
-              </label>
-              <input
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
-              />
-            </div>
-          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -651,13 +711,15 @@ function LessonModal({
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2] flex-shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+            disabled={saving}
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors disabled:opacity-40"
           >
             {t('cal.action.cancel', lang)}
           </button>
           <button
-            onClick={handleSave}
-            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
+            onClick={() => void handleSave()}
+            disabled={saving}
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors disabled:opacity-60"
           >
             {t('cal.event.save', lang)}
           </button>

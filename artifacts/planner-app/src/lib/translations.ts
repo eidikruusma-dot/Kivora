@@ -1232,9 +1232,8 @@ export type TranslationKey =
     | "sched.field.subjectPh"
     | "sched.field.day"
     | "sched.field.dayPh"
-    | "sched.field.dayNone"
-    | "sched.field.date"
-    | "sched.field.datePh"
+    | "sched.field.startDate"
+    | "sched.field.endDate"
     | "sched.field.start"
     | "sched.field.end"
     | "sched.field.room"
@@ -1243,6 +1242,9 @@ export type TranslationKey =
     | "sched.field.teacherPh"
     | "sched.field.optional"
     | "sched.field.error.subject"
+    | "sched.field.error.startDate"
+    | "sched.field.error.endDate"
+    | "sched.field.error.dateRange"
     // ── SchoolPage status/day labels ──────────────────────────────────────────
     | "school.task.today"
     | "school.task.daysLeft"
@@ -3209,9 +3211,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "sched.field.subjectPh": "Vali aine või tegevus",
         "sched.field.day": "Nädalapäev",
         "sched.field.dayPh": "Vali päev",
-        "sched.field.dayNone": "Pole määratud",
-        "sched.field.date": "Kuupäev",
-        "sched.field.datePh": "nt. 4. august 2026",
+        "sched.field.startDate": "Alguskuupäev",
+        "sched.field.endDate": "Lõppkuupäev",
         "sched.field.start": "Algus",
         "sched.field.end": "Lõpp",
         "sched.field.room": "Ruum",
@@ -3220,6 +3221,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "sched.field.teacherPh": "nt. M. Tamm",
         "sched.field.optional": "valikuline",
         "sched.field.error.subject": "Sisesta aine või tegevuse nimi.",
+        "sched.field.error.startDate": "Sisesta alguskuupäev.",
+        "sched.field.error.endDate": "Sisesta lõppkuupäev.",
+        "sched.field.error.dateRange": "Lõppkuupäev ei saa olla enne alguskuupäeva.",
         // ── SchoolPage status/day labels
         "school.task.today": "Täna",
         "school.task.daysLeft": "{n} päeva",
@@ -5195,9 +5199,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "sched.field.subjectPh": "Select a subject or activity",
         "sched.field.day": "Day of week",
         "sched.field.dayPh": "Select day",
-        "sched.field.dayNone": "Not set",
-        "sched.field.date": "Date",
-        "sched.field.datePh": "e.g. 4 August 2026",
+        "sched.field.startDate": "Start date",
+        "sched.field.endDate": "End date",
         "sched.field.start": "Start",
         "sched.field.end": "End",
         "sched.field.room": "Room",
@@ -5206,6 +5209,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "sched.field.teacherPh": "e.g. M. Smith",
         "sched.field.optional": "optional",
         "sched.field.error.subject": "Please enter a subject or activity name.",
+        "sched.field.error.startDate": "Please enter a start date.",
+        "sched.field.error.endDate": "Please enter an end date.",
+        "sched.field.error.dateRange": "End date cannot be before the start date.",
         // ── SchoolPage status/day labels
         "school.task.today": "Today",
         "school.task.daysLeft": "{n} days",

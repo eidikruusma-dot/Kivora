@@ -44,6 +44,21 @@ export function formatDateWithWeekday(dateStr: string, lang: AppLang): string {
 }
 
 /**
+ * Formats a start/end YYYY-MM-DD pair as a localized date range, e.g.
+ * "26. august 2026 – 2. september 2026" (et) / "26 August 2026 – 2 September
+ * 2026" (en). When both dates are equal, returns a single formatted date
+ * instead of repeating it. Parses via `${dateStr}T00:00:00` (local
+ * midnight), matching formatDateWithWeekday's UTC-safe approach.
+ */
+export function formatDateRange(startISO: string, endISO: string, lang: AppLang): string {
+  const locale = lang === 'et' ? 'et-EE' : 'en-GB'
+  const fmt = (dateStr: string) =>
+    new Date(`${dateStr}T00:00:00`).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' })
+  if (startISO === endISO) return fmt(startISO)
+  return `${fmt(startISO)} – ${fmt(endISO)}`
+}
+
+/**
  * Milliseconds until the next local midnight (plus a small buffer so the
  * timer reliably fires after, not just at, the boundary). Used to schedule
  * a single one-shot refresh rather than polling.

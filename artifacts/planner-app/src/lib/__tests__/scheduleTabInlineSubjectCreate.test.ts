@@ -177,7 +177,7 @@ describe('ScheduleTab.LessonModal — "+ Add new subject" inline flow (structura
     // declaration + early-return check + input disabled + color buttons disabled + create button disabled/label(x2) + cancel disabled = 8
     expect(savingSubjectRefs).toBeLessThanOrEqual(8)
     // None of the day/date/start/end/room/teacher fields reference it
-    for (const fieldName of ['day', 'date', 'startTime', 'endTime', 'room', 'teacher']) {
+    for (const fieldName of ['day', 'startDate', 'endDate', 'startTime', 'endTime', 'room', 'teacher']) {
       const fieldBlockMatch = SCHEDULE_TAB_SRC.match(
         new RegExp(`value=\\{${fieldName}\\}[\\s\\S]{0,300}`),
       )

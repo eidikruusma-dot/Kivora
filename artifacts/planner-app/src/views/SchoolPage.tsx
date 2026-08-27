@@ -77,7 +77,7 @@ import { removeLinksForEntity } from "@/lib/entityLinksStore";
 import PostSaveLinkSuggestionsDialog from "@/components/links/PostSaveLinkSuggestionsDialog";
 import AutoLinkToast from "@/components/links/AutoLinkToast";
 import { runAutomaticLinking, type AutoLinkResult } from "@/lib/automaticLinking";
-import { getLocalDateString, getLocalWeekdayIndex, formatDateWithWeekday, msUntilNextLocalMidnight } from "@/lib/dateUtils";
+import { getLocalDateString, getLocalWeekdayIndex, formatDateWithWeekday, formatDateRange, msUntilNextLocalMidnight } from "@/lib/dateUtils";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -2337,7 +2337,9 @@ function TodaySchedule({
                 <span className="text-[11px] text-[#64748B] font-medium">
                   {lesson.startTime && lesson.endTime
                     ? `${lesson.startTime}–${lesson.endTime}`
-                    : lesson.day || lesson.date || "—"}
+                    : lesson.startDate && lesson.endDate
+                      ? formatDateRange(lesson.startDate, lesson.endDate, lang)
+                      : lesson.day || lesson.date || "—"}
                 </span>
               </div>
               <p className="text-sm font-semibold text-[#1A1F36]">

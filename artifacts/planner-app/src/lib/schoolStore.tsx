@@ -258,6 +258,8 @@ export interface SchoolLesson {
   subjectId?: string
   day?: string
   date?: string
+  startDate?: string
+  endDate?: string
   startTime?: string
   endTime?: string
   room?: string
@@ -322,6 +324,8 @@ interface StoredLesson {
   subjectId?: string
   day?: string
   date?: string
+  startDate?: string
+  endDate?: string
   startTime?: string
   endTime?: string
   room?: string
