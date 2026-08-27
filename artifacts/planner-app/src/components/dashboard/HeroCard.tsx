@@ -132,20 +132,23 @@ export default function HeroCard() {
        * approved visual reference. No divider, no side-by-side stats.
        */}
       <div className="hidden sm:block px-5 lg:px-6 py-3 lg:py-4">
-        <div className="flex items-start justify-between gap-4">
+        <div className="relative">
           {/* Greeting — the daily message wraps (no truncation) so the full
-             sentence is always shown. */}
-          <div className="min-w-0 flex-1">
+             sentence is always shown. Right padding (from md+, where the
+             illustration is visible) reserves room for it so the text can
+             never run underneath. */}
+          <div className="min-w-0 pr-20 lg:pr-28">
             <p className="text-base lg:text-lg font-bold text-[#1A1F36] leading-tight">
               {greeting}, {name} 👋
             </p>
             <p className="text-xs lg:text-sm text-[#94A3B8] mt-1 max-w-xl">{dailyMsg}</p>
           </div>
 
-          {/* Illustration — shown from md+ where there's enough width not to
-             crowd the greeting; height-driven so it stays compact instead of
-             stretching the card. */}
-          <div className="hidden md:block flex-shrink-0 h-16 lg:h-20 xl:h-24 aspect-[11/10]">
+          {/* Illustration — absolutely positioned in the upper-right so its
+             own height never contributes to the card's layout height; the
+             greeting text's height alone drives this row. Sized small
+             enough to comfortably clear the shortest realistic greeting. */}
+          <div className="hidden md:block absolute top-0 right-0 h-12 lg:h-14 xl:h-16 aspect-[11/10] pointer-events-none">
             <MountainIllustration isDark={isDark} />
           </div>
         </div>

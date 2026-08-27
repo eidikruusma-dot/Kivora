@@ -129,8 +129,9 @@ describe('HeroCard: livelier lavender banner + full motivational text + dark-mod
   it('all four statistics now sit together in one lighter inset row below the greeting', () => {
     const smBlock = HERO_SRC.match(/hidden sm:block[\s\S]*?\n {6}<\/div>\n\n {4}<\/div>/)?.[0] ?? ''
     expect(smBlock).not.toBe('')
-    // The greeting/message block and the mountain sit in one row...
-    expect(smBlock).toMatch(/flex items-start justify-between gap-4/)
+    // The greeting/message block and the (absolutely positioned) mountain
+    // share one relative-positioned wrapper...
+    expect(smBlock).toMatch(/<div className="relative">/)
     // ...and the stats grid is a separate, visually lighter block underneath, not inline with the greeting.
     const statsRowMatch = smBlock.match(/<div\s*\n\s*className="bg-white rounded-xl[\s\S]*?<\/div>\s*\n\s*<\/div>/)
     expect(statsRowMatch).not.toBeNull()
@@ -142,9 +143,11 @@ describe('HeroCard: livelier lavender banner + full motivational text + dark-mod
     expect(HERO_SRC).toMatch(/className="bg-white rounded-xl px-4 py-3 mt-3 grid grid-cols-2 md:grid-cols-4/)
   })
 
-  it('the mountain illustration is visible from md (tablet) rather than only lg (desktop), and height-driven so it stays compact', () => {
+  it('the mountain illustration is absolutely positioned in the upper-right so its height cannot affect the card layout height', () => {
     expect(HERO_SRC).not.toMatch(/hidden lg:block/)
-    expect(HERO_SRC).toMatch(/hidden md:block flex-shrink-0 h-16 lg:h-20 xl:h-24 aspect-\[11\/10\]/)
+    expect(HERO_SRC).toMatch(/hidden md:block absolute top-0 right-0 h-12 lg:h-14 xl:h-16 aspect-\[11\/10\] pointer-events-none/)
+    // It must no longer be a sibling flex item of the greeting (which would let its height affect row height).
+    expect(HERO_SRC).not.toMatch(/flex items-start justify-between gap-4/)
   })
 
   it('the desktop/tablet section has no oversized vertical padding or explicit min-height causing an empty gap', () => {
@@ -154,7 +157,11 @@ describe('HeroCard: livelier lavender banner + full motivational text + dark-mod
     expect(HERO_SRC).not.toMatch(/flex-grow|flex-1.*MountainIllustration|grow\b/)
   })
 
-  it('the mountain sits beside the greeting, not overlapping the stats row (separate flex row vs. separate block)', () => {
+  it('the greeting text reserves right padding so it cannot overlap the absolutely positioned mountain', () => {
+    expect(HERO_SRC).toMatch(/<div className="min-w-0 pr-20 lg:pr-28">/)
+  })
+
+  it('the mountain sits after the greeting in source order and before the stats row (still visually upper-right, above the stats)', () => {
     const illustrationIdx = HERO_SRC.indexOf('<MountainIllustration isDark={isDark} />')
     const statsRowIdx = HERO_SRC.indexOf('grid grid-cols-2 md:grid-cols-4')
     expect(illustrationIdx).toBeGreaterThan(-1)
