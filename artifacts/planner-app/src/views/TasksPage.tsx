@@ -8,7 +8,7 @@ import { getTaskCategories } from '@/lib/taskCategories'
 import AddTaskModal from '@/components/tasks/AddTaskModal'
 import PostSaveLinkSuggestionsDialog from '@/components/links/PostSaveLinkSuggestionsDialog'
 import AutoLinkToast from '@/components/links/AutoLinkToast'
-import { runAutomaticLinking, type AutoLinkResult } from '@/lib/automaticLinking'
+import { runAutomaticLinking, syncTaskCalendarEvent, type AutoLinkResult } from '@/lib/automaticLinking'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { useIsDark } from '@/lib/themeColors'
@@ -70,14 +70,19 @@ export default function TasksPage() {
     const result = await runAutomaticLinking('task', task.id, lang, {
       title: task.title,
       date: task.date,
+      time: task.time,
       description: task.description,
       category: task.category,
     })
     if (result.linkIds.length > 0) setAutoLink(result)
     setPostSave({ type: 'task', id: task.id })
   }
-  const handleEditTask = (task: Task) => {
-    storeUpdateTask(task)
+  const handleEditTask = async (task: Task) => {
+    await storeUpdateTask(task)
+    // Keep the task's auto-created calendar event (if any) in sync — same
+    // event, no duplicate; converts between timed/all-day as the task's own
+    // time comes and goes. No-ops for tasks with no such event.
+    await syncTaskCalendarEvent(task)
     toast.success(lang === 'et' ? 'Ülesanne uuendatud' : 'Task updated')
     setEditingTask(undefined)
   }

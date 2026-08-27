@@ -31,6 +31,13 @@ function toMinutes(time: string): number {
   return h * 60 + m
 }
 
+// All-day events carry no meaningful startTime (never a fake 00:00–23:59
+// block) — sort them first, ahead of every timed event, instead of feeding
+// an empty string into toMinutes().
+function sortMinutes(evt: MockCalendarEvent): number {
+  return evt.allDay ? -1 : toMinutes(evt.startTime)
+}
+
 export default function DayPreview({
   selectedDate,
   events,
@@ -42,7 +49,7 @@ export default function DayPreview({
 
   const dayEvents = [...events]
     .filter((evt) => evt.date === dateKey(selectedDate))
-    .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime))
+    .sort((a, b) => sortMinutes(a) - sortMinutes(b))
 
   return (
     <div className="mt-4 p-3 rounded-lg border border-[#ECECF2] bg-[#FAFAFB]">
