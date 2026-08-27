@@ -30,6 +30,7 @@ import { ensureUserProfile } from '@/lib/userProfile'
 import { initTasksStore } from '@/lib/tasksStore'
 import { initGoalsStore } from '@/lib/goalsStore'
 import { initCalendarStore } from '@/lib/calendarStore'
+import { initUserCalendarsStore } from '@/lib/userCalendarsStore'
 import { initNotesStore } from '@/lib/quickNotesStore'
 import { initAIConversationsStore } from '@/lib/aiConversationsStore'
 import { initSchoolStore } from '@/lib/schoolStore'
@@ -97,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       initTasksStore(uid)
       initGoalsStore(uid)
       initCalendarStore(uid)
+      initUserCalendarsStore(uid)
       initNotesStore(uid)
       initAIConversationsStore(uid)
       initSchoolStore(uid)

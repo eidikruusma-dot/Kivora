@@ -13,9 +13,11 @@ import MiniCalendar from '@/components/calendar/MiniCalendar'
 import MyCalendars from '@/components/calendar/MyCalendars'
 import DayPreview from '@/components/calendar/DayPreview'
 import NewEventModal from '@/components/calendar/NewEventModal'
+import NewCalendarModal from '@/components/calendar/NewCalendarModal'
 import EventDetailsModal from '@/components/calendar/EventDetailsModal'
 import { startOfWeek, addWeeks, addDays, addMonths } from '@/lib/calendar/dateUtils'
 import { useCalendarEvents, addCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '@/lib/calendarStore'
+import { useUserCalendars, addUserCalendar, type UserCalendar } from '@/lib/userCalendarsStore'
 import { removeLinksForEntity } from '@/lib/entityLinksStore'
 import PostSaveLinkSuggestionsDialog from '@/components/links/PostSaveLinkSuggestionsDialog'
 import AutoLinkToast from '@/components/links/AutoLinkToast'
@@ -45,12 +47,15 @@ export default function CalendarPage() {
     return () => { cancelled = true }
   }, [user])
 
+  const userCalendars = useUserCalendars()
+
   const CALENDARS = [
     { id: 'mine',     label: t('cal.mine',     lang), color: '#6F5AE8' },
     { id: 'school',   label: t('cal.school',   lang), color: '#3B82F6' },
     { id: 'work',     label: t('cal.work',     lang), color: '#F59E0B' },
     { id: 'family',   label: t('cal.family',   lang), color: '#10B981' },
     { id: 'training', label: t('cal.training', lang), color: '#EC4899' },
+    ...userCalendars,
   ]
 
   const [currentDate, setCurrentDate] = useState<Date>(new Date())
@@ -61,9 +66,21 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const events = useCalendarEvents()
   const [eventModalOpen, setEventModalOpen] = useState(false)
+  const [calendarModalOpen, setCalendarModalOpen] = useState(false)
   const [visibleCalendars, setVisibleCalendars] = useState<Record<string, boolean>>(
     () => Object.fromEntries(CALENDARS.map((c) => [c.id, true])),
   )
+
+  // New calendars (loaded from Firestore on mount, or created via "Uus
+  // kalender") default to visible, without resetting the toggle state of
+  // calendars already known.
+  useEffect(() => {
+    setVisibleCalendars((prev) => {
+      const missing = userCalendars.filter((c) => !(c.id in prev))
+      if (missing.length === 0) return prev
+      return { ...prev, ...Object.fromEntries(missing.map((c) => [c.id, true])) }
+    })
+  }, [userCalendars])
 
   // Detail + edit state
   const [detailEvent, setDetailEvent] = useState<MockCalendarEvent | null>(null)
@@ -128,7 +145,11 @@ export default function CalendarPage() {
   }, [])
 
   const handleNewCalendar = useCallback(() => {
-    // Future feature: open calendar creation modal
+    setCalendarModalOpen(true)
+  }, [])
+
+  const handleSaveCalendar = useCallback((calendar: UserCalendar) => {
+    addUserCalendar(calendar)
   }, [])
 
   // Add new event
@@ -285,6 +306,13 @@ export default function CalendarPage() {
         onSave={handleUpdateEvent}
         calendars={CALENDARS}
         initialEvent={editingEvent ?? undefined}
+      />
+
+      {/* Create new calendar modal */}
+      <NewCalendarModal
+        open={calendarModalOpen}
+        onClose={() => setCalendarModalOpen(false)}
+        onSave={handleSaveCalendar}
       />
 
       {/* Event details modal */}

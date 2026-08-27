@@ -633,6 +633,11 @@ export type TranslationKey =
     | "cal.recur.weekly"
     | "cal.recur.monthly"
     | "cal.recur.yearly"
+    | "cal.calendarModal.addTitle"
+    | "cal.calendarModal.name"
+    | "cal.calendarModal.namePlaceholder"
+    | "cal.calendarModal.color"
+    | "cal.calendarModal.error.name"
     // ── Notifications page ────────────────────────────────────────────────────
     | "notif.title"
     | "notif.unread"
@@ -2465,6 +2470,11 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "cal.recur.weekly": "Iga nädal",
         "cal.recur.monthly": "Iga kuu",
         "cal.recur.yearly": "Iga aasta",
+        "cal.calendarModal.addTitle": "Uus kalender",
+        "cal.calendarModal.name": "Nimi",
+        "cal.calendarModal.namePlaceholder": "Kalendri nimi",
+        "cal.calendarModal.color": "Värv",
+        "cal.calendarModal.error.name": "Nimi on kohustuslik.",
         // notifications page
         "notif.title": "Teavitused",
         "notif.unread": "{n} lugemata teavitust",
@@ -4463,6 +4473,11 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "cal.recur.weekly": "Every week",
         "cal.recur.monthly": "Every month",
         "cal.recur.yearly": "Every year",
+        "cal.calendarModal.addTitle": "New calendar",
+        "cal.calendarModal.name": "Name",
+        "cal.calendarModal.namePlaceholder": "Calendar name",
+        "cal.calendarModal.color": "Color",
+        "cal.calendarModal.error.name": "Name is required.",
         // notifications page
         "notif.title": "Notifications",
         "notif.unread": "{n} unread notifications",
