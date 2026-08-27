@@ -186,6 +186,18 @@ export default function GoalsPage() {
     if (goal) setDetailGoal(goal)
   }, [location.key]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Deep-link: open the create-goal form when navigated here with an
+  // explicit signal (e.g. the "Minu päev" dashboard's empty-state CTA).
+  // The signal is consumed once and cleared from history state so a
+  // refresh, Back navigation, or later normal navigation to this page
+  // never reopens the modal on its own.
+  useEffect(() => {
+    const openCreate = (location.state as { openCreate?: boolean } | null)?.openCreate
+    if (!openCreate) return
+    window.history.replaceState({ ...(window.history.state ?? {}), usr: null }, '')
+    openCreateModal()
+  }, [location.key]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!menuOpenId) return
     const handler = (e: MouseEvent) => {
@@ -234,6 +246,12 @@ export default function GoalsPage() {
       if (!updated) setDetailGoal(null)
     }
   }, [goals, detailGoal])
+
+  const openCreateModal = () => {
+    setForm(emptyForm)
+    setFormError('')
+    setShowAddModal(true)
+  }
 
   const handleAddGoal = async () => {
     if (!form.title.trim()) {
@@ -338,7 +356,7 @@ export default function GoalsPage() {
           </div>
           <button
             className="flex items-center gap-2 px-4 py-2.5 bg-[#6F5AE8] text-white rounded-xl text-sm font-medium hover:bg-[#5B48D8] transition-colors shadow-sm"
-            onClick={() => { setForm(emptyForm); setFormError(''); setShowAddModal(true) }}
+            onClick={openCreateModal}
           >
             <Plus size={16} strokeWidth={2.5} />
             {t('goals.add', lang)}

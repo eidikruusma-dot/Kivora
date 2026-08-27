@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, CalendarPlus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Card from '@/components/ui/AppCard'
-import { useCalendarEvents, updateCalendarEvent, deleteCalendarEvent } from '@/lib/calendarStore'
+import { useCalendarEvents, addCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '@/lib/calendarStore'
 import { getEventsForDate } from '@/lib/calendar/eventLayout'
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
 import EventDetailsModal from '@/components/calendar/EventDetailsModal'
@@ -33,6 +33,7 @@ export default function CalendarWidget() {
 
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [editingEvent, setEditingEvent] = useState<MockCalendarEvent | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
 
   // Derive the live event from the store so edits are always fresh
   const selectedEvent = selectedEventId
@@ -54,6 +55,11 @@ export default function CalendarWidget() {
     setEditingEvent(null)
   }
 
+  const handleAddEvent = (event: MockCalendarEvent) => {
+    addCalendarEvent(event)
+    setAddOpen(false)
+  }
+
   return (
     <>
       <Card className="h-full flex flex-col">
@@ -69,7 +75,18 @@ export default function CalendarWidget() {
 
         <div className="flex-1 px-5 space-y-1 overflow-y-auto scrollbar-thin pb-3">
           {todayEvents.length === 0 ? (
-            <p className="text-xs text-[#94A3B8] py-4 text-center">{t('dash.calendar.empty', lang)}</p>
+            <div className="flex flex-col items-center justify-center py-5 text-center gap-2.5">
+              <div className="w-12 h-12 rounded-full bg-[#EFF6FF] flex items-center justify-center">
+                <CalendarPlus size={22} className="text-[#3B82F6]" />
+              </div>
+              <p className="text-xs text-[#94A3B8] max-w-[220px]">{t('dash.calendar.empty', lang)}</p>
+              <button
+                onClick={() => setAddOpen(true)}
+                className="min-h-[44px] px-4 flex items-center justify-center rounded-xl bg-[#EFF6FF] text-[#3B82F6] text-xs font-semibold hover:opacity-80 transition-opacity"
+              >
+                {t('dash.calendar.emptyCta', lang)}
+              </button>
+            </div>
           ) : (
             todayEvents.map((event) => (
               <div
@@ -107,6 +124,15 @@ export default function CalendarWidget() {
         onSave={handleUpdateSave}
         calendars={CALENDARS}
         initialEvent={editingEvent ?? undefined}
+      />
+
+      {/* Add event (from empty state) */}
+      <NewEventModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onSave={handleAddEvent}
+        calendars={CALENDARS}
+        defaultDate={new Date()}
       />
     </>
   )

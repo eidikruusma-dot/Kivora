@@ -14,9 +14,9 @@ export default function QuickActionsWidget() {
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
 
   const actions = [
-    { icon: CheckSquare, labelKey: 'dash.action.newTask'  as const, to: '/app/tasks'    },
-    { icon: Calendar,    labelKey: 'dash.action.newEvent' as const, to: '/app/calendar' },
-    { icon: StickyNote,  labelKey: 'dash.action.quickNote' as const, to: '/app/notes'  },
+    { icon: CheckSquare, labelKey: 'dash.action.newTask'   as const, to: '/app/tasks',    iconBg: 'bg-[#EDE9FB]', iconColor: 'text-[#6F5AE8]' },
+    { icon: Calendar,    labelKey: 'dash.action.newEvent'  as const, to: '/app/calendar', iconBg: 'bg-[#EFF6FF]', iconColor: 'text-[#3B82F6]' },
+    { icon: StickyNote,  labelKey: 'dash.action.quickNote' as const, to: '/app/notes',    iconBg: 'bg-[#FFEDD5]', iconColor: 'text-[#F97316]' },
   ]
 
   return (
@@ -25,13 +25,15 @@ export default function QuickActionsWidget() {
         <h2 className="text-sm font-bold text-[#1A1F36]">{t('dash.actions.title', lang)}</h2>
       </div>
       <div className="flex-1 px-4 pb-4 grid grid-cols-2 gap-2.5 content-center">
-        {actions.map(({ icon: Icon, labelKey, to }) => (
+        {actions.map(({ icon: Icon, labelKey, to, iconBg, iconColor }) => (
           <button
             key={labelKey}
             onClick={() => navigate(to)}
             className="flex items-center gap-2.5 px-3.5 h-[52px] rounded-xl bg-[#F8F7F4] hover:bg-[#EDE9FB] transition-colors text-left"
           >
-            <Icon size={18} className="text-[#6F5AE8] flex-shrink-0" />
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+              <Icon size={16} className={iconColor} />
+            </div>
             <span className="text-sm font-medium text-[#1A1F36] truncate">{t(labelKey, lang)}</span>
           </button>
         ))}
@@ -39,7 +41,9 @@ export default function QuickActionsWidget() {
           onClick={openModal}
           className="flex items-center gap-2.5 px-3.5 h-[52px] rounded-xl bg-[#F8F7F4] hover:bg-[#EDE9FB] transition-colors text-left"
         >
-          <Timer size={18} className="text-[#6F5AE8] flex-shrink-0" />
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[#DCFCE7]">
+            <Timer size={16} className="text-[#16A34A]" />
+          </div>
           <span className="text-sm font-medium text-[#1A1F36] truncate">{t('dash.action.timer', lang)}</span>
         </button>
       </div>

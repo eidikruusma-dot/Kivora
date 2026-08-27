@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Check, ArrowRight } from 'lucide-react'
+import { Check, ArrowRight, Repeat } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Card from '@/components/ui/AppCard'
 import ProgressRing from '@/components/ui/ProgressRing'
@@ -79,7 +79,18 @@ export default function HabitsWidget() {
             )
           })}
           {activeHabits.length === 0 && (
-            <p className="text-xs text-[#94A3B8] py-4 text-center">{t('dash.habits.empty', lang)}</p>
+            <div className="flex flex-col items-center justify-center py-5 text-center gap-2.5">
+              <div className="w-12 h-12 rounded-full bg-[#DCFCE7] flex items-center justify-center">
+                <Repeat size={22} className="text-[#16A34A]" />
+              </div>
+              <p className="text-xs text-[#94A3B8] max-w-[220px]">{t('dash.habits.empty', lang)}</p>
+              <button
+                onClick={() => navigate('/app/habits', { state: { openCreate: true } })}
+                className="min-h-[44px] px-4 flex items-center justify-center rounded-xl bg-[#DCFCE7] text-[#16A34A] text-xs font-semibold hover:opacity-80 transition-opacity"
+              >
+                {t('dash.habits.emptyCta', lang)}
+              </button>
+            </div>
           )}
         </div>
         {/* Progress ring */}

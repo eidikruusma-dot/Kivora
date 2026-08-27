@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, ArrowRight } from 'lucide-react'
+import { Plus, ArrowRight, Lightbulb } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Card from '@/components/ui/AppCard'
 import {
@@ -77,9 +77,15 @@ export default function QuickNoteWidget() {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-[#94A3B8] leading-relaxed italic">
-            {t('dash.notes.emptyHint', lang)}
-          </p>
+          <div className="flex flex-col items-center text-center gap-2 py-2">
+            <div className="w-10 h-10 rounded-full bg-[#FFEDD5] flex items-center justify-center">
+              <Lightbulb size={18} className="text-[#F97316]" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[#1A1F36]">{t('dash.notes.emptyTitle', lang)}</p>
+              <p className="text-xs text-[#94A3B8] mt-0.5">{t('dash.notes.emptyHint', lang)}</p>
+            </div>
+          </div>
         )}
       </div>
     </Card>

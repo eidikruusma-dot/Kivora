@@ -11,14 +11,15 @@ import { useGoals } from '@/lib/goalsStore'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
+import { useIsDark, tc } from '@/lib/themeColors'
 
-function MountainIllustration() {
+function MountainIllustration({ isDark }: { isDark: boolean }) {
   return (
     <svg viewBox="0 0 220 200" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
       <defs>
         <linearGradient id="skyG" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#EDE9FB" />
-          <stop offset="100%" stopColor="#F5F3FF" />
+          <stop offset="0%" stopColor={isDark ? '#1E1B2E' : '#EDE9FB'} />
+          <stop offset="100%" stopColor={isDark ? '#151329' : '#F5F3FF'} />
         </linearGradient>
       </defs>
       <rect width="220" height="200" fill="url(#skyG)" />
@@ -46,6 +47,7 @@ export default function HeroCard() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
+  const isDark = useIsDark()
 
   const allTasks      = useTasks()
   const allEvents     = useCalendarEvents()
@@ -103,7 +105,7 @@ export default function HeroCard() {
   )
 
   return (
-    <div className="bg-white rounded-2xl overflow-hidden">
+    <div className="bg-[#F4F2FF] rounded-2xl overflow-hidden">
 
       {/*
        * ── PORTRAIT (< sm = 640 px) ──────────────────────────────────────────
@@ -115,7 +117,7 @@ export default function HeroCard() {
           <p className="text-base font-bold text-[#1A1F36] leading-tight truncate">
             {greeting}, {name} 👋
           </p>
-          <p className="text-xs text-[#94A3B8] mt-0.5 line-clamp-2">{dailyMsg}</p>
+          <p className="text-xs text-[#94A3B8] mt-0.5">{dailyMsg}</p>
         </div>
         <div className="grid grid-cols-2 gap-2">
           {stats.map((s) => <StatButton key={s.label} {...s} compact />)}
@@ -124,36 +126,38 @@ export default function HeroCard() {
 
       {/*
        * ── LANDSCAPE PHONE + TABLET + DESKTOP (sm+) ─────────────────────────
-       * Greeting left | divider | stats row (2-col on sm–md, 4-col on md+).
-       * Illustration visible only on desktop (lg+) where there is enough room.
+       * Greeting + full motivational text top-left, mountain illustration
+       * top-right (from md, once there's room), and all four statistics
+       * together in one lighter inset row underneath — matching the
+       * approved visual reference. No divider, no side-by-side stats.
        */}
-      <div className="hidden sm:flex items-center overflow-hidden" style={{ minHeight: '120px' }}>
-        <div className="flex-1 min-w-0 flex items-center gap-4 lg:gap-6 px-5 lg:px-6 py-4">
-          {/* Greeting — constrained so it doesn't crowd the stats */}
-          <div className="flex-shrink-0 min-w-0" style={{ maxWidth: 'min(38%, 220px)' }}>
-            <p className="text-base lg:text-lg font-bold text-[#1A1F36] leading-tight truncate">
+      <div className="hidden sm:block px-5 lg:px-6 py-4 lg:py-5">
+        <div className="flex items-start justify-between gap-4">
+          {/* Greeting — the daily message wraps (no truncation) so the full
+             sentence is always shown. */}
+          <div className="min-w-0 flex-1">
+            <p className="text-base lg:text-lg font-bold text-[#1A1F36] leading-tight">
               {greeting}, {name} 👋
             </p>
-            <p className="text-xs text-[#94A3B8] mt-1 truncate">{dailyMsg}</p>
+            <p className="text-xs lg:text-sm text-[#94A3B8] mt-1 max-w-xl">{dailyMsg}</p>
           </div>
 
-          {/* Divider */}
-          <div className="h-10 w-px bg-[#F0F0F0] flex-shrink-0" />
-
-          {/*
-           * Stats grid:
-           *   sm–md  (640–767 px)  → 2 columns (landscape phone)
-           *   md+    (768 px+)     → 4 columns (tablet / desktop)
-           * flex-1 + min-w-0 prevents overflow beyond the card.
-           */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-5 flex-1 min-w-0">
-            {stats.map((s) => <StatButton key={s.label} {...s} />)}
+          {/* Illustration — shown from md+ where there's enough width not to
+             crowd the greeting; sized for real visual weight, not a sliver. */}
+          <div className="hidden md:block flex-shrink-0 w-36 lg:w-44 xl:w-52 aspect-[11/10]">
+            <MountainIllustration isDark={isDark} />
           </div>
         </div>
 
-        {/* Illustration — only where there is plenty of horizontal space */}
-        <div className="w-32 flex-shrink-0 hidden lg:block">
-          <MountainIllustration />
+        {/* Stats — lighter inset row below the greeting.
+         *   sm–md  (640–767 px)  → 2 columns (landscape phone)
+         *   md+    (768 px+)     → 4 columns (tablet / desktop)
+         */}
+        <div
+          className="bg-white rounded-xl px-4 py-3 mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-5"
+          style={{ boxShadow: tc('0 1px 3px rgba(17, 12, 46, 0.06)', 'none', isDark) }}
+        >
+          {stats.map((s) => <StatButton key={s.label} {...s} />)}
         </div>
       </div>
 

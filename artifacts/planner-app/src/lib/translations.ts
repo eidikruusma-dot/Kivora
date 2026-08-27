@@ -1364,6 +1364,7 @@ export type TranslationKey =
     | "dash.habits.empty"
     | "dash.notes.placeholder"
     | "dash.notes.recentLabel"
+    | "dash.notes.emptyTitle"
     | "dash.notes.emptyHint"
     | "dash.goals.empty"
     | "dash.goals.deadline"
@@ -1374,6 +1375,10 @@ export type TranslationKey =
     | "dash.action.newEvent"
     | "dash.action.quickNote"
     | "dash.action.timer"
+    | "dash.tasks.emptyCta"
+    | "dash.calendar.emptyCta"
+    | "dash.habits.emptyCta"
+    | "dash.goals.emptyCta"
     | "dash.goal.progress"
     | "dash.goal.steps"
     | "dash.goal.fieldName"
@@ -3025,13 +3030,14 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "dash.viewAll": "Vaata kõiki",
         "dash.viewCalendar": "Vaata kalendrit",
         "dash.viewNotes": "Vaata märkmeid",
-        "dash.tasks.empty": "Täna pole ülesandeid.",
-        "dash.calendar.empty": "Tänased sündmused puuduvad",
-        "dash.habits.empty": "Aktiivseid harjumusi pole.",
+        "dash.tasks.empty": "Täna pole veel ühtegi ülesannet — alusta millestki lihtsast!",
+        "dash.calendar.empty": "Täna pole veel sündmusi — sinu päev on vaba!",
+        "dash.habits.empty": "Sul pole veel harjumusi — hea hetk üks luua!",
         "dash.notes.placeholder": "Kirjuta kiire märge...",
         "dash.notes.recentLabel": "Viimased märkmed",
-        "dash.notes.emptyHint": "Siia ilmuvad sinu viimased kiired märkmed.",
-        "dash.goals.empty": "Eesmärke pole veel lisatud",
+        "dash.notes.emptyTitle": "Pane oma mõte kirja",
+        "dash.notes.emptyHint": "Siia kogunevad sinu kiired märkmed.",
+        "dash.goals.empty": "Sul pole veel eesmärke — unistused väärivad plaani!",
         "dash.goals.deadline": "Tähtaeg",
         "dash.habits.done": "Täidetud",
         "dash.habits.markDone": "Märgi täidetuks",
@@ -3040,6 +3046,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "dash.action.newEvent": "Uus sündmus",
         "dash.action.quickNote": "Kiire märge",
         "dash.action.timer": "Alusta taimerit",
+        "dash.tasks.emptyCta": "+ Lisa ülesanne",
+        "dash.calendar.emptyCta": "+ Lisa sündmus",
+        "dash.habits.emptyCta": "+ Loo harjumus",
+        "dash.goals.emptyCta": "+ Sea eesmärk",
         "dash.goal.progress": "Edenemine",
         "dash.goal.steps": "Sammud",
         "dash.goal.fieldName": "Nimi",
@@ -5010,13 +5020,14 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "dash.viewAll": "View all",
         "dash.viewCalendar": "View calendar",
         "dash.viewNotes": "View notes",
-        "dash.tasks.empty": "No tasks today.",
-        "dash.calendar.empty": "No events today",
-        "dash.habits.empty": "No active habits.",
+        "dash.tasks.empty": "No tasks yet today — start with something simple!",
+        "dash.calendar.empty": "No events yet today — your day is wide open!",
+        "dash.habits.empty": "No habits yet — a great moment to create one!",
         "dash.notes.placeholder": "Write a quick note...",
         "dash.notes.recentLabel": "Recent notes",
-        "dash.notes.emptyHint": "Your latest quick notes will appear here.",
-        "dash.goals.empty": "No goals added yet",
+        "dash.notes.emptyTitle": "Jot down a quick thought",
+        "dash.notes.emptyHint": "Your quick notes will appear here.",
+        "dash.goals.empty": "No goals yet — dreams deserve a plan!",
         "dash.goals.deadline": "Deadline",
         "dash.habits.done": "Done",
         "dash.habits.markDone": "Mark as done",
@@ -5025,6 +5036,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "dash.action.newEvent": "New event",
         "dash.action.quickNote": "Quick note",
         "dash.action.timer": "Start timer",
+        "dash.tasks.emptyCta": "+ Add task",
+        "dash.calendar.emptyCta": "+ Add event",
+        "dash.habits.emptyCta": "+ Create habit",
+        "dash.goals.emptyCta": "+ Set goal",
         "dash.goal.progress": "Progress",
         "dash.goal.steps": "Steps",
         "dash.goal.fieldName": "Name",

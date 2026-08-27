@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowRight, Target, Star } from 'lucide-react'
+import { ArrowRight, Target, Star, Flag } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Card from '@/components/ui/AppCard'
 import ProgressBar from '@/components/ui/ProgressBar'
@@ -8,6 +8,7 @@ import GoalDetailModal from '@/components/dashboard/GoalDetailModal'
 import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
+import { useIsDark } from '@/lib/themeColors'
 
 const goalIcons = [Target, Star]
 const goalColors = ['#6F5AE8', '#F97316']
@@ -17,6 +18,7 @@ export default function GoalsWidget() {
   const goals = useGoals()
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null)
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
+  const isDark = useIsDark()
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
 
   return (
@@ -45,7 +47,7 @@ export default function GoalsWidget() {
                 <div className="flex items-center gap-2.5 mb-1.5">
                   <div
                     className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: `${color}15` }}
+                    style={{ backgroundColor: `${color}${isDark ? '30' : '15'}` }}
                   >
                     <Icon size={14} style={{ color }} />
                   </div>
@@ -65,8 +67,17 @@ export default function GoalsWidget() {
             )
           })}
           {goals.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <p className="text-xs text-[#94A3B8]">{t('dash.goals.empty', lang)}</p>
+            <div className="flex flex-col items-center justify-center py-5 text-center gap-2.5">
+              <div className="w-12 h-12 rounded-full bg-[#EDE9FB] flex items-center justify-center">
+                <Flag size={22} className="text-[#6F5AE8]" />
+              </div>
+              <p className="text-xs text-[#94A3B8] max-w-[220px]">{t('dash.goals.empty', lang)}</p>
+              <button
+                onClick={() => navigate('/app/goals', { state: { openCreate: true } })}
+                className="min-h-[44px] px-4 flex items-center justify-center rounded-xl bg-[#EDE9FB] text-[#6F5AE8] text-xs font-semibold hover:opacity-80 transition-opacity"
+              >
+                {t('dash.goals.emptyCta', lang)}
+              </button>
             </div>
           )}
         </div>

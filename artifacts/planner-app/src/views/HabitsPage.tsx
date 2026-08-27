@@ -194,6 +194,18 @@ export default function HabitsPage() {
     setTimeout(() => setHighlightId(null), 2500);
   }, [location.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Deep-link: open the create-habit form when navigated here with an
+  // explicit signal (e.g. the "Minu päev" dashboard's empty-state CTA).
+  // The signal is consumed once and cleared from history state so a
+  // refresh, Back navigation, or later normal navigation to this page
+  // never reopens the modal on its own.
+  useEffect(() => {
+    const openCreate = (location.state as { openCreate?: boolean } | null)?.openCreate;
+    if (!openCreate) return;
+    window.history.replaceState({ ...(window.history.state ?? {}), usr: null }, "");
+    openCreateModal();
+  }, [location.key]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     return subscribeHabits(() => {
       setHabits(getAllHabits());

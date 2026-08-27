@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, ListChecks } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Card from '@/components/ui/AppCard'
-import { useTasks, toggleTask } from '@/lib/tasksStore'
+import { useTasks, toggleTask, addTask } from '@/lib/tasksStore'
 import TaskDetailModal from '@/components/dashboard/TaskDetailModal'
-import type { Priority } from '@/types'
+import AddTaskModal from '@/components/tasks/AddTaskModal'
+import type { Priority, Task } from '@/types'
 import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
@@ -22,8 +23,14 @@ export default function TasksWidget() {
   const todayTasks = allTasks.filter((t) => !t.date || t.date === todayStr)
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
+
+  const handleAddTask = async (task: Task) => {
+    await addTask(task)
+    setAddOpen(false)
+  }
 
   return (
     <>
@@ -84,7 +91,18 @@ export default function TasksWidget() {
           ))}
 
           {todayTasks.length === 0 && (
-            <p className="text-xs text-[#94A3B8] py-4 text-center">{t('dash.tasks.empty', lang)}</p>
+            <div className="flex flex-col items-center justify-center py-5 text-center gap-2.5">
+              <div className="w-12 h-12 rounded-full bg-[#EDE9FB] flex items-center justify-center">
+                <ListChecks size={22} className="text-[#6F5AE8]" />
+              </div>
+              <p className="text-xs text-[#94A3B8] max-w-[220px]">{t('dash.tasks.empty', lang)}</p>
+              <button
+                onClick={() => setAddOpen(true)}
+                className="min-h-[44px] px-4 flex items-center justify-center rounded-xl bg-[#EDE9FB] text-[#6F5AE8] text-xs font-semibold hover:opacity-80 transition-opacity"
+              >
+                {t('dash.tasks.emptyCta', lang)}
+              </button>
+            </div>
           )}
         </div>
       </Card>
@@ -93,6 +111,8 @@ export default function TasksWidget() {
         taskId={selectedTaskId}
         onClose={() => setSelectedTaskId(null)}
       />
+
+      <AddTaskModal open={addOpen} onClose={() => setAddOpen(false)} onSave={handleAddTask} lang={lang} />
     </>
   )
 }
