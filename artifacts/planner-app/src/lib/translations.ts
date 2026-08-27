@@ -327,6 +327,10 @@ export type TranslationKey =
     | "tasks.ai.body"
     | "tasks.action.edit"
     | "tasks.action.delete"
+    | "tasks.deleteConfirm.title"
+    | "tasks.deleteConfirm.body"
+    | "tasks.deleteConfirm.confirm"
+    | "tasks.deleteConfirm.cancel"
     // ── Task modal ────────────────────────────────────────────────────────────
     | "taskModal.addTitle"
     | "taskModal.editTitle"
@@ -2144,6 +2148,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
             "Sul on täna 1 kõrge prioriteediga ülesanne ja 2 tänase tähtajaga ülesannet. Soovitan alustada projektiraportist.",
         "tasks.action.edit": "Muuda",
         "tasks.action.delete": "Kustuta",
+        "tasks.deleteConfirm.title": "Kustuta ülesanne?",
+        "tasks.deleteConfirm.body": "Seda toimingut ei saa tagasi võtta.",
+        "tasks.deleteConfirm.confirm": "Kustuta",
+        "tasks.deleteConfirm.cancel": "Tühista",
         // task modal
         "taskModal.addTitle": "Lisa ülesanne",
         "taskModal.editTitle": "Muuda ülesannet",
@@ -4139,6 +4147,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
             "You have 1 high-priority task and 2 tasks due today. I suggest starting with the project report.",
         "tasks.action.edit": "Edit",
         "tasks.action.delete": "Delete",
+        "tasks.deleteConfirm.title": "Delete task?",
+        "tasks.deleteConfirm.body": "This action cannot be undone.",
+        "tasks.deleteConfirm.confirm": "Delete",
+        "tasks.deleteConfirm.cancel": "Cancel",
         // task modal
         "taskModal.addTitle": "Add task",
         "taskModal.editTitle": "Edit task",

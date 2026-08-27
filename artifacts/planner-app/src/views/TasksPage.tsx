@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Sparkles, Pencil, Loader2, Plus, CheckSquare, Calendar } from 'lucide-react'
+import { Sparkles, Pencil, Loader2, Plus, CheckSquare, Calendar, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTasks, useTasksLoading, addTask, updateTask as storeUpdateTask, toggleTask as storeToggleTask, deleteTask as storeDeleteTask } from '@/lib/tasksStore'
 import type { Task, Priority, TaskCategory } from '@/types'
@@ -34,6 +34,8 @@ export default function TasksPage() {
   const [postSave, setPostSave] = useState<{ type: 'task'; id: string } | null>(null)
   const [autoLink, setAutoLink] = useState<AutoLinkResult | null>(null)
   const [flashId, setFlashId] = useState<string | null>(null)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const location = useLocation()
 
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
@@ -42,6 +44,7 @@ export default function TasksPage() {
     setFilter('all')
     setModalOpen(false)
     setEditingTask(undefined)
+    setDeleteId(null)
   }, [location.key])
 
   // Deep-link: open specific task navigated from a linked items panel
@@ -70,6 +73,20 @@ export default function TasksPage() {
       toast.success(lang === 'et' ? 'Ülesanne kustutatud' : 'Task deleted')
     } catch {
       toast.error(lang === 'et' ? 'Ülesande kustutamine ebaõnnestus' : 'Failed to delete task')
+    }
+  }
+
+  // Confirmation dialog: the trash icon only opens it (setDeleteId); the
+  // dialog's own Confirm button is the sole caller of deleteTask, guarded
+  // against a second click while the first delete is still in flight.
+  const handleConfirmDelete = async () => {
+    if (!deleteId || deleting) return
+    setDeleting(true)
+    try {
+      await deleteTask(deleteId)
+    } finally {
+      setDeleting(false)
+      setDeleteId(null)
     }
   }
 
@@ -275,7 +292,7 @@ export default function TasksPage() {
                       </button>
 
                       <button
-                        onClick={() => deleteTask(task.id)}
+                        onClick={() => setDeleteId(task.id)}
                         aria-label={t('tasks.action.delete', lang)}
                         className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:text-red-500 hover:bg-red-50 transition-colors sm:opacity-0 sm:group-hover:opacity-100"
                       >
@@ -363,6 +380,52 @@ export default function TasksPage() {
 
       <AddTaskModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleAddTask} lang={lang} />
       <AddTaskModal open={editingTask !== undefined} onClose={closeEdit} onSave={handleEditTask} initialTask={editingTask} lang={lang} />
+
+      {/* Delete confirmation — reuses the same pattern as HabitsPage/NotesPage */}
+      {deleteId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(15, 23, 42, 0.4)' }}
+          onClick={() => { if (!deleting) setDeleteId(null) }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-task-title"
+            className="kv-modal-enter bg-white rounded-2xl shadow-xl w-full max-w-sm flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-5 flex flex-col items-center text-center">
+              <div className="w-12 h-12 rounded-full bg-[#FEF2F2] flex items-center justify-center mb-3">
+                <Trash2 size={20} className="text-[#E11D48]" />
+              </div>
+              <h3 id="delete-task-title" className="text-base font-semibold text-[#1A1F36] mb-1">
+                {t('tasks.deleteConfirm.title', lang)}
+              </h3>
+              <p className="text-sm text-[#64748B]">
+                {t('tasks.deleteConfirm.body', lang)}
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 px-5 py-4 border-t border-[#F4F4F0]">
+              <button
+                onClick={() => setDeleteId(null)}
+                disabled={deleting}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors disabled:opacity-50"
+              >
+                {t('tasks.deleteConfirm.cancel', lang)}
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#E11D48] hover:bg-[#BE123C] transition-colors shadow-sm disabled:opacity-50"
+              >
+                {t('tasks.deleteConfirm.confirm', lang)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {postSave && (
         <PostSaveLinkSuggestionsDialog
           type={postSave.type}
