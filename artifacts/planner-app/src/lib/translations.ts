@@ -1221,6 +1221,10 @@ export type TranslationKey =
     | "cal.action.close"
     | "cal.action.edit"
     | "cal.action.cancel"
+    | "cal.deleteConfirm.title"
+    | "cal.deleteConfirm.body"
+    | "cal.deleteConfirm.cancel"
+    | "cal.deleteConfirm.confirm"
     // ── Schedule tab ──────────────────────────────────────────────────────────
     | "sched.mode.traditional"
     | "sched.mode.elearning"
@@ -3208,6 +3212,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "cal.action.close": "Sulge",
         "cal.action.edit": "Muuda",
         "cal.action.cancel": "Tühista",
+        "cal.deleteConfirm.title": "Kustuta sündmus?",
+        "cal.deleteConfirm.body": "Seda toimingut ei saa tagasi võtta.",
+        "cal.deleteConfirm.cancel": "Tühista",
+        "cal.deleteConfirm.confirm": "Kustuta",
         // ── Schedule tab
         "sched.mode.traditional": "Tavapärane tunniplaan",
         "sched.mode.elearning": "E-õpe / paindlik õpe",
@@ -5209,6 +5217,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "cal.action.close": "Close",
         "cal.action.edit": "Edit",
         "cal.action.cancel": "Cancel",
+        "cal.deleteConfirm.title": "Delete event?",
+        "cal.deleteConfirm.body": "This action cannot be undone.",
+        "cal.deleteConfirm.cancel": "Cancel",
+        "cal.deleteConfirm.confirm": "Delete",
         // ── Schedule tab
         "sched.mode.traditional": "Traditional schedule",
         "sched.mode.elearning": "E-learning / flexible",

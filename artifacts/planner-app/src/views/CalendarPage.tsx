@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
+import { toast } from 'sonner'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
@@ -169,12 +170,20 @@ export default function CalendarPage() {
     setEditingEvent(null)
   }, [])
 
-  // Delete event (from detail modal)
-  const handleDeleteEvent = useCallback((id: string) => {
-    removeLinksForEntity('calendar', id)
-    deleteCalendarEvent(id)
-    setDetailEvent(null)
-  }, [])
+  // Delete event (from detail modal, after its own confirmation dialog).
+  // Only the event itself and its EntityLinks are removed — never a linked
+  // task (removeLinksForEntity only deletes link rows, not the entities
+  // they reference; see entityLinksStore.ts).
+  const handleDeleteEvent = useCallback(async (id: string) => {
+    try {
+      // removeLinksForEntity is optimistic and reverts its own local state
+      // on a failed write, so it doesn't need to be awaited/caught here.
+      removeLinksForEntity('calendar', id)
+      await deleteCalendarEvent(id)
+    } catch {
+      toast.error(lang === 'et' ? 'Sündmuse kustutamine ebaõnnestus' : 'Failed to delete event')
+    }
+  }, [lang])
 
   // Open detail modal when an event is clicked
   const handleEventClick = useCallback((id: string) => {
