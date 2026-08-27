@@ -139,12 +139,19 @@ describe('HeroCard: livelier lavender banner + full motivational text + dark-mod
   })
 
   it('the stats row uses the shared bg-white dark-mode override, not a bespoke color', () => {
-    expect(HERO_SRC).toMatch(/className="bg-white rounded-xl px-4 py-3 mt-4 grid grid-cols-2 md:grid-cols-4/)
+    expect(HERO_SRC).toMatch(/className="bg-white rounded-xl px-4 py-3 mt-3 grid grid-cols-2 md:grid-cols-4/)
   })
 
-  it('the mountain illustration is visible from md (tablet) rather than only lg (desktop), and sized for real visual weight', () => {
+  it('the mountain illustration is visible from md (tablet) rather than only lg (desktop), and height-driven so it stays compact', () => {
     expect(HERO_SRC).not.toMatch(/hidden lg:block/)
-    expect(HERO_SRC).toMatch(/hidden md:block flex-shrink-0 w-36 lg:w-44 xl:w-52 aspect-\[11\/10\]/)
+    expect(HERO_SRC).toMatch(/hidden md:block flex-shrink-0 h-16 lg:h-20 xl:h-24 aspect-\[11\/10\]/)
+  })
+
+  it('the desktop/tablet section has no oversized vertical padding or explicit min-height causing an empty gap', () => {
+    expect(HERO_SRC).toMatch(/hidden sm:block px-5 lg:px-6 py-3 lg:py-4/)
+    expect(HERO_SRC).not.toMatch(/minHeight/)
+    expect(HERO_SRC).not.toMatch(/min-h-/)
+    expect(HERO_SRC).not.toMatch(/flex-grow|flex-1.*MountainIllustration|grow\b/)
   })
 
   it('the mountain sits beside the greeting, not overlapping the stats row (separate flex row vs. separate block)', () => {

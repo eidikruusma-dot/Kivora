@@ -131,7 +131,7 @@ export default function HeroCard() {
        * together in one lighter inset row underneath — matching the
        * approved visual reference. No divider, no side-by-side stats.
        */}
-      <div className="hidden sm:block px-5 lg:px-6 py-4 lg:py-5">
+      <div className="hidden sm:block px-5 lg:px-6 py-3 lg:py-4">
         <div className="flex items-start justify-between gap-4">
           {/* Greeting — the daily message wraps (no truncation) so the full
              sentence is always shown. */}
@@ -143,18 +143,19 @@ export default function HeroCard() {
           </div>
 
           {/* Illustration — shown from md+ where there's enough width not to
-             crowd the greeting; sized for real visual weight, not a sliver. */}
-          <div className="hidden md:block flex-shrink-0 w-36 lg:w-44 xl:w-52 aspect-[11/10]">
+             crowd the greeting; height-driven so it stays compact instead of
+             stretching the card. */}
+          <div className="hidden md:block flex-shrink-0 h-16 lg:h-20 xl:h-24 aspect-[11/10]">
             <MountainIllustration isDark={isDark} />
           </div>
         </div>
 
-        {/* Stats — lighter inset row below the greeting.
+        {/* Stats — lighter inset row directly below the greeting.
          *   sm–md  (640–767 px)  → 2 columns (landscape phone)
          *   md+    (768 px+)     → 4 columns (tablet / desktop)
          */}
         <div
-          className="bg-white rounded-xl px-4 py-3 mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-5"
+          className="bg-white rounded-xl px-4 py-3 mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-5"
           style={{ boxShadow: tc('0 1px 3px rgba(17, 12, 46, 0.06)', 'none', isDark) }}
         >
           {stats.map((s) => <StatButton key={s.label} {...s} />)}
