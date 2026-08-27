@@ -1,0 +1,7 @@
+# The real secret must never exist in this repository, on any branch, in
+# any directory. If it's ever created here by mistake (e.g. while testing
+# locally), this stops it from being accidentally committed.
+mail-relay-secret.php
+
+# esbuild/editor noise, if any ever lands here
+*.tmp

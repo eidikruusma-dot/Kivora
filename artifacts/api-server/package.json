@@ -31,8 +31,10 @@
     "test:firebaseAdmin": "npx esbuild --bundle --platform=node --format=cjs src/lib/firebaseAdmin.test.ts | node",
     "test:requireFirebaseAuth": "npx esbuild --bundle --platform=node --format=esm --packages=external src/middleware/requireFirebaseAuth.test.ts --outfile=.tmp-requireFirebaseAuth.mjs && node .tmp-requireFirebaseAuth.mjs",
     "test:routesIndex": "npx esbuild --bundle --platform=node --format=cjs src/routes/index.test.ts | node",
-    "test:contactAuthBoundary": "npx esbuild --bundle --platform=node --format=esm --external:express --external:cors --external:pino-http --external:pino --external:pino-pretty --external:firebase-admin --external:firebase-admin/* --external:openai --external:web-push --external:nodemailer --external:multer --external:pdf-lib --external:pdf-parse --external:pdfjs-dist --external:xlsx --external:mammoth --external:@napi-rs/canvas src/routes/index.contactAuthBoundary.test.ts --outfile=.tmp-contactAuthBoundary.mjs && node .tmp-contactAuthBoundary.mjs",
-    "test": "pnpm run test:parseEuropeanNumber && pnpm run test:groupIntoRows && pnpm run test:extraction && pnpm run test:planDraftValidation && pnpm run test:validateChatRequest && pnpm run test:evaluateFinishReason && pnpm run test:firebaseAdmin && pnpm run test:requireFirebaseAuth && pnpm run test:routesIndex && pnpm run test:contactAuthBoundary"
+    "test:contactAuthBoundary": "npx esbuild --bundle --platform=node --format=esm --external:express --external:cors --external:pino-http --external:pino --external:pino-pretty --external:firebase-admin --external:firebase-admin/* --external:openai --external:web-push --external:multer --external:pdf-lib --external:pdf-parse --external:pdfjs-dist --external:xlsx --external:mammoth --external:@napi-rs/canvas src/routes/index.contactAuthBoundary.test.ts --outfile=.tmp-contactAuthBoundary.mjs && node .tmp-contactAuthBoundary.mjs",
+    "test:mailer": "npx esbuild --bundle --platform=node --format=esm --packages=external src/lib/mailer.test.ts --outfile=.tmp-mailer.mjs && node .tmp-mailer.mjs",
+    "test:emailRoutesSharedMailer": "npx esbuild --bundle --platform=node --format=esm --external:express --external:cors --external:pino-http --external:pino --external:pino-pretty --external:firebase-admin --external:firebase-admin/* --external:openai --external:web-push --external:multer --external:pdf-lib --external:pdf-parse --external:pdfjs-dist --external:xlsx --external:mammoth --external:@napi-rs/canvas src/routes/emailRoutesUseSharedMailer.test.ts --outfile=.tmp-emailRoutesSharedMailer.mjs && node .tmp-emailRoutesSharedMailer.mjs",
+    "test": "pnpm run test:parseEuropeanNumber && pnpm run test:groupIntoRows && pnpm run test:extraction && pnpm run test:planDraftValidation && pnpm run test:validateChatRequest && pnpm run test:evaluateFinishReason && pnpm run test:firebaseAdmin && pnpm run test:requireFirebaseAuth && pnpm run test:routesIndex && pnpm run test:contactAuthBoundary && pnpm run test:mailer && pnpm run test:emailRoutesSharedMailer"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",
@@ -44,7 +46,6 @@
     "firebase-admin": "^14.3.0",
     "mammoth": "^1.12.0",
     "multer": "^2.2.0",
-    "nodemailer": "^9.0.3",
     "openai": "^7.0.0",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
@@ -63,7 +64,6 @@
     "@types/express": "^5.0.6",
     "@types/multer": "^2.2.0",
     "@types/node": "catalog:",
-    "@types/nodemailer": "^8.0.1",
     "@types/web-push": "^3.6.4",
     "esbuild": "0.27.3",
     "esbuild-plugin-pino": "^2.3.3",

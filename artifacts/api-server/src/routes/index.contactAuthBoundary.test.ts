@@ -34,7 +34,7 @@
  *   npx esbuild --bundle --platform=node --format=esm \
  *       --external:express --external:cors --external:pino-http --external:pino \
  *       --external:pino-pretty --external:firebase-admin --external:firebase-admin/* \
- *       --external:openai --external:web-push --external:nodemailer --external:multer \
+ *       --external:openai --external:web-push --external:multer \
  *       --external:pdf-lib --external:pdf-parse --external:pdfjs-dist --external:xlsx \
  *       --external:mammoth --external:@napi-rs/canvas \
  *       src/routes/index.contactAuthBoundary.test.ts \
@@ -119,9 +119,9 @@ try {
     assert(!isAuthRejection(missingFields), `/api/contact (invalid body) is not auth-rejected (got ${missingFields.status})`);
     assert(missingFields.status === 400, `/api/contact with a missing required field returns contact.ts's own 400 (got ${missingFields.status})`);
 
-    // A fully valid body reaches CONTACT_RECIPIENT's own check (500, since
-    // it's unset in this test env) or actually attempts to send — either
-    // way, never a 401 from requireFirebaseAuth.
+    // A fully valid body reaches the mail relay client's own config check
+    // (500, since MAIL_RELAY_URL/MAIL_RELAY_SECRET are unset in this test
+    // env) — either way, never a 401 from requireFirebaseAuth.
     const validBody = await call("POST", "/api/contact", {
       name: "Test User",
       email: "test@example.com",
