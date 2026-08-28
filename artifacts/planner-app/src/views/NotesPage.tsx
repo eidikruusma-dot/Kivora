@@ -339,7 +339,16 @@ export default function NotesPage() {
             return (
               <div
                 key={note.id}
-                className="group bg-white rounded-2xl border border-[#ECECF2] p-4 hover:border-[#6F5AE8]/30 hover:shadow-md transition-all cursor-pointer flex flex-col"
+                role="button"
+                tabIndex={0}
+                onClick={() => setDetailNote(note)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setDetailNote(note)
+                  }
+                }}
+                className="group bg-white rounded-2xl border border-[#ECECF2] p-4 hover:border-[#6F5AE8]/30 hover:shadow-md transition-all cursor-pointer flex flex-col focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6F5AE8]/40"
               >
                 {/* Top row: icon + actions */}
                 <div className="flex items-start justify-between mb-3">
