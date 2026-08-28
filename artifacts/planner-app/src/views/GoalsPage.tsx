@@ -493,17 +493,17 @@ export default function GoalsPage() {
           })}
 
           {filtered.length === 0 && (
-            <div className="bg-white rounded-2xl border border-[#ECECF2] flex flex-col items-center justify-center py-16 text-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-[#F8F7F4] flex items-center justify-center">
-                <Target size={20} className="text-[#94A3B8]" />
+            <div className="rounded-2xl bg-[#F8F7FC] flex flex-col items-center justify-center py-16 text-center gap-3">
+              <div className="w-16 h-16 rounded-full bg-[#EDE9FB] flex items-center justify-center">
+                <Target size={28} className="text-[#6F5AE8]" />
               </div>
               <div>
                 <p className="text-sm font-medium text-[#1A1F36]">{t('goals.empty.title', lang)}</p>
                 <p className="text-xs text-[#94A3B8] mt-1">{t('goals.empty.body', lang)}</p>
               </div>
               <button
-                onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-[#6F5AE8] text-white rounded-xl text-sm font-medium hover:bg-[#5B48D8] transition-colors shadow-sm"
+                onClick={openCreateModal}
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#EDE9FB] text-[#6F5AE8] rounded-xl text-sm font-semibold hover:opacity-80 transition-opacity"
               >
                 <Plus size={14} />
                 {lang === 'et' ? 'Lisa eesmärk' : 'Add goal'}
