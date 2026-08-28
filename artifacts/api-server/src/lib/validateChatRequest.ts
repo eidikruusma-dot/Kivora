@@ -38,6 +38,23 @@ export const CHAT_REQUEST_LIMITS = {
   maxMessages: 50,
   maxMessageLength: 20_000,
   maxTotalContentLength: 60_000,
+  /**
+   * `context` (CURRENT_KIVORA_STATE, built by aiContextBuilder.ts) is a
+   * SEPARATE top-level request field, not part of `messages` — none of the
+   * limits above ever applied to it, and none of its module sections
+   * (Tasks, Plans, Goals, Notes, Habits, Calendar, School, Finance,
+   * Notifications) cap how much they render. Live incident: an active
+   * account's real data exceeded the raw HTTP body-size limit before this
+   * field-level check existed, and the resulting rejection happened inside
+   * body-parser — before this validator ever ran — as an opaque 400/413
+   * with no usable error message. 500,000 characters is comfortably above
+   * any realistic account's total context size (well under the 2mb raw
+   * body limit set in app.ts, leaving headroom for messages + JSON
+   * overhead) while still being a real, intentional bound rather than
+   * "whatever the raw body limit happens to allow" — so a still-oversized
+   * context now fails here, cleanly, with a specific code and message.
+   */
+  maxContextLength: 500_000,
 } as const;
 
 export interface ChatRequestValidationOk {
@@ -62,9 +79,23 @@ function err(code: string, status: number, error: string): ChatRequestValidation
 export function validateChatRequest(body: {
   messages?: unknown;
   mode?: unknown;
+  context?: unknown;
 }): ChatRequestValidationResult {
   if (body.mode !== undefined && body.mode !== "chat" && body.mode !== "plan_creation") {
     return err("INVALID_MODE", 400, `Unknown mode "${String(body.mode)}".`);
+  }
+
+  if (body.context !== undefined) {
+    if (typeof body.context !== "string") {
+      return err("INVALID_CONTEXT", 400, "context must be a string.");
+    }
+    if (body.context.length > CHAT_REQUEST_LIMITS.maxContextLength) {
+      return err(
+        "CONTEXT_TOO_LARGE",
+        400,
+        `context exceeds the maximum length of ${CHAT_REQUEST_LIMITS.maxContextLength} characters.`,
+      );
+    }
   }
   const mode: ChatMode = body.mode === "plan_creation" ? "plan_creation" : "chat";
 

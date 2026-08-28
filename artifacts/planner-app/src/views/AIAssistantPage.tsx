@@ -97,6 +97,27 @@ function nowTime(lang: string) {
   });
 }
 
+/**
+ * A failed fetchAIReply() call must never leave the user with just a bare
+ * "something went wrong" — fetchAIReply already extracts the server's own
+ * `error` field (a specific, server-controlled message: an oversized-
+ * context rejection, a validation error, an OpenAI failure) into the
+ * thrown Error's `.message`, but the catch handler previously discarded
+ * it entirely and always showed the same generic translated apology
+ * regardless of cause. This appends that reason (when there is a safe,
+ * informative one) so the user — and anyone reading a bug report — can
+ * actually tell what happened, e.g. "context exceeds the maximum length
+ * of 500000 characters." AuthRequiredError's internal "AUTH_REQUIRED"
+ * sentinel and a bare empty message are not informative to a user, so
+ * those fall back to the plain apology.
+ */
+export function describeAIError(err: unknown, lang: AppLang): string {
+  const base = t("ai.chat.error", lang);
+  const reason = err instanceof Error ? err.message.trim() : "";
+  if (!reason || reason === "AUTH_REQUIRED") return base;
+  return `${base} (${reason})`;
+}
+
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -817,7 +838,7 @@ export default function AIAssistantPage() {
             ],
           }).catch(() => {});
         })
-        .catch(() => {
+        .catch((err: unknown) => {
           setChats((prev) =>
             prev.map((c) =>
               c.id === id
@@ -827,7 +848,7 @@ export default function AIAssistantPage() {
                       m.id === messages[1].id
                         ? {
                             ...m,
-                            content: t("ai.chat.error", lang),
+                            content: describeAIError(err, lang),
                             pending: false,
                             error: true,
                           }
@@ -1160,7 +1181,7 @@ export default function AIAssistantPage() {
           aiNotifDispatchedRef.current = true;
         }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         setChats((prev) =>
           prev.map((c) =>
             c.id === activeChat.id
@@ -1170,7 +1191,7 @@ export default function AIAssistantPage() {
                     m.id === aiMsgId
                       ? {
                           ...m,
-                          content: t("ai.chat.error", lang),
+                          content: describeAIError(err, lang),
                           pending: false,
                           error: true,
                         }

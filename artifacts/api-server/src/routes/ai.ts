@@ -23,7 +23,7 @@ router.post("/ai/chat", async (req, res) => {
       localDate?: string;
     };
 
-    const validation = validateChatRequest(req.body as { messages?: unknown; mode?: unknown });
+    const validation = validateChatRequest(req.body as { messages?: unknown; mode?: unknown; context?: unknown });
     if (!validation.ok) {
       // Diagnostic logging only — never message contents.
       console.log(`[ai/chat] validation rejected code=${validation.code} status=${validation.status}`);

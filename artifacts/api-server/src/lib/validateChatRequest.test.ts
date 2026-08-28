@@ -188,6 +188,64 @@ group("12. Integration-level: the actual frontend request-construction path matc
   assert(validateChatRequest({ messages: trickyMessages, mode: "plan_creation" }).ok === true, "accepted at exactly the limit");
 });
 
+// ── context (CURRENT_KIVORA_STATE) size/type validation ─────────────────────
+//
+// Root cause of a live production 400 on POST /api/ai/chat: `context` is a
+// SEPARATE top-level request field, sent alongside (never inside) the
+// `messages` array — none of the checks above this section ever applied to
+// it, and none of aiContextBuilder.ts's module sections (Tasks, Plans,
+// Goals, Notes, Habits, Calendar, School, Finance, Notifications) cap their
+// own rendered size. An active account's real data (the incident report
+// specifically named "substantially more real School/Task data") exceeded
+// the raw HTTP body-size limit before this field-level check existed, and
+// that rejection happened inside body-parser, before this validator ever
+// ran, as an opaque error with no usable message.
+
+group("context: a realistically large value (simulating a heavy real account) is accepted", () => {
+  // Mirrors the shape of a real buildAIContext() output for an account with
+  // substantial Task/School/Plan/Notes data — well over the OLD 100kb raw
+  // body-parser default, comfortably under maxContextLength.
+  const taskLines = Array.from({ length: 1000 }, (_, i) => `  - Ülesanne ${i} — kirjeldus ja tähtaeg (kategooria: Kodu, prioriteet: keskmine)`);
+  const schoolLines = Array.from({ length: 1000 }, (_, i) => `  - Õppeaine ${i % 12}: Kodutöö ${i} — tähtaeg: 2026-09-01, edenemine: ${i % 100}%, staatus: tegemata`);
+  const realisticContext = [
+    `### Ülesanded (tegemata 400/400)\n${taskLines.join("\n")}`,
+    `### Kool\n${schoolLines.join("\n")}`,
+  ].join("\n\n");
+  assert(realisticContext.length > 100_000, `test context is realistically large (${realisticContext.length} chars > 100,000)`);
+  assert(realisticContext.length < CHAT_REQUEST_LIMITS.maxContextLength, "still comfortably under maxContextLength");
+
+  const result = validateChatRequest({
+    messages: [userMsg("Millised ülesanded mul on?")],
+    context: realisticContext,
+  });
+  assert(result.ok === true, `a realistically large context is accepted (got ${JSON.stringify(result)})`);
+});
+
+group("context: exactly at maxContextLength is accepted; one character over is rejected", () => {
+  const atLimit = "x".repeat(CHAT_REQUEST_LIMITS.maxContextLength);
+  const atResult = validateChatRequest({ messages: [userMsg("hi")], context: atLimit });
+  assert(atResult.ok === true, "exactly maxContextLength characters is accepted");
+
+  const overLimit = "x".repeat(CHAT_REQUEST_LIMITS.maxContextLength + 1);
+  const overResult = validateChatRequest({ messages: [userMsg("hi")], context: overLimit });
+  assert(overResult.ok === false, "one character over maxContextLength is rejected");
+  if (!overResult.ok) {
+    assert(overResult.code === "CONTEXT_TOO_LARGE", "rejected with the expected stable code CONTEXT_TOO_LARGE");
+    assert(overResult.status === 400, "rejected with 400, not a generic 5xx");
+  }
+});
+
+group("context: a non-string value is rejected cleanly, never reaches the model", () => {
+  const result = validateChatRequest({ messages: [userMsg("hi")], context: { not: "a string" } as unknown });
+  assert(result.ok === false, "a non-string context is rejected");
+  if (!result.ok) assert(result.code === "INVALID_CONTEXT", "rejected with the expected stable code INVALID_CONTEXT");
+});
+
+group("context: omitted entirely is still valid (context is optional)", () => {
+  const result = validateChatRequest({ messages: [userMsg("hi")] });
+  assert(result.ok === true, "no context field at all is still a valid request");
+});
+
 console.log(`\n${"═".repeat(48)}`);
 console.log(`  validateChatRequest: ${passed} passed, ${failed} failed`);
 console.log(`${"═".repeat(48)}`);
