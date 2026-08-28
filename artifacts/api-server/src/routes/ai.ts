@@ -283,6 +283,15 @@ router.post("/ai/chat", async (req, res) => {
     }
     const { mode, messages } = validation;
 
+    // Opt-in, sanitized diagnostic for boundary C ("did the server receive
+    // what the browser sent"): logs only the context's section headers
+    // (e.g. "### Plaanid (3)") — never any task/plan/note/goal title or
+    // content. Off by default; enable per-deploy with AI_CONTEXT_DEBUG=1.
+    if (process.env["AI_CONTEXT_DEBUG"] === "1" && context) {
+      const sectionHeaders = context.match(/^### .+$/gm) ?? [];
+      console.log(`[ai/chat] AI_CONTEXT_DEBUG contextLength=${context.length} sections=${JSON.stringify(sectionHeaders)}`);
+    }
+
     // Resolve current date — prefer client-supplied local date (YYYY-MM-DD), fall back to server UTC date
     let todayDate: Date;
     if (localDate && /^\d{4}-\d{2}-\d{2}$/.test(localDate)) {

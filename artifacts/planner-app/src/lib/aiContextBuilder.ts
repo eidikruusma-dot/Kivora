@@ -389,17 +389,48 @@ function buildFinanceSection(): string {
   return `### Finantside\n${lines.join("\n")}`;
 }
 
+/**
+ * Opt-in, sanitized diagnostic: logs id+title only for tasks/plans/goals —
+ * never note/description/finance content — immediately before this exact
+ * context is sent to the model. Off by default; enable in any browser
+ * (including production) with:
+ *   localStorage.setItem('kivora:debugAIContext', '1')
+ * and disable again with .removeItem(...). Exists to answer, from the real
+ * runtime, "what does buildAIContext() actually see right now" without
+ * guessing from store/unit tests — see aiRequestPayloadIntegration.test.ts
+ * for the equivalent proof against the actual request payload.
+ */
+function logAIContextDebugSummary(tasks: Task[], plans: Plan[], goals: Goal[]): void {
+  try {
+    if (typeof window === "undefined" || window.localStorage?.getItem("kivora:debugAIContext") !== "1") return;
+    // eslint-disable-next-line no-console
+    console.debug("[AI_CONTEXT_DEBUG]", {
+      tasks: tasks.map((t) => ({ id: t.id, title: t.title })),
+      plans: plans.map((p) => ({ id: p.id, title: p.title })),
+      goals: goals.map((g) => ({ id: g.id, title: g.title })),
+    });
+  } catch {
+    // localStorage can throw (private browsing, disabled storage) — never
+    // let a diagnostic break the actual context build.
+  }
+}
+
 export function buildAIContext(lang: "et" | "en"): string {
   const modules = getModuleSettings();
   const sections: string[] = [];
 
+  const liveTasks = getAllTasks();
+  const livePlans = getAllPlans();
+  const liveGoals = getAllGoals();
+  logAIContextDebugSummary(liveTasks, livePlans, liveGoals);
+
   // Core modules — only include if enabled
   if (modules.calendar)  sections.push(buildCalendarSection(getAllEvents()));
-  if (modules.tasks)     sections.push(buildTasksSection(getAllTasks()));
+  if (modules.tasks)     sections.push(buildTasksSection(liveTasks));
   if (modules.notes)     sections.push(buildNotesSection(getAllNotes()));
   if (modules.habits)    sections.push(buildHabitsSection(getAllHabits()));
-  if (modules.goals)     sections.push(buildGoalsSection(getAllGoals()));
-  if (modules.plans)     sections.push(buildPlansSection(getAllPlans()));
+  if (modules.goals)     sections.push(buildGoalsSection(liveGoals));
+  if (modules.plans)     sections.push(buildPlansSection(livePlans));
   if (modules.finance)   sections.push(buildFinanceSection());
   if (modules.school)    sections.push(buildSchoolFromStore(lang));
 
