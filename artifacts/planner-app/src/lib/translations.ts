@@ -1018,6 +1018,7 @@ export type TranslationKey =
     | "habits.modal.namePlaceholder"
     | "habits.modal.descPlaceholder"
     | "habits.modal.goalLabel"
+    | "habits.modal.customizeAppearance"
     | "habits.manage.empty"
     | "habits.recommend.weekFilled"
     | "habits.recommend.noHabits"
@@ -2998,6 +2999,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "habits.modal.namePlaceholder": "nt. Joo vett",
         "habits.modal.descPlaceholder": "nt. 8 klaasi päevas",
         "habits.modal.goalLabel": "Eesmärk päevas",
+        "habits.modal.customizeAppearance": "Kohanda välimust",
         "habits.manage.empty": "Harjumusi pole.",
         "habits.recommend.weekFilled": "Täidetud {done} päeval {total}-st.",
         "habits.recommend.noHabits": "Lisa harjumus, et näha AI soovitust.",
@@ -5005,6 +5007,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "habits.modal.namePlaceholder": "e.g. Drink water",
         "habits.modal.descPlaceholder": "e.g. 8 glasses a day",
         "habits.modal.goalLabel": "Daily goal",
+        "habits.modal.customizeAppearance": "Customize appearance",
         "habits.manage.empty": "No habits yet.",
         "habits.recommend.weekFilled": "Done {done} out of {total} days.",
         "habits.recommend.noHabits": "Add a habit to see an AI suggestion.",

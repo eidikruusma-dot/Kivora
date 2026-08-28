@@ -25,6 +25,9 @@ import {
   Settings2,
   Loader2,
   Repeat2,
+  Flame,
+  Briefcase,
+  ChevronDown,
 } from "lucide-react";
 import { WEEK_DAYS } from "@/data/habitsData";
 import type { Habit, HabitStatus, HabitCategory } from "@/data/habitsData";
@@ -52,6 +55,8 @@ const ICON_MAP: Record<Habit["icon"], React.ReactNode> = {
   meditation: <span style={{ fontSize: 17 }}>🧘</span>,
   apple: <Apple size={18} strokeWidth={2} />,
   moon: <Moon size={18} strokeWidth={2} />,
+  flame: <Flame size={18} strokeWidth={2} />,
+  briefcase: <Briefcase size={18} strokeWidth={2} />,
 };
 
 const ICON_OPTIONS: {
@@ -69,6 +74,8 @@ const ICON_OPTIONS: {
   },
   { id: "apple", label: "Toit", node: <Apple size={18} /> },
   { id: "moon", label: "Uni", node: <Moon size={18} /> },
+  { id: "flame", label: "Harjumus", node: <Flame size={18} /> },
+  { id: "briefcase", label: "Töö", node: <Briefcase size={18} /> },
 ];
 
 const COLOR_OPTIONS = [
@@ -81,6 +88,16 @@ const COLOR_OPTIONS = [
   { color: "#F97316", bg: "#FFF0E6" },
   { color: "#64748B", bg: "#F1F5F9" },
 ];
+
+// Category → sensible default icon + color, reusing the existing COLOR_OPTIONS
+// palette entries exactly (no new colors). Applied automatically in create
+// mode only — see handleCategoryChange.
+const CATEGORY_DEFAULTS: Record<HabitCategory, { icon: Habit["icon"]; iconColor: string; iconBg: string }> = {
+  Isiklik: { icon: "flame", iconColor: COLOR_OPTIONS[0].color, iconBg: COLOR_OPTIONS[0].bg },
+  Tervis:  { icon: "apple", iconColor: COLOR_OPTIONS[1].color, iconBg: COLOR_OPTIONS[1].bg },
+  Töö:     { icon: "briefcase", iconColor: COLOR_OPTIONS[6].color, iconBg: COLOR_OPTIONS[6].bg },
+  Kool:    { icon: "book", iconColor: COLOR_OPTIONS[2].color, iconBg: COLOR_OPTIONS[2].bg },
+};
 
 function DayDot({ done, color }: { done: boolean | null; color: string }) {
   const isDark = useIsDark();
@@ -116,18 +133,25 @@ interface HabitForm {
   goalPerDay: number;
   recurrence: "daily" | "weekdays" | "custom";
   customDays: boolean[];
+  // Local form UI state only — never persisted to the habit model. Tracks
+  // whether the user manually picked an icon/color so a later category
+  // change (create mode only) doesn't silently overwrite their choice.
+  iconCustomized: boolean;
+  colorCustomized: boolean;
 }
 
 const EMPTY_FORM: HabitForm = {
   title: "",
   description: "",
   category: "Isiklik",
-  icon: "droplet",
-  iconColor: "#6F5AE8",
-  iconBg: "#EDE9FB",
+  icon: CATEGORY_DEFAULTS.Isiklik.icon,
+  iconColor: CATEGORY_DEFAULTS.Isiklik.iconColor,
+  iconBg: CATEGORY_DEFAULTS.Isiklik.iconBg,
   goalPerDay: 1,
   recurrence: "daily",
   customDays: [true, true, true, true, true, false, false],
+  iconCustomized: false,
+  colorCustomized: false,
 };
 
 export default function HabitsPage() {
@@ -163,6 +187,10 @@ export default function HabitsPage() {
   const [autoLink, setAutoLink] = useState<AutoLinkResult | null>(null);
   const [form, setForm] = useState<HabitForm>(EMPTY_FORM);
   const [formError, setFormError] = useState("");
+  // Icon/color selectors start collapsed behind "Kohanda välimust" /
+  // "Customize appearance" in both create and edit — one shared form, no
+  // second modal.
+  const [appearanceExpanded, setAppearanceExpanded] = useState(false);
 
   // Manage modal
   const [manageOpen, setManageOpen] = useState(false);
@@ -268,6 +296,7 @@ export default function HabitsPage() {
     setEditingId(null);
     setForm(EMPTY_FORM);
     setFormError("");
+    setAppearanceExpanded(false);
     setModalOpen(true);
   };
 
@@ -290,10 +319,35 @@ export default function HabitsPage() {
       iconBg: habit.iconBg,
       goalPerDay: 1,
       recurrence,
+      // Always "customized" in edit mode — not that it matters, since
+      // handleCategoryChange never auto-applies defaults while editingId is
+      // set; kept true here for consistency with that invariant.
+      iconCustomized: true,
+      colorCustomized: true,
       customDays: habit.weekDays.map((d) => d === true),
     });
     setFormError("");
+    setAppearanceExpanded(false);
     setModalOpen(true);
+  };
+
+  // Category selection auto-applies a sensible default icon+color in create
+  // mode only, and never overwrites a value the user already picked by hand.
+  // In edit mode this never touches icon/color at all — opening or saving an
+  // existing habit must never silently replace its appearance.
+  const handleCategoryChange = (category: HabitCategory) => {
+    if (editingId) {
+      setForm({ ...form, category });
+      return;
+    }
+    const defaults = CATEGORY_DEFAULTS[category];
+    setForm({
+      ...form,
+      category,
+      icon: form.iconCustomized ? form.icon : defaults.icon,
+      iconColor: form.colorCustomized ? form.iconColor : defaults.iconColor,
+      iconBg: form.colorCustomized ? form.iconBg : defaults.iconBg,
+    });
   };
 
   const handleSave = async () => {
@@ -336,6 +390,7 @@ export default function HabitsPage() {
       setForm(EMPTY_FORM);
       setFormError("");
       setEditingId(null);
+      setAppearanceExpanded(false);
     } finally {
       setSaving(false);
     }
@@ -346,6 +401,7 @@ export default function HabitsPage() {
     setForm(EMPTY_FORM);
     setFormError("");
     setEditingId(null);
+    setAppearanceExpanded(false);
   };
 
   const handleToggleToday = (id: string) => {
@@ -928,7 +984,7 @@ export default function HabitsPage() {
                   {CATEGORY_OPTIONS_LANG.map((cat) => (
                     <button
                       key={cat.value}
-                      onClick={() => setForm({ ...form, category: cat.value })}
+                      onClick={() => handleCategoryChange(cat.value)}
                       className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                         form.category === cat.value
                           ? "bg-[#EDE9FB] text-[#6F5AE8] border border-[#6F5AE8]/30"
@@ -941,55 +997,73 @@ export default function HabitsPage() {
                 </div>
               </div>
 
-              {/* Icon */}
-              <div>
-                <label className="block text-xs font-medium text-[#64748B] mb-1.5">
-                  {t("habits.modal.iconLabel", lang)}
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {ICON_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.id}
-                      onClick={() => setForm({ ...form, icon: opt.id })}
-                      className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
-                        form.icon === opt.id
-                          ? "bg-[#EDE9FB] border border-[#6F5AE8]/30"
-                          : "habit-icon-btn bg-white border border-[#ECECF2] hover:bg-[#F8F7F4]"
-                      }`}
-                      style={
-                        form.icon === opt.id
-                          ? { color: form.iconColor }
-                          : { color: "#64748B" }
-                      }
-                    >
-                      {opt.node}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {/* Collapsed by default — reveals the Icon + Color selectors below */}
+              <button
+                type="button"
+                onClick={() => setAppearanceExpanded((v) => !v)}
+                aria-expanded={appearanceExpanded}
+                className="flex items-center gap-1.5 self-start text-sm font-medium text-[#6F5AE8] hover:text-[#5B48D8] transition-colors"
+              >
+                <ChevronDown
+                  size={14}
+                  className={`transition-transform ${appearanceExpanded ? "rotate-180" : ""}`}
+                />
+                {t("habits.modal.customizeAppearance", lang)}
+              </button>
 
-              {/* Color */}
-              <div>
-                <label className="block text-xs font-medium text-[#64748B] mb-1.5">
-                  {t("habits.modal.colorLabel", lang)}
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {COLOR_OPTIONS.map((c) => (
-                    <button
-                      key={c.color}
-                      onClick={() =>
-                        setForm({ ...form, iconColor: c.color, iconBg: c.bg })
-                      }
-                      className={`w-8 h-8 rounded-full transition-transform ${
-                        form.iconColor === c.color
-                          ? "ring-2 ring-offset-2 ring-[#1A1F36] scale-110"
-                          : "hover:scale-110"
-                      }`}
-                      style={{ background: c.color }}
-                    />
-                  ))}
-                </div>
-              </div>
+              {appearanceExpanded && (
+                <>
+                  {/* Icon */}
+                  <div>
+                    <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+                      {t("habits.modal.iconLabel", lang)}
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {ICON_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.id}
+                          onClick={() => setForm({ ...form, icon: opt.id, iconCustomized: true })}
+                          className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
+                            form.icon === opt.id
+                              ? "bg-[#EDE9FB] border border-[#6F5AE8]/30"
+                              : "habit-icon-btn bg-white border border-[#ECECF2] hover:bg-[#F8F7F4]"
+                          }`}
+                          style={
+                            form.icon === opt.id
+                              ? { color: form.iconColor }
+                              : { color: "#64748B" }
+                          }
+                        >
+                          {opt.node}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Color */}
+                  <div>
+                    <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+                      {t("habits.modal.colorLabel", lang)}
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {COLOR_OPTIONS.map((c) => (
+                        <button
+                          key={c.color}
+                          onClick={() =>
+                            setForm({ ...form, iconColor: c.color, iconBg: c.bg, colorCustomized: true })
+                          }
+                          className={`w-8 h-8 rounded-full transition-transform ${
+                            form.iconColor === c.color
+                              ? "ring-2 ring-offset-2 ring-[#1A1F36] scale-110"
+                              : "hover:scale-110"
+                          }`}
+                          style={{ background: c.color }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Goal per day */}
               <div>

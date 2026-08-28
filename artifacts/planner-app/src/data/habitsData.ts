@@ -13,7 +13,7 @@ export interface Habit {
   description: string
   iconBg: string
   iconColor: string
-  icon: 'droplet' | 'run' | 'book' | 'meditation' | 'apple' | 'moon'
+  icon: 'droplet' | 'run' | 'book' | 'meditation' | 'apple' | 'moon' | 'flame' | 'briefcase'
   streak: number
   status: HabitStatus
   category: HabitCategory
