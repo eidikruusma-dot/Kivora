@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { installPromptStore, type BeforeInstallPromptEvent } from './lib/installPromptStore';
+// Sets window.__KIVORA_BUILD__ as a side effect — temporary build/version
+// marker, see buildInfo.ts.
+import './lib/buildInfo';
 
 // ── Capture beforeinstallprompt BEFORE React renders ──────────────────────────
 //

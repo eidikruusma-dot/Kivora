@@ -1,8 +1,25 @@
 import path from 'path';
+import { execSync } from 'child_process';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
+
+// Temporary build/version marker (see src/lib/buildInfo.ts) — captured
+// once per build, never hardcoded. Falls back to 'unknown' when git isn't
+// available (e.g. a source archive without .git) rather than failing the
+// build.
+function resolveGitCommit(): string {
+  try {
+    return execSync('git rev-parse --short HEAD', {
+      cwd: import.meta.dirname,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).toString().trim()
+  } catch {
+    return 'unknown'
+  }
+}
+const gitCommit = resolveGitCommit()
 
 const rawPort = process.env.PORT;
 
@@ -28,6 +45,9 @@ if (!basePath) {
 
 export default defineConfig({
   base: basePath,
+  define: {
+    'import.meta.env.VITE_GIT_COMMIT': JSON.stringify(gitCommit),
+  },
   css: {
     postcss: {
       plugins: [

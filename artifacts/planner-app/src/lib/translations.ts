@@ -753,7 +753,7 @@ export type TranslationKey =
     // ── App Info page ─────────────────────────────────────────────────────────
     | "appInfo.title" | "appInfo.subtitle"
     | "appInfo.about.title" | "appInfo.about.desc"
-    | "appInfo.app.name" | "appInfo.app.version" | "appInfo.app.copyright" | "appInfo.app.developer"
+    | "appInfo.app.name" | "appInfo.app.version" | "appInfo.app.build" | "appInfo.app.copyright" | "appInfo.app.developer"
     | "appInfo.legal.title" | "appInfo.legal.desc"
     | "appInfo.legal.privacy" | "appInfo.legal.terms"
     // ── Settings shared ───────────────────────────────────────────────────────
@@ -2636,6 +2636,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "appInfo.about.desc": "Rakenduse üksikasjad",
         "appInfo.app.name": "Rakenduse nimi",
         "appInfo.app.version": "Versioon",
+        "appInfo.app.build": "Build",
         "appInfo.app.copyright": "Autoriõigus",
         "appInfo.app.developer": "Arendaja",
         "appInfo.legal.title": "Juriidilised dokumendid",
@@ -4649,6 +4650,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "appInfo.about.desc": "Application details",
         "appInfo.app.name": "App name",
         "appInfo.app.version": "Version",
+        "appInfo.app.build": "Build",
         "appInfo.app.copyright": "Copyright",
         "appInfo.app.developer": "Developer",
         "appInfo.legal.title": "Legal",

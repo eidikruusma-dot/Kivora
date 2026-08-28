@@ -3,6 +3,7 @@ import { ArrowLeft, Info, ShieldCheck, FileText, ChevronRight } from 'lucide-rea
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
+import { BUILD_COMMIT } from '@/lib/buildInfo'
 
 // ── App constants ──────────────────────────────────────────────────────────────
 // Update these when the app version or branding changes.
@@ -137,6 +138,7 @@ export default function RakendusePage({ onBack }: Props) {
         >
           <InfoRow label={t('appInfo.app.name', lang)} value={APP_NAME} />
           <InfoRow label={t('appInfo.app.version', lang)} value={APP_VERSION} />
+          <InfoRow label={t('appInfo.app.build', lang)} value={BUILD_COMMIT} />
           <InfoRow label={t('appInfo.app.developer', lang)} value={APP_DEVELOPER} />
           <InfoRow label={t('appInfo.app.copyright', lang)} value={APP_COPYRIGHT} />
         </SectionCard>
