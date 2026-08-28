@@ -57,9 +57,9 @@ describe('existing user with a stored module doc missing the plans field', () =>
 })
 
 describe('plan template gallery', () => {
-  it('has exactly the six expected templates', () => {
+  it('has exactly the seven expected templates', () => {
     expect(PLAN_TEMPLATES.map((p) => p.type)).toEqual([
-      'menu', 'workout', 'study', 'cleaning', 'selfcare', 'blank',
+      'menu', 'workout', 'study', 'cleaning', 'selfcare', 'workSchedule', 'blank',
     ])
   })
 

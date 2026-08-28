@@ -1,7 +1,7 @@
-import { UtensilsCrossed, Dumbbell, BookOpen, Brush, Heart, Plus, type LucideIcon } from 'lucide-react'
+import { UtensilsCrossed, Dumbbell, BookOpen, Brush, Heart, Briefcase, Plus, type LucideIcon } from 'lucide-react'
 import type { TranslationKey } from '@/lib/translations'
 
-export type PlanTemplateType = 'menu' | 'workout' | 'study' | 'cleaning' | 'selfcare' | 'blank'
+export type PlanTemplateType = 'menu' | 'workout' | 'study' | 'cleaning' | 'selfcare' | 'workSchedule' | 'blank'
 
 /** One default checklist item a template pre-fills a new plan with. */
 export interface PlanItemBlueprint {
@@ -100,6 +100,19 @@ export const PLAN_TEMPLATES: PlanTemplate[] = [
       { id: 'rest', titleKey: 'plans.item.selfcare.rest' },
       { id: 'evening', titleKey: 'plans.item.selfcare.evening' },
     ],
+  },
+  {
+    type: 'workSchedule',
+    icon: Briefcase,
+    titleKey: 'plans.template.workSchedule.title',
+    descriptionKey: 'plans.template.workSchedule.desc',
+    accentColor: '#0D9488',
+    accentBg: '#CCFBF1',
+    defaultColor: '#0D9488',
+    // Shifts are entered by the user in a dedicated create form (one row per
+    // work day, since different days can have different hours) rather than
+    // pre-filled from blueprints — see WorkScheduleFormModal.tsx.
+    itemBlueprints: [],
   },
   {
     type: 'blank',

@@ -36,6 +36,7 @@ const EXPECTED_ITEM_COUNT: Record<string, number> = {
   study: 5,
   cleaning: 4,
   selfcare: 4,
+  workSchedule: 0, // shifts are entered by the user in its own create form, not pre-filled blueprints
   blank: 0,
 }
 
@@ -62,13 +63,13 @@ describe('PlanType assigned per template', () => {
       expect(tpl.type).toBe(tpl.type) // sanity: type is the literal used to build the Plan
     }
     expect(PLAN_TEMPLATES.map((t) => t.type)).toEqual([
-      'menu', 'workout', 'study', 'cleaning', 'selfcare', 'blank',
+      'menu', 'workout', 'study', 'cleaning', 'selfcare', 'workSchedule', 'blank',
     ])
   })
 })
 
 describe('generated item count per template', () => {
-  it('matches the required blueprint (menu 7, workout 3, study 5, cleaning 4, selfcare 4, blank 0)', () => {
+  it('matches the required blueprint (menu 7, workout 3, study 5, cleaning 4, selfcare 4, workSchedule 0, blank 0)', () => {
     for (const tpl of PLAN_TEMPLATES) {
       const items = createPlanItemsFromTemplate(tpl, 'et')
       expect(items).toHaveLength(EXPECTED_ITEM_COUNT[tpl.type])

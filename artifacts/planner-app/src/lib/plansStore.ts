@@ -25,6 +25,10 @@ export interface PlanItem {
   done: boolean
   date?: string
   note?: string
+  /** Shift start time ("HH:MM") — set only by the Work Schedule template's shifts. */
+  startTime?: string
+  /** Shift end time ("HH:MM") — set only by the Work Schedule template's shifts. */
+  endTime?: string
 }
 
 export interface Plan {
@@ -37,6 +41,13 @@ export interface Plan {
   items: PlanItem[]
   createdAt: number
   updatedAt: number
+  /**
+   * Work Schedule only: when true, each item with a date+startTime+endTime
+   * is derived into its own Calendar entry (see planGoalCalendarEvents.ts's
+   * planItemToCalendarEvent) — opt-in because a schedule can generate many
+   * entries at once, unlike every other template's single whole-plan entry.
+   */
+  addShiftsToCalendar?: boolean
 }
 
 /**
@@ -158,6 +169,66 @@ export function createPlanItemsFromTemplate(template: PlanTemplate, lang: AppLan
 
 export function isValidItemLabel(label: string): boolean {
   return label.trim().length > 0
+}
+
+// ── Work Schedule template ───────────────────────────────────────────────────
+// A shift is entered by the user (one row per work day) rather than being a
+// pre-filled boilerplate item like the other templates' itemBlueprints, since
+// two shifts can have completely different dates/times (see
+// isValidWorkScheduleShift's doc comment for the exact V1 constraint this
+// implies). Kept as plain pure functions — reused by both the create-form
+// component and its tests, matching every other validation helper above.
+
+export interface WorkScheduleShiftDraft {
+  date: string
+  startTime: string
+  endTime: string
+}
+
+/**
+ * A shift's end time must be strictly after its start time. V1 deliberately
+ * does not support a shift that crosses midnight (e.g. 22:00-06:00) — that
+ * would need the derived Calendar entry to span two dates, which the rest of
+ * the calendar-derivation/rendering code (built around a single-day timed
+ * event) does not model. An overnight shift can still be entered as two
+ * separate rows (e.g. 22:00-23:59 and 00:00-06:00 the next day).
+ */
+export function isValidShiftTimes(startTime: string, endTime: string): boolean {
+  return startTime.length > 0 && endTime.length > 0 && endTime > startTime
+}
+
+export function isValidWorkScheduleShift(shift: WorkScheduleShiftDraft): boolean {
+  return shift.date.length > 0 && isValidShiftTimes(shift.startTime, shift.endTime)
+}
+
+/** At least one fully valid shift row is required to create a Work Schedule plan. */
+export function hasValidWorkScheduleShift(shifts: WorkScheduleShiftDraft[]): boolean {
+  return shifts.some(isValidWorkScheduleShift)
+}
+
+/**
+ * Builds the plan's items from the shift rows entered in the create form.
+ * Invalid/incomplete rows (still being filled in) are silently dropped
+ * rather than rejected — the form only needs at least one valid row overall
+ * (hasValidWorkScheduleShift) to allow submission. Each item's label is the
+ * shift's own time range (e.g. "09:00–17:00") since that is the one thing
+ * that varies from item to item and is what makes the plan read as a
+ * schedule; the optional workplace/note is attached identically to every
+ * generated shift.
+ */
+export function buildWorkScheduleItems(shifts: WorkScheduleShiftDraft[], workplaceNote: string): PlanItem[] {
+  const note = workplaceNote.trim() || undefined
+  return shifts
+    .filter(isValidWorkScheduleShift)
+    .map((shift) => ({
+      id: generateItemId(),
+      label: `${shift.startTime}–${shift.endTime}`,
+      done: false,
+      date: shift.date,
+      startTime: shift.startTime,
+      endTime: shift.endTime,
+      ...(note ? { note } : {}),
+    }))
 }
 
 /**

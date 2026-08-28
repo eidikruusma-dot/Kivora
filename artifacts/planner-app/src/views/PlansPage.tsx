@@ -7,6 +7,7 @@ import { t, type TranslationKey } from '@/lib/translations'
 import AppCard from '@/components/ui/AppCard'
 import ProgressBar from '@/components/ui/ProgressBar'
 import PlanFormModal, { PLAN_COLOR_SWATCHES, type PlanFormValues } from '@/components/plans/PlanFormModal'
+import WorkScheduleFormModal, { type WorkScheduleFormValues } from '@/components/plans/WorkScheduleFormModal'
 import { PLAN_TEMPLATES, getTemplateIcon, type PlanTemplate } from '@/data/planTemplates'
 import {
   usePlans,
@@ -15,6 +16,7 @@ import {
   generatePlanId,
   computePlanProgress,
   createPlanItemsFromTemplate,
+  buildWorkScheduleItems,
   formatDateRange,
   type Plan,
 } from '@/lib/plansStore'
@@ -32,6 +34,7 @@ export default function PlansPage() {
   const [activeTab, setActiveTab] = useState<PlansTab>('myPlans')
   const [modalOpen, setModalOpen] = useState(false)
   const [creatingTemplate, setCreatingTemplate] = useState<PlanTemplate | null>(null)
+  const [workScheduleModalOpen, setWorkScheduleModalOpen] = useState(false)
 
   const plans = usePlans()
   const plansLoading = usePlansLoading()
@@ -162,7 +165,10 @@ export default function PlansPage() {
                   return (
                     <button
                       key={type}
-                      onClick={() => openCreateModal(isBlank ? null : template)}
+                      onClick={() => {
+                        if (type === 'workSchedule') { setWorkScheduleModalOpen(true); return }
+                        openCreateModal(isBlank ? null : template)
+                      }}
                       className={`flex items-start gap-3 p-4 rounded-2xl border bg-white text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6F5AE8] focus-visible:ring-offset-2 ${
                         isBlank
                           ? 'border-dashed border-[#D1D5DB] hover:border-[#6F5AE8] hover:bg-[#F8F7FF]'
@@ -214,6 +220,33 @@ export default function PlansPage() {
           onSuccess={() => {
             setModalOpen(false)
             setCreatingTemplate(null)
+            setActiveTab('myPlans')
+          }}
+        />
+      )}
+
+      {workScheduleModalOpen && (
+        <WorkScheduleFormModal
+          lang={lang}
+          onCancel={() => setWorkScheduleModalOpen(false)}
+          onSubmit={async (values: WorkScheduleFormValues) => {
+            const now = Date.now()
+            const newPlan: Plan = {
+              id: generatePlanId(),
+              type: 'workSchedule',
+              title: values.title,
+              color: values.color,
+              startDate: values.startDate || undefined,
+              endDate: values.endDate || undefined,
+              items: buildWorkScheduleItems(values.shifts, values.workplaceNote),
+              addShiftsToCalendar: values.addShiftsToCalendar,
+              createdAt: now,
+              updatedAt: now,
+            }
+            await addPlan(newPlan)
+          }}
+          onSuccess={() => {
+            setWorkScheduleModalOpen(false)
             setActiveTab('myPlans')
           }}
         />

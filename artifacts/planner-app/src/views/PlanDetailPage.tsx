@@ -13,6 +13,7 @@ import {
   usePlansLoading,
   computePlanProgress,
   formatDateRange,
+  formatPlanDate,
   isValidItemLabel,
   addPlanItem,
   updatePlanItem,
@@ -359,6 +360,9 @@ export default function PlanDetailPage() {
                 </button>
 
                 <div className="min-w-0 flex-1">
+                  {item.date && (
+                    <p className="text-[11px] font-medium text-[#6F5AE8] mb-0.5">{formatPlanDate(item.date, lang)}</p>
+                  )}
                   <p className={`text-sm ${item.done ? 'line-through text-[#94A3B8]' : 'text-[#1A1F36]'}`}>
                     {item.label}
                   </p>

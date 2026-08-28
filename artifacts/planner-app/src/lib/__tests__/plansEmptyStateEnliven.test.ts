@@ -144,7 +144,11 @@ describe('everything else on the Plans page is untouched', () => {
 
   it('the templates grid and its own creation entry points are untouched', () => {
     expect(SRC).toMatch(/\{PLAN_TEMPLATES\.map\(\(template\) => \{/)
-    expect(SRC).toMatch(/onClick=\{\(\) => openCreateModal\(isBlank \? null : template\)\}/)
+    // Every non-Work-Schedule template still opens the original generic
+    // create modal, unchanged — Work Schedule is special-cased ahead of it
+    // to open its own dedicated form instead (see plansWorkScheduleTemplate
+    // .test.ts for that wiring specifically).
+    expect(SRC).toMatch(/openCreateModal\(isBlank \? null : template\)/)
   })
 
   it('the plans list (non-empty state), progress bars, and navigation to plan detail are untouched', () => {

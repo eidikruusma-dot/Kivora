@@ -27,7 +27,7 @@
  * edit/delete flow (these are not independently editable from Calendar).
  */
 
-import type { Plan } from '@/lib/plansStore'
+import type { Plan, PlanItem } from '@/lib/plansStore'
 import type { Goal } from '@/data/goalsData'
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
 
@@ -38,6 +38,11 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 export function planCalendarEventId(planId: string): string {
   return `${PLAN_CALENDAR_EVENT_PREFIX}${planId}`
+}
+
+/** Deterministic id for one Work Schedule shift's derived Calendar entry — item-level, but still traceable back to the same source plan. */
+export function planItemCalendarEventId(planId: string, itemId: string): string {
+  return `${planCalendarEventId(planId)}-${itemId}`
 }
 
 export function goalCalendarEventId(goalId: string): string {
@@ -51,6 +56,10 @@ export function goalCalendarEventId(goalId: string): string {
  * entry spanning the whole inclusive range.
  */
 export function planToCalendarEvent(plan: Plan): MockCalendarEvent | null {
+  // A Work Schedule's own shifts (see planItemToCalendarEvent below) are
+  // what should show on Calendar — a second, whole-plan-range all-day entry
+  // spanning the same period would just be redundant clutter on top of them.
+  if (plan.type === 'workSchedule') return null
   const { startDate, endDate } = plan
   if (!startDate && !endDate) return null
   const date = startDate ?? endDate!
@@ -63,6 +72,36 @@ export function planToCalendarEvent(plan: Plan): MockCalendarEvent | null {
     allDay: true,
     startTime: '',
     endTime: '',
+    color: plan.color,
+    calendarId: 'mine',
+    source: { type: 'plan', id: plan.id },
+  }
+}
+
+/**
+ * One Work Schedule shift, derived as its own timed (non-all-day) Calendar
+ * entry — never persisted, exactly like planToCalendarEvent above, so
+ * editing or deleting the source shift/plan is instantly reflected and can
+ * never leave an orphaned/duplicate calendar entry behind. Requires:
+ *   - the plan is a Work Schedule (other templates never set startTime/
+ *     endTime on an item, so this never fires for them anyway, but the
+ *     explicit check keeps the gate obvious and future-proof);
+ *   - addShiftsToCalendar was opted into for this specific plan; and
+ *   - the item actually has a valid date + start + end time.
+ * Linked back to the plan (not the item) via the same `source: { type:
+ * 'plan', id }` shape planToCalendarEvent uses, so CalendarPage.tsx's
+ * existing "click a plan-sourced entry -> open that plan" routing works
+ * unchanged for every shift, with no per-item special case needed there.
+ */
+export function planItemToCalendarEvent(plan: Plan, item: PlanItem): MockCalendarEvent | null {
+  if (plan.type !== 'workSchedule' || !plan.addShiftsToCalendar) return null
+  if (!item.date || !ISO_DATE.test(item.date) || !item.startTime || !item.endTime) return null
+  return {
+    id: planItemCalendarEventId(plan.id, item.id),
+    title: plan.title,
+    date: item.date,
+    startTime: item.startTime,
+    endTime: item.endTime,
     color: plan.color,
     calendarId: 'mine',
     source: { type: 'plan', id: plan.id },
@@ -96,8 +135,13 @@ export function getDerivedCalendarEvents(plans: Plan[], goals: Goal[]): MockCale
   const planEvents = plans
     .map(planToCalendarEvent)
     .filter((e): e is MockCalendarEvent => e !== null)
+  const shiftEvents = plans.flatMap((plan) =>
+    plan.items
+      .map((item) => planItemToCalendarEvent(plan, item))
+      .filter((e): e is MockCalendarEvent => e !== null),
+  )
   const goalEvents = goals
     .map(goalToCalendarEvent)
     .filter((e): e is MockCalendarEvent => e !== null)
-  return [...planEvents, ...goalEvents]
+  return [...planEvents, ...shiftEvents, ...goalEvents]
 }

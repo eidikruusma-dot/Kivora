@@ -1702,6 +1702,20 @@ export type TranslationKey =
     | "plans.template.cleaning.desc"
     | "plans.template.selfcare.title"
     | "plans.template.selfcare.desc"
+    | "plans.template.workSchedule.title"
+    | "plans.template.workSchedule.desc"
+    | "plans.workSchedule.modalTitle"
+    | "plans.workSchedule.workplaceLabel"
+    | "plans.workSchedule.workplacePlaceholder"
+    | "plans.workSchedule.shiftsHeading"
+    | "plans.workSchedule.addShift"
+    | "plans.workSchedule.removeShift"
+    | "plans.workSchedule.shiftDateLabel"
+    | "plans.workSchedule.shiftStartLabel"
+    | "plans.workSchedule.shiftEndLabel"
+    | "plans.workSchedule.addToCalendarLabel"
+    | "plans.workSchedule.errorNoShifts"
+    | "plans.workSchedule.submit"
     | "plans.template.blank.title"
     | "plans.template.blank.desc"
     | "plans.modal.title"
@@ -3719,6 +3733,20 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.template.cleaning.desc": "Hoia oma kodu korras ja planeeri lihtsasti.",
         "plans.template.selfcare.title": "Enesehooldus",
         "plans.template.selfcare.desc": "Pühenda aega endale ja oma heaolule.",
+        "plans.template.workSchedule.title": "Töögraafik",
+        "plans.template.workSchedule.desc": "Sisesta oma töövahetused ja näe neid graafiku ja kalendrina.",
+        "plans.workSchedule.modalTitle": "Uus töögraafik",
+        "plans.workSchedule.workplaceLabel": "Töökoht / märkus (valikuline)",
+        "plans.workSchedule.workplacePlaceholder": "Nt Firma AS",
+        "plans.workSchedule.shiftsHeading": "Töövahetused",
+        "plans.workSchedule.addShift": "Lisa vahetus",
+        "plans.workSchedule.removeShift": "Eemalda vahetus",
+        "plans.workSchedule.shiftDateLabel": "Kuupäev",
+        "plans.workSchedule.shiftStartLabel": "Algusaeg",
+        "plans.workSchedule.shiftEndLabel": "Lõpuaeg",
+        "plans.workSchedule.addToCalendarLabel": "Lisa loodud vahetused kalendrisse",
+        "plans.workSchedule.errorNoShifts": "Lisa vähemalt üks kehtiv töövahetus (kuupäev, algus- ja lõpuaeg, kus lõpuaeg on hilisem kui algusaeg).",
+        "plans.workSchedule.submit": "Loo töögraafik",
         "plans.template.blank.title": "Tühi plaan",
         "plans.template.blank.desc": "Alusta täiesti tühjalt lehelt.",
         "plans.modal.title": "Uus tühi plaan",
@@ -5728,6 +5756,20 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.template.cleaning.desc": "Keep your home tidy with an easy plan.",
         "plans.template.selfcare.title": "Self-care",
         "plans.template.selfcare.desc": "Dedicate time to yourself and your wellbeing.",
+        "plans.template.workSchedule.title": "Work schedule",
+        "plans.template.workSchedule.desc": "Enter your work shifts and see them as a schedule and on your calendar.",
+        "plans.workSchedule.modalTitle": "New work schedule",
+        "plans.workSchedule.workplaceLabel": "Workplace / note (optional)",
+        "plans.workSchedule.workplacePlaceholder": "E.g. Acme Inc.",
+        "plans.workSchedule.shiftsHeading": "Shifts",
+        "plans.workSchedule.addShift": "Add shift",
+        "plans.workSchedule.removeShift": "Remove shift",
+        "plans.workSchedule.shiftDateLabel": "Date",
+        "plans.workSchedule.shiftStartLabel": "Start time",
+        "plans.workSchedule.shiftEndLabel": "End time",
+        "plans.workSchedule.addToCalendarLabel": "Add the generated shifts to Calendar",
+        "plans.workSchedule.errorNoShifts": "Add at least one valid shift (date, start and end time, with end time after start time).",
+        "plans.workSchedule.submit": "Create work schedule",
         "plans.template.blank.title": "Blank plan",
         "plans.template.blank.desc": "Start completely from scratch.",
         "plans.modal.title": "New blank plan",
