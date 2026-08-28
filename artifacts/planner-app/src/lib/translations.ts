@@ -1689,6 +1689,7 @@ export type TranslationKey =
     | "plans.tab.templates"
     | "plans.empty.title"
     | "plans.empty.desc"
+    | "plans.empty.cta"
     | "plans.templates.heading"
     | "plans.template.menu.title"
     | "plans.template.menu.desc"
@@ -3701,8 +3702,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.create": "Loo uus plaan",
         "plans.tab.myPlans": "Minu plaanid",
         "plans.tab.templates": "Mallid",
-        "plans.empty.title": "Plaane pole veel lisatud",
-        "plans.empty.desc": "Alusta mallist või loo täiesti uus plaan.",
+        "plans.empty.title": "Loo oma esimene plaan",
+        "plans.empty.desc": "Pane mõtted sammudeks ja vii plaan päriselt ellu.",
+        "plans.empty.cta": "Loo plaan",
         "plans.templates.heading": "Alusta mallist",
         "plans.template.menu.title": "Nädala menüü",
         "plans.template.menu.desc": "Planeeri oma nädala toidukorrad lihtsalt.",
@@ -5707,8 +5709,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.create": "Create new plan",
         "plans.tab.myPlans": "My plans",
         "plans.tab.templates": "Templates",
-        "plans.empty.title": "No plans yet",
-        "plans.empty.desc": "Start from a template or create a brand new plan.",
+        "plans.empty.title": "Create your first plan",
+        "plans.empty.desc": "Turn your ideas into steps and bring your plan to life.",
+        "plans.empty.cta": "Create plan",
         "plans.templates.heading": "Start from a template",
         "plans.template.menu.title": "Weekly menu",
         "plans.template.menu.desc": "Plan your week's meals with ease.",

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Loader2 } from 'lucide-react'
+import { Plus, Loader2, ClipboardList } from 'lucide-react'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t, type TranslationKey } from '@/lib/translations'
@@ -97,9 +97,21 @@ export default function PlansPage() {
                 <Loader2 size={24} className="animate-spin text-[#6F5AE8]" />
               </div>
             ) : plans.length === 0 ? (
-              <div className="flex flex-col items-center justify-center text-center py-16 gap-1.5">
-                <p className="text-sm font-semibold text-[#1A1F36]">{t('plans.empty.title', lang)}</p>
-                <p className="text-sm text-[#94A3B8]">{t('plans.empty.desc', lang)}</p>
+              <div className="rounded-2xl bg-[#F8F7FC] flex flex-col items-center justify-center py-16 text-center gap-3">
+                <div className="w-16 h-16 rounded-full bg-[#EDE9FB] flex items-center justify-center">
+                  <ClipboardList size={28} className="text-[#6F5AE8]" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[#1A1F36]">{t('plans.empty.title', lang)}</p>
+                  <p className="text-xs text-[#94A3B8] mt-1">{t('plans.empty.desc', lang)}</p>
+                </div>
+                <button
+                  onClick={() => setActiveTab('templates')}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#EDE9FB] text-[#6F5AE8] rounded-xl text-sm font-semibold hover:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6F5AE8] focus-visible:ring-offset-2"
+                >
+                  <Plus size={14} />
+                  {t('plans.empty.cta', lang)}
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
