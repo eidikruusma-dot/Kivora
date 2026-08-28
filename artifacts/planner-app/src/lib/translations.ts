@@ -354,6 +354,7 @@ export type TranslationKey =
     | "cat.family"
     | "cat.health"
     | "cat.shopping"
+    | "cat.home"
     // ── Notes page ────────────────────────────────────────────────────────────
     | "notes.title"
     | "notes.subtitle"
@@ -2190,6 +2191,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "cat.family": "Pere",
         "cat.health": "Tervis",
         "cat.shopping": "Ostud",
+        "cat.home": "Kodu",
         // notes page
         "notes.title": "Märkmed",
         "notes.subtitle": "{n} märget · {f} kausta",
@@ -4205,6 +4207,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "cat.family": "Family",
         "cat.health": "Health",
         "cat.shopping": "Shopping",
+        "cat.home": "Home",
         // notes page
         "notes.title": "Notes",
         "notes.subtitle": "{n} notes · {f} folders",

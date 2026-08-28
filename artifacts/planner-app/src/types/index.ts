@@ -1,5 +1,5 @@
 export type Priority = 'high' | 'medium' | 'low'
-export type TaskCategory = 'Töö' | 'Kool' | 'Isiklik' | 'Pere' | 'Tervis' | 'Ostud'
+export type TaskCategory = 'Töö' | 'Kool' | 'Isiklik' | 'Pere' | 'Tervis' | 'Ostud' | 'Kodu'
 
 export interface Task {
   id: string

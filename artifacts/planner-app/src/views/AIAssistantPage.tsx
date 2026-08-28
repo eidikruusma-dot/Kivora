@@ -9,6 +9,8 @@ import {
   resolveIncomeCategory,
   resolveExpenseCategory,
   findMoneyDuplicate,
+  shouldHandleAsShortConfirmationReply,
+  resolveShortConfirmationReply,
   type AIAction,
   type PendingFileRef,
 } from "@/lib/aiActions";
@@ -1058,6 +1060,70 @@ export default function AIAssistantPage() {
         hiddenContext || undefined,
         attachments.length > 0 ? attachments : undefined,
       );
+      return;
+    }
+
+    // ── Short confirm/cancel reply for an already-pending destructive action ──
+    // Resolved locally, without a round-trip to the AI model, so a bare
+    // "jah"/"yes" always works even though the model's own confirmation
+    // question is worded as a full sentence. Only ever affects the exact
+    // pending {type, entityId}, through the existing, unmodified
+    // confirm-before-execute gate — see resolveShortConfirmationReply's doc
+    // comment in aiActions.ts. Skipped entirely when there's an attachment
+    // (not a bare short reply) or nothing pending to resolve.
+    if (
+      trimmed &&
+      attachments.length === 0 &&
+      shouldHandleAsShortConfirmationReply(trimmed)
+    ) {
+      const chat = activeChat;
+      const shortUserMsg: ChatMessage = {
+        id: uid(),
+        role: "user",
+        content: trimmed,
+        time: nowTime(lang),
+      };
+      setInput("");
+      setChats((prev) =>
+        prev.map((c) =>
+          c.id === chat.id
+            ? {
+                ...c,
+                messages: [...c.messages, shortUserMsg],
+                updatedAt: Date.now(),
+              }
+            : c,
+        ),
+      );
+      resolveShortConfirmationReply(trimmed).then((results) => {
+        const finalReply = composeFinalReply(results ?? [], "");
+        const assistantMsg: ChatMessage = {
+          id: uid(),
+          role: "assistant",
+          content: finalReply,
+          time: nowTime(lang),
+        };
+        setChats((prev) =>
+          prev.map((c) =>
+            c.id === chat.id
+              ? {
+                  ...c,
+                  messages: [...c.messages, assistantMsg],
+                  updatedAt: Date.now(),
+                }
+              : c,
+          ),
+        );
+        storeSaveChat({
+          ...chat,
+          updatedAt: Date.now(),
+          messages: [
+            ...chat.messages.filter((m) => !m.pending && !m.error),
+            shortUserMsg,
+            assistantMsg,
+          ],
+        }).catch(() => {});
+      });
       return;
     }
 

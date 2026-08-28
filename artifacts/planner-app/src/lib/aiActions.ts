@@ -21,6 +21,7 @@ import {
 } from '@/lib/documentsStore'
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
 import type { Task, Priority, TaskCategory } from '@/types'
+import { TASK_CATEGORIES } from '@/lib/taskCategories'
 import type { NoteFolder } from '@/data/notesData'
 import type { HabitCategory } from '@/data/habitsData'
 import { sanitizePlanDraft, normalizeSingleValidPlanPreview, type PlanDraft } from '@/lib/planDraftValidation'
@@ -164,6 +165,38 @@ function inferPriority(text: string): Priority {
   return 'medium'
 }
 
+const VALID_PRIORITIES: Priority[] = ['high', 'medium', 'low']
+
+/**
+ * Honors an explicit category the model passed through in action.data.category
+ * (itself carrying the user's own stated wish, e.g. "kategooria Kodu") when it
+ * exactly matches one of Kivora's canonical TaskCategory values — case- and
+ * whitespace-insensitively, since the model may vary casing. Falls back to
+ * inferCategory(title) ONLY when no category was given, or the given one
+ * doesn't match any canonical value. This is the fix for a live bug where an
+ * explicitly requested category was silently discarded in favor of a
+ * title-keyword guess (e.g. "Kodu" → "Ostud") because this field was never
+ * read at all.
+ */
+function resolveTaskCategory(rawCategory: unknown, title: string): TaskCategory {
+  if (typeof rawCategory === 'string') {
+    const trimmed = rawCategory.trim().toLowerCase()
+    const match = TASK_CATEGORIES.find((c) => c.toLowerCase() === trimmed)
+    if (match) return match
+  }
+  return inferCategory(title)
+}
+
+/** Same rule as resolveTaskCategory, for action.data.priority. */
+function resolveTaskPriority(rawPriority: unknown, title: string): Priority {
+  if (typeof rawPriority === 'string') {
+    const trimmed = rawPriority.trim().toLowerCase()
+    const match = VALID_PRIORITIES.find((p) => p === trimmed)
+    if (match) return match
+  }
+  return inferPriority(title)
+}
+
 // ── Money helpers ─────────────────────────────────────────────────────────────
 
 const VALID_INCOME_CATS: TransactionCategory[] = [
@@ -301,6 +334,85 @@ function clearPendingDestructiveAction(): void {
   _pendingDestructiveAction = null
 }
 
+// ── Short confirm/cancel replies ("jah" / "yes" / "ei" / "cancel") ─────────
+//
+// Live bug: a full-sentence confirmation ("Jah, kustuta.") worked, but a
+// bare "jah"/"yes" reply to the SAME confirm question apparently did not —
+// the model's own confirm-question example text uses a full sentence,
+// biasing it toward expecting one back. The confirm-before-execute GATE
+// itself (above) was never the problem: it only cares whether the SAME
+// {type, entityId} is re-proposed in a later round-trip, completely
+// independent of the user's wording.
+//
+// Fix: recognize a short, unambiguous confirm/cancel reply here, in code,
+// and resolve it WITHOUT a round-trip to the model at all — by re-feeding
+// the exact pending {type, entityId} through the existing, unmodified
+// executeActionsAsync → executeDestructiveAction gate (a synthetic action
+// built from the pending state, resolved by id — never by title). This
+// reuses every existing safety guarantee unchanged: the confirmation stays
+// bound to the exact pending type + entity id, and a later "later round-trip"
+// requirement is still enforced by the same generation counter.
+//
+// A deliberately small, exact whitelist (not a fuzzy regex over arbitrary
+// sentences) — matching only the minimal required words/phrases plus
+// trivial punctuation/case variation — so an ambiguous reply is never
+// mistaken for confirmation.
+const SHORT_CONFIRM_REPLIES = new Set(['jah', 'jah palun', 'kinnitan', 'yes', 'confirm', 'confirmed'])
+const SHORT_CANCEL_REPLIES = new Set(['ei', 'tühista', 'no', 'cancel', 'cancelled', 'canceled'])
+
+function normalizeShortReply(message: string): string {
+  return message.trim().toLowerCase().replace(/[.!?]+$/g, '').replace(/\s+/g, ' ')
+}
+
+export type ShortConfirmationIntent = 'confirm' | 'cancel'
+
+/** Pure classifier — exact whitelist match only, so an ambiguous reply never resolves to either intent. */
+export function classifyShortConfirmationReply(message: string): ShortConfirmationIntent | null {
+  const normalized = normalizeShortReply(message)
+  if (SHORT_CONFIRM_REPLIES.has(normalized)) return 'confirm'
+  if (SHORT_CANCEL_REPLIES.has(normalized)) return 'cancel'
+  return null
+}
+
+/**
+ * Synchronous pre-check a caller can use BEFORE sending a message to the AI
+ * backend at all, to decide whether to take the local short-circuit path
+ * instead of the normal chat round-trip. True only when the message is a
+ * recognized short confirm/cancel word AND a destructive action is actually
+ * pending — a generic "jah"/"yes" with nothing pending is never handled
+ * here (it safely falls through to the normal AI flow, which executes
+ * nothing on its own).
+ */
+export function shouldHandleAsShortConfirmationReply(message: string): boolean {
+  return classifyShortConfirmationReply(message) !== null && _pendingDestructiveAction !== null
+}
+
+/**
+ * Resolves a short confirm/cancel reply locally. Returns null when it does
+ * not apply (ambiguous message, or nothing pending) — callers fall through
+ * to the normal AI chat flow in that case, completely unaffected.
+ */
+export async function resolveShortConfirmationReply(
+  message: string,
+  ctx?: ActionContext,
+): Promise<AIActionResult[] | null> {
+  const intent = classifyShortConfirmationReply(message)
+  if (!intent || !_pendingDestructiveAction) return null
+
+  if (intent === 'cancel') {
+    clearPendingDestructiveAction()
+    return [{ success: true, message: 'Toiming tühistatud. Midagi ei muudetud.' }]
+  }
+
+  // 'confirm' — re-propose the exact pending {type, entityId} through the
+  // unmodified executeActionsAsync/executeDestructiveAction gate. Since
+  // this is a genuinely later call to executeActionsAsync, the generation
+  // counter advances past requestedInGeneration and the pending action is
+  // recognized as confirmed and actually executed.
+  const { type, entityId } = _pendingDestructiveAction
+  return executeActionsAsync([{ type, data: { id: entityId } }], ctx)
+}
+
 interface DestructiveActionConfig<T> {
   type: DestructiveActionType
   find: (id: string, title: string) => T | undefined
@@ -382,10 +494,10 @@ export async function executeAction(rawAction: AIAction, ctx?: ActionContext): P
           title,
           description: action.data.description ? String(action.data.description) : undefined,
           date: action.data.date ? parseDate(String(action.data.date)) : todayDateStr(),
-          priority: inferPriority(title),
+          priority: resolveTaskPriority(action.data.priority, title),
           time: action.data.time ? String(action.data.time) : undefined,
           completed: false,
-          category: inferCategory(title),
+          category: resolveTaskCategory(action.data.category, title),
         }
         await addTask(task)
         const taskOk = await verifyDoc('tasks', task.id)
@@ -920,15 +1032,31 @@ export async function executeActionsAsync(
  * empty compose is intentional (a UI card renders in their place); any
  * other empty outcome falls back to a generic acknowledgement so the user
  * is never left staring at nothing.
+ *
+ * When at least one non-silent action executed successfully, the model's
+ * own free-text reply is suppressed ENTIRELY (not appended) — only the
+ * code-verified actionSummary is shown. The model writes `reply` before
+ * any action result is known, so on a successful action it typically
+ * either re-narrates the same outcome the actionSummary already states
+ * ("Ülesanne „X” lisatud." followed by the model's own "Lisasin ülesande
+ * X...") or re-asks a question that has already been answered by the
+ * action executing — both read as duplicated/confusing text in the same
+ * bubble. This does NOT affect turns where no action executed at all
+ * (results is empty) or where every action was silent (a card renders) —
+ * those still show the model's reply exactly as before.
  */
 export function composeFinalReply(results: AIActionResult[], modelReply: string): string {
   const actionSummary = results.map((r) => r.message).filter(Boolean).join(' ')
   const needsConfirmation = results.some((r) => r.needsConfirmation)
   const hasFailure = results.some((r) => !r.success && !r.needsConfirmation)
   const allSilent = results.length > 0 && results.every((r) => r.silent)
+  const hasVisibleSuccess = results.some((r) => r.success && !r.silent)
 
   if (needsConfirmation || hasFailure) {
     return actionSummary || 'Toimingu tulemust ei õnnestunud kuvada. Palun proovi uuesti.'
+  }
+  if (hasVisibleSuccess) {
+    return actionSummary || 'Toiming käivitatud.'
   }
   const combined = [actionSummary, modelReply].filter(Boolean).join('\n\n')
   if (combined) return combined

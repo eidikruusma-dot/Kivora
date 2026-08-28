@@ -4,7 +4,7 @@ import type { AppLang } from '@/lib/languageStore'
 
 /** The canonical (ET) category values — used as data keys in tasks. */
 export const TASK_CATEGORIES: TaskCategory[] = [
-  'Töö', 'Kool', 'Isiklik', 'Pere', 'Tervis', 'Ostud',
+  'Töö', 'Kool', 'Isiklik', 'Pere', 'Tervis', 'Ostud', 'Kodu',
 ]
 
 /** Category colors (design-system only, not i18n-sensitive). */
@@ -15,6 +15,7 @@ const CATEGORY_COLORS: Record<TaskCategory, string> = {
   'Pere':    '#CA8A04',
   'Tervis':  '#DC2626',
   'Ostud':   '#F97316',
+  'Kodu':    '#0D9488',
 }
 
 /**
@@ -28,6 +29,7 @@ export const CATEGORY_MAP: Record<TaskCategory, { color: string; label: string }
   'Pere':    { color: CATEGORY_COLORS['Pere'],    label: 'Pere'    },
   'Tervis':  { color: CATEGORY_COLORS['Tervis'],  label: 'Tervis'  },
   'Ostud':   { color: CATEGORY_COLORS['Ostud'],   label: 'Ostud'   },
+  'Kodu':    { color: CATEGORY_COLORS['Kodu'],    label: 'Kodu'    },
 }
 
 /** Returns category objects with translated labels for the given language. */
@@ -39,6 +41,7 @@ export function getTaskCategories(lang: AppLang): { value: TaskCategory; label: 
     { value: 'Pere',    label: t('cat.family',   lang), color: CATEGORY_COLORS['Pere']    },
     { value: 'Tervis',  label: t('cat.health',   lang), color: CATEGORY_COLORS['Tervis']  },
     { value: 'Ostud',   label: t('cat.shopping', lang), color: CATEGORY_COLORS['Ostud']   },
+    { value: 'Kodu',    label: t('cat.home',     lang), color: CATEGORY_COLORS['Kodu']    },
   ]
 }
 

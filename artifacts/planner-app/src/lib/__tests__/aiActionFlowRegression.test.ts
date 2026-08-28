@@ -208,6 +208,15 @@ describe('1-6. the exact live-incident flow: create a task from an AI turn', () 
     expect(results[0]!.success).toBe(true)
     expect(setDocMock).toHaveBeenCalledTimes(1)
 
+    // 3b. the explicitly requested category ("Kodu") and priority ("medium")
+    // are preserved verbatim in the actual Firestore write — the live bug
+    // was that create_task ignored action.data.category/priority entirely
+    // and always overwrote them with a title-keyword guess (here, the title
+    // contains "osta", so the old code silently produced "Ostud" instead).
+    const writtenTask = setDocMock.mock.calls[0]![1] as Task
+    expect(writtenTask.category).toBe('Kodu')
+    expect(writtenTask.priority).toBe('medium')
+
     // 4. exactly one task is created — reflect the write via onSnapshot,
     // the same way a real Firestore listener would.
     seedTasks([{
@@ -258,16 +267,17 @@ describe('a failed create produces a visible error, never an empty response', ()
 })
 
 describe("model reply + successful action can't produce duplicate success text", () => {
-  it('composeFinalReply never repeats the action summary inside itself', () => {
+  it('composeFinalReply suppresses the model\'s own free-text reply entirely on a visible success — exactly one authoritative message, never two', () => {
     const results: AIActionResult[] = [{ success: true, message: 'Ülesanne "Osta piima" lisatud.' }]
     const finalReply = composeFinalReply(results, 'Ülesanne "Osta piima" lisatud. Anna teada, kui vajad veel midagi.')
-    // The code-verified summary is the authoritative one; the model's own
-    // reply is appended as-is (it may legitimately add its own commentary
-    // after the fact), but the exact confirmation phrase from the summary
-    // itself is never duplicated by composeFinalReply's own composition.
+    // Live bug: the model's own reply (written before the action result is
+    // known) redundantly repeated or re-asked about the very thing that
+    // just succeeded. The fix is to show ONLY the code-verified summary —
+    // the model's reply text (even a legitimate follow-up remark) never
+    // appears at all once an action has visibly succeeded.
+    expect(finalReply).toBe('Ülesanne "Osta piima" lisatud.')
     const summaryOccurrences = finalReply.split('Ülesanne "Osta piima" lisatud.').length - 1
-    expect(summaryOccurrences).toBeLessThanOrEqual(2) // once from actionSummary, once (verbatim) from the model's own text — never MORE
-    expect(finalReply.startsWith('Ülesanne "Osta piima" lisatud.')).toBe(true)
+    expect(summaryOccurrences).toBe(1)
   })
 })
 

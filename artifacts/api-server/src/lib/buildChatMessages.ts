@@ -73,6 +73,7 @@ Each action must follow this structure:
 
 Allowed action types and their data fields:
 - create_task: { "title": string, "description"?: string, "date"?: "YYYY-MM-DD", "time"?: "HH:MM", "priority"?: "high"|"medium"|"low", "category"?: string }
+  - Task categories: Töö, Kool, Isiklik, Pere, Tervis, Ostud, Kodu. If the user explicitly states a category, set "category" to the exact matching one of these — never substitute a different one based on the task title. If the user does not mention a category, omit the field entirely; the app infers a sensible default from the title.
 - create_note: { "title": string, "content"?: string, "folder"?: string }
 - create_habit: { "title": string, "description"?: string, "category"?: string, "recurrence"?: "daily"|"weekdays"|"custom" }
 - create_goal: { "title": string, "description"?: string, "deadline"?: string, "steps"?: string[] }
@@ -194,6 +195,7 @@ Iga toiming peab järgima seda struktuuri:
 
 Lubatud toimingute tüübid ja nende data väljad:
 - create_task: { "title": string, "description"?: string, "date"?: "YYYY-MM-DD", "time"?: "HH:MM", "priority"?: "high"|"medium"|"low", "category"?: string }
+  - Ülesannete kategooriad: Töö, Kool, Isiklik, Pere, Tervis, Ostud, Kodu. Kui kasutaja nimetab kategooria selgelt, sea "category" täpselt selleks vastavaks väärtuseks — ära kunagi asenda seda pealkirja põhjal muu väärtusega. Kui kasutaja kategooriat ei maini, jäta väli täiesti välja — rakendus tuletab mõistliku vaikeväärtuse pealkirja põhjal.
 - create_note: { "title": string, "content"?: string, "folder"?: string }
 - create_habit: { "title": string, "description"?: string, "category"?: string, "recurrence"?: "daily"|"weekdays"|"custom" }
 - create_goal: { "title": string, "description"?: string, "deadline"?: string, "steps"?: string[] }

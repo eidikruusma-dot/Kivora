@@ -521,10 +521,10 @@ describe('composeFinalReply: the model\'s free-text reply is untrusted about act
     )
   })
 
-  it('appends the model\'s reply after the action summary when every action genuinely succeeded', () => {
+  it('suppresses the model\'s own free-text reply when a visible action genuinely succeeded — showing only the one authoritative summary (live duplicate-message fix)', () => {
     const results: AIActionResult[] = [{ success: true, message: 'Ülesanne "X" lisatud.' }]
     expect(composeFinalReply(results, 'Anna teada, kui vajad veel midagi.')).toBe(
-      'Ülesanne "X" lisatud.\n\nAnna teada, kui vajad veel midagi.',
+      'Ülesanne "X" lisatud.',
     )
   })
 
