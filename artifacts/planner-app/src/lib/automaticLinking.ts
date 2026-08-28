@@ -34,9 +34,11 @@ import type { Task } from '@/types'
 
 // Every calendar event this service auto-creates gets an id with this
 // prefix — it's the only place in the codebase that generates ids this way
-// (see tasksStore.ts's deleteTask cascade, which checks the same prefix to
-// distinguish "owned by this task" from a merely-linked pre-existing event).
-const AUTO_CREATED_CALENDAR_EVENT_PREFIX = 'cal-auto-'
+// (see tasksStore.ts's deleteTask cascade, and CalendarPage.tsx's
+// handleEventClick, which both check the same prefix to distinguish "owned
+// by this task" from a merely-linked pre-existing event). Exported so those
+// call sites reuse this one definition instead of redeclaring the literal.
+export const AUTO_CREATED_CALENDAR_EVENT_PREFIX = 'cal-auto-'
 
 /**
  * Adds one hour to an "HH:MM" time string, clamped to 23:59 same day so a

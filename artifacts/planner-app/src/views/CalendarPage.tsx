@@ -22,10 +22,10 @@ import { useUserCalendars, addUserCalendar, type UserCalendar } from '@/lib/user
 import { usePlans } from '@/lib/plansStore'
 import { useGoals } from '@/lib/goalsStore'
 import { getDerivedCalendarEvents } from '@/lib/planGoalCalendarEvents'
-import { removeLinksForEntity } from '@/lib/entityLinksStore'
+import { removeLinksForEntity, getLinksForEntity } from '@/lib/entityLinksStore'
 import PostSaveLinkSuggestionsDialog from '@/components/links/PostSaveLinkSuggestionsDialog'
 import AutoLinkToast from '@/components/links/AutoLinkToast'
-import { runAutomaticLinking, type AutoLinkResult } from '@/lib/automaticLinking'
+import { runAutomaticLinking, AUTO_CREATED_CALENDAR_EVENT_PREFIX, type AutoLinkResult } from '@/lib/automaticLinking'
 import type { CalendarViewType, UserPreferences } from '@/types'
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
 import { useAuth } from '@/context/AuthContext'
@@ -200,12 +200,24 @@ export default function CalendarPage() {
     }
   }, [lang])
 
-  // Open detail modal when an event is clicked — unless it's a Plan/Goal-
-  // derived entry, which isn't a real calendarEvents document and so isn't
-  // independently editable/deletable from Calendar; route to the source
-  // module instead (the exact same "openId" deep-link convention
-  // LinkedItemsPanel already uses to open a specific entity), rather than
-  // adding a second, conflicting edit/delete path for these entries.
+  // Open detail modal when an event is clicked — unless it's an entry
+  // sourced from another module, in which case it deep-links to that exact
+  // source item's own existing detail/edit view instead of the generic
+  // Calendar event modal. This is the one consistent rule for every
+  // source-linked entry, not a per-module special case:
+  //   - Plan/Goal-derived entries aren't real calendarEvents documents at
+  //     all (see planGoalCalendarEvents.ts) and carry their source directly
+  //     on the event (`evt.source`).
+  //   - A task-auto-created event IS a real calendarEvents document, so its
+  //     source isn't on the event itself — it's found the same way
+  //     tasksStore.ts's deleteTask cascade already finds it: a `scheduled`
+  //     EntityLink FROM a task TO this event, where the event id carries
+  //     the auto-created prefix. The prefix check matters — a `scheduled`
+  //     link alone is also how a user manually links a task to an
+  //     independently-created event (LinkPickerModal), and that event must
+  //     keep the normal manual Calendar edit/detail flow.
+  // Anything that matches neither (a manual event, or unrecognized/future
+  // source metadata) safely falls through to the existing detail modal.
   const handleEventClick = useCallback((id: string) => {
     const evt = allEvents.find((e) => e.id === id) ?? null
     if (evt?.source?.type === 'plan') {
@@ -215,6 +227,15 @@ export default function CalendarPage() {
     if (evt?.source?.type === 'goal') {
       navigate('/app/goals', { state: { openId: evt.source.id } })
       return
+    }
+    if (evt && id.startsWith(AUTO_CREATED_CALENDAR_EVENT_PREFIX)) {
+      const ownerLink = getLinksForEntity('calendar', id).find(
+        (l) => l.relationType === 'scheduled' && l.fromType === 'task' && l.toId === id,
+      )
+      if (ownerLink) {
+        navigate('/app/tasks', { state: { openId: ownerLink.fromId } })
+        return
+      }
     }
     setDetailEvent(evt)
   }, [allEvents, navigate])
