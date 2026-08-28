@@ -94,7 +94,10 @@ describe('header and footer remain fixed within the dialog', () => {
   })
 
   it('the footer (Tühista/Salvesta) is flex-shrink-0 and no longer sticky', () => {
-    const footer = SRC.match(/<div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-\[#F4F4F0\][^"]*">/)?.[0] ?? ''
+    // justify-between now that edit mode also shows a Delete button on the
+    // left (added alongside the row-click/edit-delete-interaction fix) —
+    // still the same single non-scrolling footer element, not a new one.
+    const footer = SRC.match(/<div className="flex items-center justify-between px-5 py-4 border-t border-\[#F4F4F0\][^"]*">/)?.[0] ?? ''
     expect(footer).not.toBe('')
     expect(footer).toMatch(/flex-shrink-0/)
     expect(footer).not.toMatch(/sticky/)

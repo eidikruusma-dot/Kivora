@@ -250,7 +250,7 @@ describe('no changes to recurrence or save payload behavior', () => {
   it('name/description validation, goal-per-day, edit/delete flows, and the weekly date strip are untouched', () => {
     expect(SRC).toMatch(/if \(!form\.title\.trim\(\)\) \{/)
     expect(SRC).toMatch(/goalPerDay: Math\.max\(1, Number\(e\.target\.value\)\),/)
-    expect(SRC).toMatch(/const handleDelete = \(id: string\) => \{/)
+    expect(SRC).toMatch(/const handleDelete = async \(id: string\) => \{/)
     expect(SRC).toMatch(/const weekTotals = computeWeekStats\(habits, weekDates, today\);/)
   })
 })

@@ -217,6 +217,7 @@ export default function HabitsPage() {
 
   // Delete confirmation
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
 
   const location = useLocation();
@@ -459,11 +460,26 @@ export default function HabitsPage() {
     setStatus(id, "active");
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     removeLinksForEntity('habit', id);
-    deleteHabit(id);
+    await deleteHabit(id);
     toast.success(lang === 'et' ? 'Harjumus kustutatud' : 'Habit deleted');
-    setDeleteId(null);
+    // The edit modal can now trigger deletion of the habit it's editing —
+    // close it too, rather than leaving a form open for a deleted habit.
+    if (editingId === id) handleCancelForm();
+  };
+
+  // Confirmation dialog's sole caller of handleDelete, guarded against a
+  // second click while the first delete is still in flight.
+  const handleConfirmDelete = async () => {
+    if (!deleteId || deleting) return;
+    setDeleting(true);
+    try {
+      await handleDelete(deleteId);
+    } finally {
+      setDeleting(false);
+      setDeleteId(null);
+    }
   };
 
   return (
@@ -638,7 +654,16 @@ export default function HabitsPage() {
               <div
                 key={habit.id}
                 id={`habit-card-${habit.id}`}
-                className={`flex items-center gap-4 px-5 py-4 hover:bg-[#FAFAF8] transition-all group ${
+                role="button"
+                tabIndex={0}
+                onClick={() => openEditModal(habit)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openEditModal(habit);
+                  }
+                }}
+                className={`flex items-center gap-4 px-5 py-4 hover:bg-[#FAFAF8] transition-all group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#6F5AE8]/40 ${
                   idx !== displayed.length - 1
                     ? "border-b border-[#F0F0F0]"
                     : ""
@@ -714,7 +739,10 @@ export default function HabitsPage() {
                           <button
                             type="button"
                             disabled={!markable || pendingToggleKey === pendingKey}
-                            onClick={() => handleToggleDay(habit.id, dateKey)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleDay(habit.id, dateKey);
+                            }}
                             aria-pressed={done}
                             aria-label={`${habit.title} — ${dayLabel} — ${
                               done ? t("habits.day.unmark", lang) : t("habits.day.mark", lang)
@@ -1213,22 +1241,37 @@ export default function HabitsPage() {
             </div>
 
             {/* Footer — flex-shrink-0, never scrolls, always visible */}
-            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#F4F4F0] flex-shrink-0">
-              <button
-                onClick={handleCancelForm}
-                disabled={saving}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors disabled:opacity-50"
-              >
-                {t("habits.modal.cancel", lang)}
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={!form.title.trim() || saving}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B48D8] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {saving && <Loader2 size={14} className="animate-spin" />}
-                {t("habits.modal.save", lang)}
-              </button>
+            <div className="flex items-center justify-between px-5 py-4 border-t border-[#F4F4F0] flex-shrink-0">
+              {editingId ? (
+                <button
+                  type="button"
+                  onClick={() => setDeleteId(editingId)}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                >
+                  <Trash2 size={14} />
+                  {t("habits.menu.delete", lang)}
+                </button>
+              ) : (
+                <span />
+              )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCancelForm}
+                  disabled={saving}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors disabled:opacity-50"
+                >
+                  {t("habits.modal.cancel", lang)}
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={!form.title.trim() || saving}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B48D8] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {saving && <Loader2 size={14} className="animate-spin" />}
+                  {t("habits.modal.save", lang)}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1355,7 +1398,7 @@ export default function HabitsPage() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: "rgba(15, 23, 42, 0.4)" }}
-          onClick={() => setDeleteId(null)}
+          onClick={() => { if (!deleting) setDeleteId(null); }}
         >
           <div
             role="dialog"
@@ -1378,13 +1421,15 @@ export default function HabitsPage() {
             <div className="flex items-center justify-center gap-2 px-5 py-4 border-t border-[#F4F4F0]">
               <button
                 onClick={() => setDeleteId(null)}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
+                disabled={deleting}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors disabled:opacity-50"
               >
                 {t("habits.deleteConfirm.cancel", lang)}
               </button>
               <button
-                onClick={() => handleDelete(deleteId)}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#E11D48] hover:bg-[#BE123C] transition-colors shadow-sm"
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#E11D48] hover:bg-[#BE123C] transition-colors shadow-sm disabled:opacity-50"
               >
                 {t("habits.deleteConfirm.confirm", lang)}
               </button>

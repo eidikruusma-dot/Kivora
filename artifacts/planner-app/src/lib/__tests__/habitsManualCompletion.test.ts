@@ -359,7 +359,7 @@ const HABITS_WIDGET_SRC = readFileSync(resolve(process.cwd(), 'src/components/da
 
 describe('per-day marking uses real buttons with keyboard support and descriptive aria-labels', () => {
   it('each day circle in the habit row is a real, keyboard-activatable <button>', () => {
-    expect(HABITS_PAGE_SRC).toMatch(/<button\s*\n\s*type="button"\s*\n\s*disabled=\{!markable \|\| pendingToggleKey === pendingKey\}\s*\n\s*onClick=\{\(\) => handleToggleDay\(habit\.id, dateKey\)\}/)
+    expect(HABITS_PAGE_SRC).toMatch(/<button\s*\n\s*type="button"\s*\n\s*disabled=\{!markable \|\| pendingToggleKey === pendingKey\}\s*\n\s*onClick=\{\(e\) => \{\s*\n\s*e\.stopPropagation\(\);\s*\n\s*handleToggleDay\(habit\.id, dateKey\);\s*\n\s*\}\}/)
   })
 
   it('the button exposes aria-pressed for its done state and an aria-label naming the habit, the date, and the action', () => {
@@ -448,7 +448,7 @@ describe('unrelated Habits behavior is untouched by this fix', () => {
 
   it('filters, edit/delete flows, and the create/edit modal validation are unaffected', () => {
     expect(HABITS_PAGE_SRC).toMatch(/const filtered = habits\.filter\(\(h\) => \{/)
-    expect(HABITS_PAGE_SRC).toMatch(/const handleDelete = \(id: string\) => \{/)
+    expect(HABITS_PAGE_SRC).toMatch(/const handleDelete = async \(id: string\) => \{/)
     expect(HABITS_PAGE_SRC).toMatch(/if \(!form\.title\.trim\(\)\) \{/)
   })
 
