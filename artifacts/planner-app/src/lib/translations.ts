@@ -514,6 +514,7 @@ export type TranslationKey =
     | "goals.modal.stepsLabel"
     | "goals.modal.stepsPlaceholder"
     | "goals.modal.save"
+    | "goals.modal.saveEdit"
     | "goals.modal.cancel"
     | "goals.modal.error"
     | "goals.detail.addStep"
@@ -2351,6 +2352,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "goals.modal.stepsLabel": "Sammud",
         "goals.modal.stepsPlaceholder": "Üks samm real",
         "goals.modal.save": "Lisa eesmärk",
+        "goals.modal.saveEdit": "Salvesta muudatused",
         "goals.modal.cancel": "Tühista",
         "goals.modal.error": "Eesmärgi nimi on kohustuslik",
         "goals.detail.addStep": "Lisa samm",
@@ -4363,6 +4365,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "goals.modal.stepsLabel": "Steps",
         "goals.modal.stepsPlaceholder": "One step per line",
         "goals.modal.save": "Add goal",
+        "goals.modal.saveEdit": "Save changes",
         "goals.modal.cancel": "Cancel",
         "goals.modal.error": "Goal name is required",
         "goals.detail.addStep": "Add step",

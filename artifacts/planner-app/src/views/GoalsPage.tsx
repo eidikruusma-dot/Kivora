@@ -966,7 +966,7 @@ export default function GoalsPage() {
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B48D8] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving && <Loader2 size={14} className="animate-spin" />}
-                {t('goals.modal.save', lang)}
+                {t('goals.modal.saveEdit', lang)}
               </button>
             </div>
           </div>
