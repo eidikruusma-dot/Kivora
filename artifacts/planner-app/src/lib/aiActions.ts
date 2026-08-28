@@ -46,6 +46,16 @@ export interface AIActionResult {
    * confirmation question — the exact bug this gate fixes.
    */
   needsConfirmation?: boolean
+  /**
+   * True ONLY for the two actions (preview_plan_creation, preview_bank_import)
+   * that intentionally return an empty `message` on success because a
+   * dedicated UI card (the plan draft / bank import review) renders
+   * instead of chat text. composeFinalReply uses this to tell "nothing to
+   * show because a card is showing it" apart from "nothing to show because
+   * something unexpected happened" — only the latter gets a fallback
+   * message, so the chat bubble can never end up silently blank.
+   */
+  silent?: boolean
 }
 
 // ── Action context — carries runtime dependencies for document actions ─────────
@@ -680,7 +690,7 @@ export async function executeAction(rawAction: AIAction, ctx?: ActionContext): P
 
         ctx?.setPendingMoneyImport?.(txns)
         // Silent success — MoneyImportReviewCard displays the data; no duplicate text
-        return { success: true, message: '' }
+        return { success: true, message: '', silent: true }
       }
 
       // ── Plan creation preview — client handles the actual write ───────────
@@ -696,7 +706,7 @@ export async function executeAction(rawAction: AIAction, ctx?: ActionContext): P
         }
         ctx?.setPendingPlanDraft?.(draft)
         // Silent success — AIPlanGeneratorModal displays the draft; no duplicate text
-        return { success: true, message: '' }
+        return { success: true, message: '', silent: true }
       }
 
       // ── Money actions ──────────────────────────────────────────────────────
@@ -898,13 +908,31 @@ export async function executeActionsAsync(
  *     (needsConfirmation) — the original confirm-before-execute fix, or
  *   - any action outright failed (success: false, not a confirmation
  *     request) — closes the write-failure-masking gap above.
+ *
+ * Never returns an empty/blank string. AIAssistantPage always renders a
+ * chat bubble for a completed (non-pending) assistant turn regardless of
+ * its content, so an empty result here is a genuinely blank bubble the
+ * user sees as "no response at all" — e.g. if every result's message
+ * happens to be empty (a `silent` preview_plan_creation/preview_bank_import
+ * success — a rendered card is expected instead of chat text — combined
+ * with a non-silent action's message being empty, or the model's own
+ * reply also coming back empty). `silent` results are the ONE case an
+ * empty compose is intentional (a UI card renders in their place); any
+ * other empty outcome falls back to a generic acknowledgement so the user
+ * is never left staring at nothing.
  */
 export function composeFinalReply(results: AIActionResult[], modelReply: string): string {
   const actionSummary = results.map((r) => r.message).filter(Boolean).join(' ')
   const needsConfirmation = results.some((r) => r.needsConfirmation)
   const hasFailure = results.some((r) => !r.success && !r.needsConfirmation)
-  if (needsConfirmation || hasFailure) return actionSummary
-  return [actionSummary, modelReply].filter(Boolean).join('\n\n')
+  const allSilent = results.length > 0 && results.every((r) => r.silent)
+
+  if (needsConfirmation || hasFailure) {
+    return actionSummary || 'Toimingu tulemust ei õnnestunud kuvada. Palun proovi uuesti.'
+  }
+  const combined = [actionSummary, modelReply].filter(Boolean).join('\n\n')
+  if (combined) return combined
+  return allSilent ? '' : 'Toiming käivitatud.'
 }
 
 /** Legacy sync shim — only works for non-document, non-money actions. */
