@@ -57,7 +57,7 @@ vi.mock('@/lib/firestoreUtils', () => ({
 
 import { initTasksStore, deleteTask } from '@/lib/tasksStore'
 import { initEntityLinksStore } from '@/lib/entityLinksStore'
-import { executeAction } from '@/lib/aiActions'
+import { executeActionsAsync } from '@/lib/aiActions'
 import { getAllTasks } from '@/lib/tasksStore'
 
 const UID = 'user-a'
@@ -186,12 +186,23 @@ describe('deleteTask cascade (Defect #2)', () => {
     expect(paths).toContain(`users/${UID}/entityLinks/link-reversed`)
   })
 
-  it('5a. the AI assistant\'s delete_task action reaches the same shared cascade', async () => {
+  it('5a. the AI assistant\'s delete_task action reaches the same shared cascade, once confirmed', async () => {
+    // delete_task now asks for confirmation before executing (see
+    // aiDestructiveActionConfirmation.test.ts) — the first call must NOT
+    // delete anything; only the second (confirming) call does.
     const link = makeLink({ id: 'link-ai', fromId: 'ai-task-1', toId: 'cal-auto-5-ai' })
     seedLinks([link])
     seedTasks([{ id: 'ai-task-1', title: 'AI task', priority: 'medium', completed: false }])
 
-    const result = await executeAction({ type: 'delete_task', data: { id: 'ai-task-1' } })
+    // Each call goes through executeActionsAsync (not bare executeAction)
+    // so the confirmation-gate generation counter actually advances between
+    // them — exactly how the real chat pipeline calls this on every reply.
+    const [first] = await executeActionsAsync([{ type: 'delete_task', data: { id: 'ai-task-1' } }])
+    expect(first.success).toBe(false)
+    expect(first.needsConfirmation).toBe(true)
+    expect(deletedPaths()).toEqual([])
+
+    const [result] = await executeActionsAsync([{ type: 'delete_task', data: { id: 'ai-task-1' } }])
 
     expect(result.success).toBe(true)
     const paths = deletedPaths()
@@ -221,7 +232,12 @@ describe('deleteTask cascade (Defect #2)', () => {
     seedTasks([{ id: 'task-fail', title: 'Will fail', priority: 'low', completed: false }])
     batchCommitImpl = () => Promise.reject(new Error('simulated Firestore batch failure'))
 
-    const result = await executeAction({ type: 'delete_task', data: { id: 'task-fail' } })
+    // First call only asks for confirmation — the simulated failure hasn't
+    // been reached yet, so confirm before exercising the failure path.
+    const [asked] = await executeActionsAsync([{ type: 'delete_task', data: { id: 'task-fail' } }])
+    expect(asked.needsConfirmation).toBe(true)
+
+    const [result] = await executeActionsAsync([{ type: 'delete_task', data: { id: 'task-fail' } }])
 
     expect(result.success).toBe(false)
     expect(result.message).not.toMatch(/kustutatud/i) // never claims "deleted" on failure

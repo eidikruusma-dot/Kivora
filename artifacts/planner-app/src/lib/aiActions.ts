@@ -37,6 +37,15 @@ export interface AIAction {
 export interface AIActionResult {
   success: boolean
   message: string
+  /**
+   * True when this result is a destructive-action CONFIRMATION REQUEST —
+   * nothing was executed, `message` is a question asking the user to
+   * confirm, and `success` is false. See the destructive-action
+   * confirmation gate below. Callers (AIAssistantPage.tsx) use this to
+   * make sure the model's own free-text reply never gets appended after a
+   * confirmation question — the exact bug this gate fixes.
+   */
+  needsConfirmation?: boolean
 }
 
 // ── Action context — carries runtime dependencies for document actions ─────────
@@ -216,6 +225,119 @@ function destLabel(module: DocumentModule, folder?: string, subjectName?: string
   return 'Isiklik / Dokumendid'
 }
 
+// ── Destructive-action confirmation gate ────────────────────────────────────
+//
+// Root-cause fix for a critical data-safety bug: delete_* actions used to
+// execute the instant the model emitted them, relying entirely on the
+// model's own prompt-following to "ask first" first — which is not
+// trustworthy (a single model reply could emit the delete tool call AND a
+// confirmation question in the same turn, deleting the item before the
+// user ever saw the question).
+//
+// This gate enforces confirm-before-execute in code, independent of the
+// model's prompt-following or wording:
+//   - A delete_* action's FIRST proposal for a given target (its type +
+//     exact resolved entity id, resolved from the live store, never the
+//     model's raw title string) is NEVER executed. It's recorded as the
+//     one pending destructive action and a confirmation question is
+//     returned instead — no store write happens.
+//   - That same delete_* action only executes once it is proposed again in
+//     a LATER round-trip (a later call to executeActionsAsync) for the
+//     exact same type + entity id. "Later round-trip" is tracked by a
+//     generation counter bumped once per executeActionsAsync call — NOT
+//     once per action — so two occurrences of the same delete inside one
+//     actions[] batch (a duplicate the model emits in a single reply)
+//     cannot satisfy each other and bypass confirmation.
+//   - Confirmation is bound to the exact pending {type, entityId}: a
+//     different target, a different action type, or a later unrelated
+//     "yes" that doesn't resolve to that same pending target, can never
+//     execute anything — it only starts (or restarts) a new, separate
+//     confirmation request.
+//   - Only one destructive action can be pending at a time; proposing a
+//     new target overwrites (invalidates) whatever was pending before, so
+//     a stale confirmation can never be redirected at a different entity.
+type DestructiveActionType =
+  | 'delete_task' | 'delete_note' | 'delete_habit' | 'delete_goal' | 'delete_calendar_event'
+
+interface PendingDestructiveAction {
+  type: DestructiveActionType
+  entityId: string
+  requestedInGeneration: number
+}
+
+let _actionGeneration = 0
+let _pendingDestructiveAction: PendingDestructiveAction | null = null
+
+/** Test-only: resets the confirmation gate to its initial (nothing pending) state. */
+export function __resetDestructiveActionGateForTests(): void {
+  _actionGeneration = 0
+  _pendingDestructiveAction = null
+}
+
+function isPendingConfirmed(type: DestructiveActionType, entityId: string): boolean {
+  return (
+    _pendingDestructiveAction !== null &&
+    _pendingDestructiveAction.type === type &&
+    _pendingDestructiveAction.entityId === entityId &&
+    _pendingDestructiveAction.requestedInGeneration < _actionGeneration
+  )
+}
+
+function requestConfirmation(type: DestructiveActionType, entityId: string): void {
+  _pendingDestructiveAction = { type, entityId, requestedInGeneration: _actionGeneration }
+}
+
+function clearPendingDestructiveAction(): void {
+  _pendingDestructiveAction = null
+}
+
+interface DestructiveActionConfig<T> {
+  type: DestructiveActionType
+  find: (id: string, title: string) => T | undefined
+  getId: (target: T) => string
+  getTitle: (target: T) => string
+  missingIdentifierMessage: string
+  notFoundMessage: string
+  confirmQuestion: (title: string) => string
+  execute: (id: string) => Promise<void>
+  successMessage: (title: string) => string
+}
+
+/**
+ * Shared confirm-before-execute flow for every destructive AI action — the
+ * single place this rule is implemented, reused by every delete_* case
+ * below instead of being duplicated (and risking drift) per entity type.
+ *
+ * On a failed `execute` (e.g. a Firestore write rejects), the thrown error
+ * propagates to executeAction's own try/catch, which returns
+ * `{ success: false, message: err.message }` WITHOUT clearing the pending
+ * confirmation — so a transient failure never produces a success message,
+ * and the user doesn't have to re-confirm just to retry.
+ */
+async function executeDestructiveAction<T>(
+  action: AIAction,
+  cfg: DestructiveActionConfig<T>,
+): Promise<AIActionResult> {
+  const title = String(action.data.title || '').trim().toLowerCase()
+  const id = String(action.data.id || '').trim()
+  if (!title && !id) return { success: false, message: cfg.missingIdentifierMessage }
+
+  const target = cfg.find(id, title)
+  if (!target) return { success: false, message: cfg.notFoundMessage }
+
+  const targetId = cfg.getId(target)
+  const targetTitle = cfg.getTitle(target)
+
+  if (!isPendingConfirmed(cfg.type, targetId)) {
+    requestConfirmation(cfg.type, targetId)
+    return { success: false, needsConfirmation: true, message: cfg.confirmQuestion(targetTitle) }
+  }
+
+  await cfg.execute(targetId)
+  clearPendingDestructiveAction()
+  return { success: true, message: cfg.successMessage(targetTitle) }
+}
+
 // ── Core action executor (async) ──────────────────────────────────────────────
 
 /**
@@ -334,58 +456,88 @@ export async function executeAction(rawAction: AIAction, ctx?: ActionContext): P
       }
 
       case 'delete_task': {
-        const title = String(action.data.title || '').trim().toLowerCase()
-        const id = String(action.data.id || '').trim()
-        if (!title && !id) return { success: false, message: 'Ülesande pealkiri või ID puudub.' }
-        const tasks = getAllTasks()
-        const target = id ? tasks.find((t) => t.id === id) : tasks.find((t) => t.title.toLowerCase() === title)
-        if (!target) return { success: false, message: 'Sellise pealkirjaga ülesannet ei leitud.' }
-        await deleteTask(target.id)
-        return { success: true, message: `Ülesanne "${target.title}" kustutatud.` }
+        return await executeDestructiveAction(action, {
+          type: 'delete_task',
+          find: (id, title) => {
+            const tasks = getAllTasks()
+            return id ? tasks.find((t) => t.id === id) : tasks.find((t) => t.title.toLowerCase() === title)
+          },
+          getId: (t) => t.id,
+          getTitle: (t) => t.title,
+          missingIdentifierMessage: 'Ülesande pealkiri või ID puudub.',
+          notFoundMessage: 'Sellise pealkirjaga ülesannet ei leitud.',
+          confirmQuestion: (title) => `Kas soovid kindlasti kustutada ülesande "${title}"? Seda toimingut ei saa tagasi võtta.`,
+          execute: (id) => deleteTask(id),
+          successMessage: (title) => `Ülesanne "${title}" kustutatud.`,
+        })
       }
 
       case 'delete_note': {
-        const title = String(action.data.title || '').trim().toLowerCase()
-        const id = String(action.data.id || '').trim()
-        if (!title && !id) return { success: false, message: 'Märke pealkiri või ID puudub.' }
-        const notes = getAllNotes()
-        const target = id ? notes.find((n) => n.id === id) : notes.find((n) => n.title.toLowerCase() === title)
-        if (!target) return { success: false, message: 'Sellise pealkirjaga märget ei leitud.' }
-        await deleteNote(target.id)
-        return { success: true, message: `Märge "${target.title}" kustutatud.` }
+        return await executeDestructiveAction(action, {
+          type: 'delete_note',
+          find: (id, title) => {
+            const notes = getAllNotes()
+            return id ? notes.find((n) => n.id === id) : notes.find((n) => n.title.toLowerCase() === title)
+          },
+          getId: (n) => n.id,
+          getTitle: (n) => n.title,
+          missingIdentifierMessage: 'Märke pealkiri või ID puudub.',
+          notFoundMessage: 'Sellise pealkirjaga märget ei leitud.',
+          confirmQuestion: (title) => `Kas soovid kindlasti kustutada märke "${title}"? Seda toimingut ei saa tagasi võtta.`,
+          execute: (id) => deleteNote(id),
+          successMessage: (title) => `Märge "${title}" kustutatud.`,
+        })
       }
 
       case 'delete_habit': {
-        const title = String(action.data.title || '').trim().toLowerCase()
-        const id = String(action.data.id || '').trim()
-        if (!title && !id) return { success: false, message: 'Harjumuse pealkiri või ID puudub.' }
-        const habits = getAllHabits()
-        const target = id ? habits.find((h) => h.id === id) : habits.find((h) => h.title.toLowerCase() === title)
-        if (!target) return { success: false, message: 'Sellise pealkirjaga harjumust ei leitud.' }
-        await deleteHabit(target.id)
-        return { success: true, message: `Harjumus "${target.title}" kustutatud.` }
+        return await executeDestructiveAction(action, {
+          type: 'delete_habit',
+          find: (id, title) => {
+            const habits = getAllHabits()
+            return id ? habits.find((h) => h.id === id) : habits.find((h) => h.title.toLowerCase() === title)
+          },
+          getId: (h) => h.id,
+          getTitle: (h) => h.title,
+          missingIdentifierMessage: 'Harjumuse pealkiri või ID puudub.',
+          notFoundMessage: 'Sellise pealkirjaga harjumust ei leitud.',
+          confirmQuestion: (title) => `Kas soovid kindlasti kustutada harjumuse "${title}"? Seda toimingut ei saa tagasi võtta.`,
+          execute: (id) => deleteHabit(id),
+          successMessage: (title) => `Harjumus "${title}" kustutatud.`,
+        })
       }
 
       case 'delete_goal': {
-        const title = String(action.data.title || '').trim().toLowerCase()
-        const id = String(action.data.id || '').trim()
-        if (!title && !id) return { success: false, message: 'Eesmärgi pealkiri või ID puudub.' }
-        const goals = getAllGoals()
-        const target = id ? goals.find((g) => g.id === id) : goals.find((g) => g.title.toLowerCase() === title)
-        if (!target) return { success: false, message: 'Sellise pealkirjaga eesmärki ei leitud.' }
-        await deleteGoal(target.id)
-        return { success: true, message: `Eesmärk "${target.title}" kustutatud.` }
+        return await executeDestructiveAction(action, {
+          type: 'delete_goal',
+          find: (id, title) => {
+            const goals = getAllGoals()
+            return id ? goals.find((g) => g.id === id) : goals.find((g) => g.title.toLowerCase() === title)
+          },
+          getId: (g) => g.id,
+          getTitle: (g) => g.title,
+          missingIdentifierMessage: 'Eesmärgi pealkiri või ID puudub.',
+          notFoundMessage: 'Sellise pealkirjaga eesmärki ei leitud.',
+          confirmQuestion: (title) => `Kas soovid kindlasti kustutada eesmärgi "${title}"? Seda toimingut ei saa tagasi võtta.`,
+          execute: (id) => deleteGoal(id),
+          successMessage: (title) => `Eesmärk "${title}" kustutatud.`,
+        })
       }
 
       case 'delete_calendar_event': {
-        const title = String(action.data.title || '').trim().toLowerCase()
-        const id = String(action.data.id || '').trim()
-        if (!title && !id) return { success: false, message: 'Sündmuse pealkiri või ID puudub.' }
-        const events = getAllEvents()
-        const target = id ? events.find((e) => e.id === id) : events.find((e) => e.title.toLowerCase() === title)
-        if (!target) return { success: false, message: 'Sellise pealkirjaga sündmust ei leitud.' }
-        await deleteCalendarEvent(target.id)
-        return { success: true, message: `Sündmus "${target.title}" kustutatud.` }
+        return await executeDestructiveAction(action, {
+          type: 'delete_calendar_event',
+          find: (id, title) => {
+            const events = getAllEvents()
+            return id ? events.find((e) => e.id === id) : events.find((e) => e.title.toLowerCase() === title)
+          },
+          getId: (e) => e.id,
+          getTitle: (e) => e.title,
+          missingIdentifierMessage: 'Sündmuse pealkiri või ID puudub.',
+          notFoundMessage: 'Sellise pealkirjaga sündmust ei leitud.',
+          confirmQuestion: (title) => `Kas soovid kindlasti kustutada sündmuse "${title}"? Seda toimingut ei saa tagasi võtta.`,
+          execute: (id) => deleteCalendarEvent(id),
+          successMessage: (title) => `Sündmus "${title}" kustutatud.`,
+        })
       }
 
       // ── Document actions ──────────────────────────────────────────────────
@@ -667,6 +819,16 @@ export async function executeActionsAsync(
   ctx?: ActionContext,
 ): Promise<AIActionResult[]> {
   const results: AIActionResult[] = []
+
+  // Bump the destructive-action confirmation generation exactly ONCE per
+  // call — i.e. once per model round-trip, not once per action. Every
+  // action in THIS batch shares this same generation, so a delete_*
+  // proposed and then "re-proposed" within a single actions[] array (a
+  // duplicate the model emits in one reply) can never satisfy its own
+  // pending confirmation — only a delete_* proposed in a genuinely later
+  // call to this function (the next model round-trip) can. See the
+  // destructive-action confirmation gate above executeAction.
+  _actionGeneration += 1
 
   // Canonicalize plan-preview actions FIRST, before any isolation-guard
   // detection — so a model that placed the plan category (e.g. "workout")
