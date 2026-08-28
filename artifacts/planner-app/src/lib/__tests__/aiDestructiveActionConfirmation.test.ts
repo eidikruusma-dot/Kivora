@@ -93,8 +93,10 @@ import { initCalendarStore, getAllEvents } from '@/lib/calendarStore'
 import {
   executeActionsAsync,
   executeAction,
+  composeFinalReply,
   __resetDestructiveActionGateForTests,
   type AIAction,
+  type AIActionResult,
 } from '@/lib/aiActions'
 
 const UID = 'user-a'
@@ -488,10 +490,45 @@ describe('every delete_* case is centralized through the one executeDestructiveA
 })
 
 describe('AIAssistantPage.tsx: the model\'s free-text reply is suppressed whenever a confirmation is pending', () => {
-  it('both executeActionsAsync call sites check results.some(needsConfirmation) before appending res.reply', () => {
-    const occurrences = AI_ASSISTANT_PAGE_SRC.match(/const needsConfirmation = results\.some\(\(r\) => r\.needsConfirmation\);/g) ?? []
+  // Both call sites used to inline this exact gate; it is now centralized in
+  // aiActions.ts's composeFinalReply (see the dedicated coverage below) and
+  // reused here, so the component itself can never drift from — or
+  // duplicate a stale copy of — the confirmation/failure-suppression rule.
+  it('both executeActionsAsync call sites delegate to the shared composeFinalReply helper', () => {
+    const occurrences = AI_ASSISTANT_PAGE_SRC.match(/const finalReply = composeFinalReply\(results, res\.reply\);/g) ?? []
     expect(occurrences.length).toBe(2)
-    const branches = AI_ASSISTANT_PAGE_SRC.match(/const finalReply = needsConfirmation\s*\n\s*\? actionSummary\s*\n\s*: \[actionSummary, res\.reply\]\.filter\(Boolean\)\.join\("\\n\\n"\);/g) ?? []
-    expect(branches.length).toBe(2)
+    // Neither call site re-implements its own needsConfirmation/actionSummary branch.
+    expect(AI_ASSISTANT_PAGE_SRC).not.toMatch(/const needsConfirmation = results\.some/)
+  })
+})
+
+describe('composeFinalReply: the model\'s free-text reply is untrusted about action outcomes', () => {
+  it('shows only the code-generated summary when a destructive action is awaiting confirmation', () => {
+    const results: AIActionResult[] = [
+      { success: false, needsConfirmation: true, message: 'Kas soovid kindlasti kustutada ülesande "X"?' },
+    ]
+    expect(composeFinalReply(results, 'Olen selle kustutanud!')).toBe(
+      'Kas soovid kindlasti kustutada ülesande "X"?',
+    )
+  })
+
+  it('shows only the code-generated summary when an action outright fails — the model cannot mask a failed write with a confident reply', () => {
+    const results: AIActionResult[] = [
+      { success: false, message: 'POST_WRITE_VERIFICATION_FAILED: ülesanne "X" ei ilmunud ülesannete andmekihis.' },
+    ]
+    expect(composeFinalReply(results, 'Valmis! Lisasin ülesande "X".')).toBe(
+      'POST_WRITE_VERIFICATION_FAILED: ülesanne "X" ei ilmunud ülesannete andmekihis.',
+    )
+  })
+
+  it('appends the model\'s reply after the action summary when every action genuinely succeeded', () => {
+    const results: AIActionResult[] = [{ success: true, message: 'Ülesanne "X" lisatud.' }]
+    expect(composeFinalReply(results, 'Anna teada, kui vajad veel midagi.')).toBe(
+      'Ülesanne "X" lisatud.\n\nAnna teada, kui vajad veel midagi.',
+    )
+  })
+
+  it('returns just the model\'s reply when no actions were attempted (a plain question turn)', () => {
+    expect(composeFinalReply([], 'Sul on 3 ülesannet täna.')).toBe('Sul on 3 ülesannet täna.')
   })
 })

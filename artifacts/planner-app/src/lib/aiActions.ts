@@ -378,6 +378,8 @@ export async function executeAction(rawAction: AIAction, ctx?: ActionContext): P
           category: inferCategory(title),
         }
         await addTask(task)
+        const taskOk = await verifyDoc('tasks', task.id)
+        if (!taskOk) return { success: false, message: `POST_WRITE_VERIFICATION_FAILED: ülesanne "${title}" ei ilmunud ülesannete andmekihis.` }
         return { success: true, message: `Ülesanne "${title}" lisatud.` }
       }
 
@@ -875,6 +877,34 @@ export async function executeActionsAsync(
     results.push(await executeAction(action, ctx))
   }
   return results
+}
+
+/**
+ * Composes the chat bubble text shown to the user after a batch of AI
+ * actions has executed.
+ *
+ * The model writes its free-text `reply` BEFORE any action result is known
+ * — it cannot truthfully report whether a write actually succeeded. Showing
+ * it unconditionally lets a silently failed create/delete/update (a
+ * rejected Firestore write, a security-rule denial, a missing field) be
+ * masked by the model's own confident "done!" narration, while the store
+ * never actually changed — the single place stale-looking data can enter
+ * downstream of a perfectly fresh read.
+ *
+ * The model's reply is therefore suppressed (only the code-verified
+ * `actionSummary`, built from each action's own result.message, is shown)
+ * whenever:
+ *   - any action is awaiting destructive-action confirmation
+ *     (needsConfirmation) — the original confirm-before-execute fix, or
+ *   - any action outright failed (success: false, not a confirmation
+ *     request) — closes the write-failure-masking gap above.
+ */
+export function composeFinalReply(results: AIActionResult[], modelReply: string): string {
+  const actionSummary = results.map((r) => r.message).filter(Boolean).join(' ')
+  const needsConfirmation = results.some((r) => r.needsConfirmation)
+  const hasFailure = results.some((r) => !r.success && !r.needsConfirmation)
+  if (needsConfirmation || hasFailure) return actionSummary
+  return [actionSummary, modelReply].filter(Boolean).join('\n\n')
 }
 
 /** Legacy sync shim — only works for non-document, non-money actions. */

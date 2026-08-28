@@ -5,6 +5,7 @@ import type { AppLang } from "@/lib/languageStore";
 import { t } from "@/lib/translations";
 import {
   executeActionsAsync,
+  composeFinalReply,
   resolveIncomeCategory,
   resolveExpenseCategory,
   findMoneyDuplicate,
@@ -786,20 +787,11 @@ export default function AIAssistantPage() {
           };
           const results = await executeActionsAsync(res.actions, actionCtx);
           pendingFilesRef.current = [];
-          const actionSummary = results
-            .map((r) => r.message)
-            .filter(Boolean)
-            .join(" ");
-          // A destructive action awaiting confirmation must never be
-          // followed by the model's own free-text reply — that reply is
-          // untrusted and is exactly what previously let a message like
-          // "kustutatud... kas kinnitad?" reach the user even though
-          // nothing had actually executed. Show only the (code-generated)
-          // confirmation question in that case.
-          const needsConfirmation = results.some((r) => r.needsConfirmation);
-          const finalReply = needsConfirmation
-            ? actionSummary
-            : [actionSummary, res.reply].filter(Boolean).join("\n\n");
+          // The model's own free-text reply is generated before any action
+          // result is known, so it is untrusted about outcomes — never
+          // shown when an action is awaiting confirmation OR when an
+          // action outright failed. See composeFinalReply's doc comment.
+          const finalReply = composeFinalReply(results, res.reply);
           setChats((prev) =>
             prev.map((c) =>
               c.id === id
@@ -1113,17 +1105,9 @@ export default function AIAssistantPage() {
         };
         const results = await executeActionsAsync(res.actions, actionCtx);
         pendingFilesRef.current = [];
-        const actionSummary = results
-          .map((r) => r.message)
-          .filter(Boolean)
-          .join(" ");
-        // A destructive action awaiting confirmation must never be
-        // followed by the model's own free-text reply — see the identical
-        // comment above the other executeActionsAsync call site.
-        const needsConfirmation = results.some((r) => r.needsConfirmation);
-        const finalReply = needsConfirmation
-          ? actionSummary
-          : [actionSummary, res.reply].filter(Boolean).join("\n\n");
+        // See composeFinalReply's doc comment — same rule as the other
+        // executeActionsAsync call site above.
+        const finalReply = composeFinalReply(results, res.reply);
         setChats((prev) =>
           prev.map((c) =>
             c.id === activeChat.id

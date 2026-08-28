@@ -8,6 +8,7 @@ import { getAllTransactions, getAllBills, getMonthSummary } from "@/lib/moneySto
 import { getAllSchoolTasks, getAllSchoolExams, getAllSchoolSubjects } from "@/lib/schoolStore";
 import { getAll as getAllNotifications } from "@/lib/notificationItemsStore";
 import { getModuleSettings } from "@/lib/modulesStore";
+import { getAllPlans, computePlanProgress, type Plan } from "@/lib/plansStore";
 import type { MockCalendarEvent } from "@/lib/calendar/eventLayout";
 import type { Task } from "@/types";
 import type { Goal } from "@/data/goalsData";
@@ -92,6 +93,21 @@ function buildGoalsSection(goals: Goal[]): string {
     return `- ${g.title} — staatus: ${g.status}, edenemine: ${pct}%${steps ? `, ${steps}` : ""}${g.deadline ? `, tähtaeg: ${g.deadline}` : ""}`;
   });
   return `### Eesmärgid (${goals.length})\n${lines.join("\n")}`;
+}
+
+function buildPlansSection(plans: Plan[]): string {
+  if (plans.length === 0)
+    return "### Plaanid\nPraegu ei ole selles moodulis ühtegi kirjet.";
+  const lines = plans.map((p) => {
+    const { done, total, percent } = computePlanProgress(p);
+    const range = p.startDate && p.endDate
+      ? `, vahemik: ${p.startDate}–${p.endDate}`
+      : p.startDate
+        ? `, algus: ${p.startDate}`
+        : "";
+    return `- ${p.title} (${p.type}) — edenemine: ${done}/${total} (${percent}%)${range}`;
+  });
+  return `### Plaanid (${plans.length})\n${lines.join("\n")}`;
 }
 
 function buildHabitsSection(habits: Habit[]): string {
@@ -383,6 +399,7 @@ export function buildAIContext(lang: "et" | "en"): string {
   if (modules.notes)     sections.push(buildNotesSection(getAllNotes()));
   if (modules.habits)    sections.push(buildHabitsSection(getAllHabits()));
   if (modules.goals)     sections.push(buildGoalsSection(getAllGoals()));
+  if (modules.plans)     sections.push(buildPlansSection(getAllPlans()));
   if (modules.finance)   sections.push(buildFinanceSection());
   if (modules.school)    sections.push(buildSchoolFromStore(lang));
 
@@ -390,7 +407,7 @@ export function buildAIContext(lang: "et" | "en"): string {
   sections.push(buildNotificationsSection());
 
   // Module-awareness note so the AI knows what is off
-  const disabled = (["calendar","tasks","notes","habits","goals","finance","school"] as const)
+  const disabled = (["calendar","tasks","notes","habits","goals","plans","finance","school"] as const)
     .filter(m => !modules[m]);
   if (disabled.length > 0) {
     const disabledNote = lang === "en"
