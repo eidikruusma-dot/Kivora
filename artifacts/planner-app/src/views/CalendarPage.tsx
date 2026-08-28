@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
@@ -19,6 +19,9 @@ import EventDetailsModal from '@/components/calendar/EventDetailsModal'
 import { startOfWeek, addWeeks, addDays, addMonths } from '@/lib/calendar/dateUtils'
 import { useCalendarEvents, addCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '@/lib/calendarStore'
 import { useUserCalendars, addUserCalendar, type UserCalendar } from '@/lib/userCalendarsStore'
+import { usePlans } from '@/lib/plansStore'
+import { useGoals } from '@/lib/goalsStore'
+import { getDerivedCalendarEvents } from '@/lib/planGoalCalendarEvents'
 import { removeLinksForEntity } from '@/lib/entityLinksStore'
 import PostSaveLinkSuggestionsDialog from '@/components/links/PostSaveLinkSuggestionsDialog'
 import AutoLinkToast from '@/components/links/AutoLinkToast'
@@ -30,6 +33,7 @@ import { getUserProfile, getEffectivePreferences, DEFAULT_PREFERENCES } from '@/
 
 export default function CalendarPage() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
 
@@ -66,6 +70,17 @@ export default function CalendarPage() {
   )
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const events = useCalendarEvents()
+  const plans = usePlans()
+  const goals = useGoals()
+  // Dated Plans/Goals are never written into calendarEvents — they're
+  // derived fresh from live Plan/Goal data on every render (see
+  // planGoalCalendarEvents.ts) and merged in here, alongside every real,
+  // manually-created or task-auto-created event.
+  const derivedEvents = useMemo(
+    () => getDerivedCalendarEvents(plans, goals),
+    [plans, goals],
+  )
+  const allEvents = useMemo(() => [...events, ...derivedEvents], [events, derivedEvents])
   const [eventModalOpen, setEventModalOpen] = useState(false)
   const [calendarModalOpen, setCalendarModalOpen] = useState(false)
   const [visibleCalendars, setVisibleCalendars] = useState<Record<string, boolean>>(
@@ -115,8 +130,8 @@ export default function CalendarPage() {
   const weekStart = startOfWeek(currentDate, preferences.startOfWeek)
 
   const visibleEvents = useMemo(
-    () => events.filter((evt) => evt.calendarId && visibleCalendars[evt.calendarId]),
-    [events, visibleCalendars],
+    () => allEvents.filter((evt) => evt.calendarId && visibleCalendars[evt.calendarId]),
+    [allEvents, visibleCalendars],
   )
 
   const handlePrev = useCallback(() => {
@@ -185,11 +200,24 @@ export default function CalendarPage() {
     }
   }, [lang])
 
-  // Open detail modal when an event is clicked
+  // Open detail modal when an event is clicked — unless it's a Plan/Goal-
+  // derived entry, which isn't a real calendarEvents document and so isn't
+  // independently editable/deletable from Calendar; route to the source
+  // module instead (the exact same "openId" deep-link convention
+  // LinkedItemsPanel already uses to open a specific entity), rather than
+  // adding a second, conflicting edit/delete path for these entries.
   const handleEventClick = useCallback((id: string) => {
-    const evt = events.find((e) => e.id === id) ?? null
+    const evt = allEvents.find((e) => e.id === id) ?? null
+    if (evt?.source?.type === 'plan') {
+      navigate(`/app/plans/${evt.source.id}`)
+      return
+    }
+    if (evt?.source?.type === 'goal') {
+      navigate('/app/goals', { state: { openId: evt.source.id } })
+      return
+    }
     setDetailEvent(evt)
-  }, [events])
+  }, [allEvents, navigate])
 
   const handleSlotClick = useCallback((_date: Date) => {}, [])
 

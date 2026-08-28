@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
+import { eventDateKeys, type MockCalendarEvent } from '@/lib/calendar/eventLayout'
 import type { UserPreferences } from '@/types'
 import { formatEventTime, getMonthMatrix,
   isToday,
@@ -39,11 +39,16 @@ export default function MonthView({
     preferences.startOfWeek,
   )
 
+  // A multi-day all-day event (e.g. a dated Plan) is listed under every day
+  // it spans, not just its start date — eventDateKeys returns just [date]
+  // for every existing single-day event, so that behavior is unchanged.
   const eventsByDate = new Map<string, MockCalendarEvent[]>()
   for (const evt of events) {
-    const list = eventsByDate.get(evt.date) ?? []
-    list.push(evt)
-    eventsByDate.set(evt.date, list)
+    for (const key of eventDateKeys(evt)) {
+      const list = eventsByDate.get(key) ?? []
+      list.push(evt)
+      eventsByDate.set(key, list)
+    }
   }
 
   return (

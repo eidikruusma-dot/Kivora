@@ -1,6 +1,6 @@
 import { CalendarDays, Plus, ChevronRight } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
+import { eventOccursOnDate, type MockCalendarEvent } from '@/lib/calendar/eventLayout'
 import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
@@ -48,7 +48,7 @@ export default function DayPreview({
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
 
   const dayEvents = [...events]
-    .filter((evt) => evt.date === dateKey(selectedDate))
+    .filter((evt) => eventOccursOnDate(evt, dateKey(selectedDate)))
     .sort((a, b) => sortMinutes(a) - sortMinutes(b))
 
   return (

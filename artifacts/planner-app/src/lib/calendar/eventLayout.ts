@@ -9,8 +9,22 @@ export interface MockCalendarEvent {
   location?: string
   description?: string
   date: string
+  /**
+   * Inclusive end date (YYYY-MM-DD) for a multi-day all-day event. Absent
+   * on every single-day event (the entire existing calendar, manual or
+   * task-linked). Only ever set on `allDay` events — a timed event never
+   * spans multiple days in this model.
+   */
+  endDate?: string
   allDay?: boolean
   calendarId?: string
+  /**
+   * Provenance for an event derived from another module (Plans/Goals)
+   * rather than a real calendarEvents document — see
+   * planGoalCalendarEvents.ts. Absent on every manually-created or
+   * task-auto-created event.
+   */
+  source?: { type: 'plan' | 'goal'; id: string }
 }
 
 export interface PositionedEvent {
@@ -119,10 +133,45 @@ export function layoutEvents(
   return result
 }
 
+/**
+ * True if `dateStr` (YYYY-MM-DD) falls within an event's occurrence — its
+ * single date, or the inclusive [date, endDate] span of a multi-day all-day
+ * event. Plain string comparison — YYYY-MM-DD strings sort correctly
+ * lexicographically — so this can never be off by a day from timezone or
+ * DST handling, unlike parsing either bound into a `Date`.
+ */
+export function eventOccursOnDate(event: MockCalendarEvent, dateStr: string): boolean {
+  if (event.date === dateStr) return true
+  return Boolean(event.allDay && event.endDate && dateStr > event.date && dateStr <= event.endDate)
+}
+
+function shiftISODateBy1(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d) + 24 * 60 * 60 * 1000)
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`
+}
+
+/**
+ * Every YYYY-MM-DD date string an event spans, inclusive — its single date,
+ * or every day in [date, endDate] for a multi-day all-day event. UTC-based
+ * day stepping (never a local-time `Date` increment), so DST transitions in
+ * the host machine's timezone can never drop or duplicate a day.
+ */
+export function eventDateKeys(event: MockCalendarEvent): string[] {
+  if (!event.allDay || !event.endDate || event.endDate <= event.date) return [event.date]
+  const keys: string[] = []
+  let cursor = event.date
+  while (cursor <= event.endDate) {
+    keys.push(cursor)
+    cursor = shiftISODateBy1(cursor)
+  }
+  return keys
+}
+
 export function getEventsForDate(
   events: MockCalendarEvent[],
   date: Date,
 ): MockCalendarEvent[] {
   const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-  return events.filter((e) => e.date === dateStr)
+  return events.filter((e) => eventOccursOnDate(e, dateStr))
 }
