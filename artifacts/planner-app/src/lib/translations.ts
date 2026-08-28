@@ -509,6 +509,7 @@ export type TranslationKey =
     | "goals.modal.categoryLabel"
     | "goals.modal.deadlineLabel"
     | "goals.modal.colorLabel"
+    | "goals.modal.customizeAppearance"
     | "goals.modal.statusLabel"
     | "goals.modal.stepsLabel"
     | "goals.modal.stepsPlaceholder"
@@ -2345,6 +2346,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "goals.modal.categoryLabel": "Kategooria",
         "goals.modal.deadlineLabel": "Tähtaeg",
         "goals.modal.colorLabel": "Värv",
+        "goals.modal.customizeAppearance": "Kohanda välimust",
         "goals.modal.statusLabel": "Staatus",
         "goals.modal.stepsLabel": "Sammud",
         "goals.modal.stepsPlaceholder": "Üks samm real",
@@ -4356,6 +4358,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "goals.modal.categoryLabel": "Category",
         "goals.modal.deadlineLabel": "Deadline",
         "goals.modal.colorLabel": "Colour",
+        "goals.modal.customizeAppearance": "Customize appearance",
         "goals.modal.statusLabel": "Status",
         "goals.modal.stepsLabel": "Steps",
         "goals.modal.stepsPlaceholder": "One step per line",

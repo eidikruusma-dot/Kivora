@@ -22,6 +22,7 @@ import {
   MoreHorizontal,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   Sparkles,
   X,
   Check,
@@ -86,6 +87,25 @@ function makeColorOptions(lang: AppLang) {
   ]
 }
 
+// Category (the goal's "icon" field) → index into makeColorOptions, applied
+// automatically in create mode only — see handleCategoryChange. Deterministic
+// and reuses the existing 6-color palette; several categories intentionally
+// share a color since there are more categories than palette colors.
+const CATEGORY_COLOR_INDEX: Record<Goal['icon'], number> = {
+  personal: 1,  // purple
+  career:   4,  // blue
+  learning: 3,  // orange
+  health:   0,  // green
+  money:    5,  // yellow
+  home:     3,  // orange
+  family:   2,  // red
+  travel:   4,  // blue
+  reading:  1,  // purple
+  sport:    2,  // red
+  project:  5,  // yellow
+  other:    1,  // purple
+}
+
 function ProgressBar({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = Math.min(100, (value / max) * 100)
   return (
@@ -106,6 +126,10 @@ interface NewGoalForm {
   colorIndex: number
   status: GoalStatus
   stepsText: string
+  // Local form UI state only — never persisted to the goal model. Tracks
+  // whether the user manually picked a color so a later category change
+  // doesn't silently overwrite their choice.
+  colorCustomized: boolean
 }
 
 const emptyForm: NewGoalForm = {
@@ -113,9 +137,10 @@ const emptyForm: NewGoalForm = {
   description: '',
   icon: 'other',
   deadline: '',
-  colorIndex: 0,
+  colorIndex: CATEGORY_COLOR_INDEX.other,
   status: 'active',
   stepsText: '',
+  colorCustomized: false,
 }
 
 export default function GoalsPage() {
@@ -155,6 +180,9 @@ export default function GoalsPage() {
   const [autoLink, setAutoLink] = useState<AutoLinkResult | null>(null)
   const [form, setForm] = useState<NewGoalForm>(emptyForm)
   const [formError, setFormError] = useState('')
+  // Manual color picker starts collapsed behind "Kohanda välimust" /
+  // "Customize appearance" in both the create and edit forms.
+  const [appearanceExpanded, setAppearanceExpanded] = useState(false)
 
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const [menuUp, setMenuUp] = useState(false)
@@ -250,7 +278,18 @@ export default function GoalsPage() {
   const openCreateModal = () => {
     setForm(emptyForm)
     setFormError('')
+    setAppearanceExpanded(false)
     setShowAddModal(true)
+  }
+
+  // Category selection auto-applies a sensible default color in create mode
+  // only, and never overwrites a color the user already picked by hand.
+  const handleCategoryChange = (icon: Goal['icon']) => {
+    setForm({
+      ...form,
+      icon,
+      colorIndex: form.colorCustomized ? form.colorIndex : CATEGORY_COLOR_INDEX[icon],
+    })
   }
 
   const handleAddGoal = async () => {
@@ -448,7 +487,7 @@ export default function GoalsPage() {
                     {menuOpenId === goal.id && (
                       <div className={`absolute right-0 ${menuUp ? 'bottom-full mb-1' : 'top-full mt-1'} w-44 bg-white rounded-xl border border-[#ECECF2] shadow-lg z-20 py-1`}>
                         <button
-                          onClick={() => { setEditGoal({ ...goal }); setMenuOpenId(null) }}
+                          onClick={() => { setEditGoal({ ...goal }); setAppearanceExpanded(false); setMenuOpenId(null) }}
                           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[#374151] hover:bg-[#F8F7F4] transition-colors text-left"
                         >
                           <Pencil size={14} className="text-[#94A3B8]" /> {t('goals.menu.edit', lang)}
@@ -679,7 +718,7 @@ export default function GoalsPage() {
                   <label className="text-xs font-medium text-[#94A3B8] uppercase tracking-wide mb-1 block">{t('goals.modal.categoryLabel', lang)}</label>
                   <select
                     value={form.icon}
-                    onChange={(e) => setForm({ ...form, icon: e.target.value as Goal['icon'] })}
+                    onChange={(e) => handleCategoryChange(e.target.value as Goal['icon'])}
                     className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] transition-colors bg-white"
                   >
                     {ICON_OPTIONS_LANG.map((opt) => (
@@ -699,20 +738,36 @@ export default function GoalsPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-medium text-[#94A3B8] uppercase tracking-wide mb-1 block">{t('goals.modal.colorLabel', lang)}</label>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {makeColorOptions(lang).map((c, i) => (
-                    <button
-                      key={c.name}
-                      onClick={() => setForm({ ...form, colorIndex: i })}
-                      className={`w-8 h-8 rounded-full transition-all ${form.colorIndex === i ? 'ring-2 ring-offset-2 ring-[#1A1F36]' : 'goals-color-inactive'}`}
-                      style={{ background: c.barColor }}
-                      title={c.name}
-                    />
-                  ))}
+              {/* Collapsed by default — reveals the manual color picker below */}
+              <button
+                type="button"
+                onClick={() => setAppearanceExpanded((v) => !v)}
+                aria-expanded={appearanceExpanded}
+                className="flex items-center gap-1.5 self-start text-sm font-medium text-[#6F5AE8] hover:text-[#5B48D8] transition-colors"
+              >
+                <ChevronDown
+                  size={14}
+                  className={`transition-transform ${appearanceExpanded ? 'rotate-180' : ''}`}
+                />
+                {t('goals.modal.customizeAppearance', lang)}
+              </button>
+
+              {appearanceExpanded && (
+                <div>
+                  <label className="text-xs font-medium text-[#94A3B8] uppercase tracking-wide mb-1 block">{t('goals.modal.colorLabel', lang)}</label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {makeColorOptions(lang).map((c, i) => (
+                      <button
+                        key={c.name}
+                        onClick={() => setForm({ ...form, colorIndex: i, colorCustomized: true })}
+                        className={`w-8 h-8 rounded-full transition-all ${form.colorIndex === i ? 'ring-2 ring-offset-2 ring-[#1A1F36]' : 'goals-color-inactive'}`}
+                        style={{ background: c.barColor }}
+                        title={c.name}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div>
                 <label className="text-xs font-medium text-[#94A3B8] uppercase tracking-wide mb-1 block">{t('goals.modal.statusLabel', lang)}</label>
@@ -836,23 +891,41 @@ export default function GoalsPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-medium text-[#94A3B8] uppercase tracking-wide mb-2 block">{t('goals.modal.colorLabel', lang)}</label>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {makeColorOptions(lang).map((c, i) => {
-                    const matchIdx = makeColorOptions(lang).findIndex((co) => co.barColor === editGoal.barColor)
-                    return (
-                      <button
-                        key={c.name}
-                        onClick={() => setEditGoal({ ...editGoal, barColor: c.barColor, iconBg: c.iconBg, iconColor: c.iconColor })}
-                        className={`w-8 h-8 rounded-full transition-all ${matchIdx === i ? 'ring-2 ring-offset-2 ring-[#1A1F36]' : 'goals-color-inactive'}`}
-                        style={{ background: c.barColor }}
-                        title={c.name}
-                      />
-                    )
-                  })}
+              {/* Collapsed by default — reveals the manual color picker below.
+                  Editing a goal's category above never touches its color; this
+                  is the only way to change an existing goal's color. */}
+              <button
+                type="button"
+                onClick={() => setAppearanceExpanded((v) => !v)}
+                aria-expanded={appearanceExpanded}
+                className="flex items-center gap-1.5 self-start text-sm font-medium text-[#6F5AE8] hover:text-[#5B48D8] transition-colors"
+              >
+                <ChevronDown
+                  size={14}
+                  className={`transition-transform ${appearanceExpanded ? 'rotate-180' : ''}`}
+                />
+                {t('goals.modal.customizeAppearance', lang)}
+              </button>
+
+              {appearanceExpanded && (
+                <div>
+                  <label className="text-xs font-medium text-[#94A3B8] uppercase tracking-wide mb-2 block">{t('goals.modal.colorLabel', lang)}</label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {makeColorOptions(lang).map((c, i) => {
+                      const matchIdx = makeColorOptions(lang).findIndex((co) => co.barColor === editGoal.barColor)
+                      return (
+                        <button
+                          key={c.name}
+                          onClick={() => setEditGoal({ ...editGoal, barColor: c.barColor, iconBg: c.iconBg, iconColor: c.iconColor })}
+                          className={`w-8 h-8 rounded-full transition-all ${matchIdx === i ? 'ring-2 ring-offset-2 ring-[#1A1F36]' : 'goals-color-inactive'}`}
+                          style={{ background: c.barColor }}
+                          title={c.name}
+                        />
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div>
                 <label className="text-xs font-medium text-[#94A3B8] uppercase tracking-wide mb-1 block">{t('goals.modal.statusLabel', lang)}</label>
