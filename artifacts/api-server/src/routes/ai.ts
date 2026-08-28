@@ -307,8 +307,16 @@ router.post("/ai/chat", async (req, res) => {
     if (context) {
       const contextHeader =
         resolvedLang === "en"
-          ? "User's current data (use only this data when answering personal questions):"
-          : "Kasutaja praegused andmed (kasuta ainult neid andmeid isiklike küsimuste vastamiseks):";
+          ? 'User\'s current data — captured fresh at the moment of THIS request, after any earlier action in this conversation has already been applied (use only this data when answering personal questions):\n' +
+            'AUTHORITATIVE STATE RULE: This block is the ONLY source of truth for what currently exists. It already reflects every create/update/delete from earlier in this conversation (and from anywhere else in the app) — do not reason from memory of earlier turns instead. Specifically:\n' +
+            '- If an item you (or the user) discussed earlier is NOT listed below, it no longer exists (or never existed) — never claim it does, and never list it, even if it was mentioned or "deleted" earlier in this chat.\n' +
+            '- If an item appears below, it currently exists with exactly these values, even if it was just created and never mentioned before, or even if an earlier message in this conversation described it differently — this block always wins.\n' +
+            '- When resolving which item a delete/update action refers to, or when listing what exists, use ONLY this block, never your recollection of a previous reply in this same conversation.'
+          : "Kasutaja praegused andmed — võetud värskelt TÄPSELT SELLE päringu hetkel, pärast seda, kui kõik selle vestluse varasemad toimingud on juba rakendatud (kasuta ainult neid andmeid isiklike küsimuste vastamiseks):\n" +
+            "AUTORITEETSE OLEKU REEGEL: See plokk on AINUS tõeallikas selle kohta, mis praegu olemas on. See kajastab juba kõiki selle vestluse varasemaid loomisi/muutmisi/kustutamisi (ja ka kõiki mujal rakenduses tehtud muudatusi) — ära põhjenda oma vastust varasemate vestlusvahetuste mälu põhjal. Täpsemalt:\n" +
+            "- Kui mõnda üksust, mida sina või kasutaja varem mainisite, allpool EI OLE, siis seda enam ei eksisteeri (või ei ole kunagi eksisteerinud) — ära kunagi väida vastupidist ega loetle seda, isegi kui seda mainiti või see \"kustutati\" selle vestluse varasemas osas.\n" +
+            "- Kui üksus on allpool olemas, eksisteerib see praegu täpselt nende väärtustega, isegi kui see loodi äsja ja seda pole varem mainitud, või kui varasem sõnum selles vestluses kirjeldas seda teisiti — see plokk on alati otsustav.\n" +
+            "- Kui lahendad, millist üksust delete/update toiming puudutab, või kui loetled, mis olemas on, kasuta AINULT seda plokki, mitte oma mälestust selle vestluse mõnest varasemast vastusest.";
       systemMessages.push({
         role: "system",
         content: `${contextHeader}\n\n${context}`,
