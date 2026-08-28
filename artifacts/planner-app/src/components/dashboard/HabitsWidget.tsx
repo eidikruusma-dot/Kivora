@@ -3,8 +3,9 @@ import { Check, ArrowRight, Repeat } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Card from '@/components/ui/AppCard'
 import ProgressRing from '@/components/ui/ProgressRing'
-import { getAllHabits, getDashboardPercent, subscribeHabits, toggleToday, TODAY_INDEX } from '@/lib/habitsStore'
+import { getAllHabits, getDashboardPercent, subscribeHabits, toggleHabitDay } from '@/lib/habitsStore'
 import type { Habit } from '@/data/habitsData'
+import { toDateKey, isHabitDoneOnDate, getCurrentWeekDates, computeHabitDateRangeStats } from '@/data/habitsData'
 import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
@@ -25,6 +26,8 @@ export default function HabitsWidget() {
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
 
   const activeHabits = habits.filter((h) => h.status === 'active')
+  const today = new Date()
+  const weekDates = getCurrentWeekDates(today)
 
   return (
     <Card className="h-full flex flex-col">
@@ -41,9 +44,8 @@ export default function HabitsWidget() {
         {/* Habits list */}
         <div className="flex-1 space-y-2 min-w-0 overflow-y-auto scrollbar-thin">
           {activeHabits.slice(0, 4).map((habit) => {
-            const done = habit.weekDays[TODAY_INDEX] === true
-            const weekDone = habit.weekDays.filter((d) => d === true).length
-            const weekTotal = habit.weekDays.filter((d) => d !== null).length
+            const done = isHabitDoneOnDate(habit, today)
+            const { done: weekDone, total: weekTotal } = computeHabitDateRangeStats(habit, weekDates, today)
             return (
               <div
                 key={habit.id}
@@ -54,7 +56,10 @@ export default function HabitsWidget() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    toggleToday(habit.id)
+                    toggleHabitDay(habit.id, toDateKey(today)).catch(() => {
+                      // The store already reverts its own optimistic update
+                      // on failure; nothing further to do here.
+                    })
                   }}
                   title={done ? t('dash.habits.unmark', lang) : t('dash.habits.markDone', lang)}
                   className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-colors ${

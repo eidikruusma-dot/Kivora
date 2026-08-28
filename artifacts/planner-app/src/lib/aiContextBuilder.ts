@@ -12,6 +12,7 @@ import type { MockCalendarEvent } from "@/lib/calendar/eventLayout";
 import type { Task } from "@/types";
 import type { Goal } from "@/data/goalsData";
 import type { Habit } from "@/data/habitsData";
+import { isHabitDoneOnDate, computeHabitStreak } from "@/data/habitsData";
 import type { Note } from "@/data/notesData";
 
 function todayISO(): string {
@@ -96,9 +97,11 @@ function buildGoalsSection(goals: Goal[]): string {
 function buildHabitsSection(habits: Habit[]): string {
   if (habits.length === 0)
     return "### Harjumused\nPraegu ei ole selles moodulis ühtegi kirjet.";
+  const today = new Date();
   const lines = habits.map((h) => {
-    const doneToday = h.weekDays.some((d) => d === true);
-    return `- ${h.title} — staatus: ${h.status}, seeria: ${h.streak} päeva${doneToday ? ", täna tehtud" : ""}${h.description ? `, ${h.description}` : ""}`;
+    const doneToday = isHabitDoneOnDate(h, today);
+    const streak = computeHabitStreak(h, today);
+    return `- ${h.title} — staatus: ${h.status}, seeria: ${streak} päeva${doneToday ? ", täna tehtud" : ""}${h.description ? `, ${h.description}` : ""}`;
   });
   return `### Harjumused (${habits.length})\n${lines.join("\n")}`;
 }

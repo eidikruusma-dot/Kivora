@@ -165,23 +165,24 @@ describe('the hard-coded/demo week is gone', () => {
   })
 
   it('HabitsPage.tsx computes WEEK_DAYS fresh from getCurrentWeekDays(), not a static import', () => {
-    expect(HABITS_PAGE_SRC).toMatch(/import \{ getCurrentWeekDays \} from "@\/data\/habitsData";/)
-    expect(HABITS_PAGE_SRC).toMatch(/const WEEK_DAYS = getCurrentWeekDays\(\);/)
+    expect(HABITS_PAGE_SRC).toMatch(/import \{[\s\S]*?getCurrentWeekDays,[\s\S]*?\} from "@\/data\/habitsData";/)
+    expect(HABITS_PAGE_SRC).toMatch(/const WEEK_DAYS = getCurrentWeekDays\(weekReferenceDate\);/)
     expect(HABITS_PAGE_SRC).not.toMatch(/import \{ WEEK_DAYS \}/)
   })
 
-  it('the Week view card no longer hard-codes isPast/isToday to fixed indices', () => {
+  it('the Week view card no longer hard-codes isPast/isToday to fixed indices — now derived from the real displayed date', () => {
     expect(HABITS_PAGE_SRC).not.toMatch(/const isPast = i < 2;/)
     expect(HABITS_PAGE_SRC).not.toMatch(/const isToday = i === 1;/)
-    expect(HABITS_PAGE_SRC).toMatch(/const isPast = i < TODAY_INDEX;/)
-    expect(HABITS_PAGE_SRC).toMatch(/const isToday = i === TODAY_INDEX;/)
+    expect(HABITS_PAGE_SRC).not.toMatch(/const isPast = i < TODAY_INDEX;/)
+    expect(HABITS_PAGE_SRC).not.toMatch(/const isToday = i === TODAY_INDEX;/)
+    expect(HABITS_PAGE_SRC).toMatch(/const isPast = dateKey < todayKey;/)
+    expect(HABITS_PAGE_SRC).toMatch(/const isToday = dateKey === todayKey;/)
   })
 
-  it('computeWeekTotals no longer depends on WEEK_DAYS at all', () => {
-    const fn = HABITS_PAGE_SRC.match(/function computeWeekTotals\(habits: Habit\[\]\) \{[\s\S]*?\n\}/)?.[0] ?? ''
-    expect(fn).not.toBe('')
-    expect(fn).not.toMatch(/WEEK_DAYS/)
-    expect(fn).toMatch(/Array\.from\(\{ length: 7 \}/)
+  it('the header band\'s stats are computed via the shared, date-range-aware computeWeekStats — no local WEEK_DAYS-indexed duplicate', () => {
+    expect(HABITS_PAGE_SRC).toMatch(/import \{[\s\S]*?computeWeekStats,?[\s\S]*?\} from "@\/data\/habitsData";/)
+    expect(HABITS_PAGE_SRC).toMatch(/const weekTotals = computeWeekStats\(habits, weekDates, today\);/)
+    expect(HABITS_PAGE_SRC).not.toMatch(/function computeWeekTotals/)
   })
 })
 

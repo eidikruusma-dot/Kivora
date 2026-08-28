@@ -423,6 +423,8 @@ export type TranslationKey =
     | "habits.streak.days"
     | "habits.streak.paused"
     | "habits.menu.markDone"
+    | "habits.day.mark"
+    | "habits.day.unmark"
     | "habits.menu.cancelToday"
     | "habits.menu.edit"
     | "habits.menu.pause"
@@ -2256,6 +2258,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "habits.streak.days": "päeva järjest",
         "habits.streak.paused": "pausil",
         "habits.menu.markDone": "Märgi tänaseks tehtuks",
+        "habits.day.mark": "Märgi tehtuks",
+        "habits.day.unmark": "Eemalda märge",
         "habits.menu.cancelToday": "Tühista tänane täitmine",
         "habits.menu.edit": "Muuda",
         "habits.menu.pause": "Pane pausile",
@@ -4265,6 +4269,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "habits.streak.days": "days in a row",
         "habits.streak.paused": "paused",
         "habits.menu.markDone": "Mark as done today",
+        "habits.day.mark": "Mark as done",
+        "habits.day.unmark": "Remove mark",
         "habits.menu.cancelToday": "Cancel today's completion",
         "habits.menu.edit": "Edit",
         "habits.menu.pause": "Pause",

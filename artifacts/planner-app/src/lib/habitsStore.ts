@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { Habit, HabitStatus, HabitCategory } from '@/data/habitsData'
+import { toDateKey, parseDateKey, isDayMarkableForHabit, computeDayStats } from '@/data/habitsData'
 import { sanitizeForFirestore } from '@/lib/firestoreUtils'
 
 // weekDays[] uses Monday=0 … Sunday=6 (ISO week, Estonian week starting Monday).
@@ -84,10 +85,9 @@ export function getAllHabits(): Habit[] {
 }
 
 export function getDashboardPercent(): number {
-  const active = _habits.filter((h) => h.status === 'active')
-  if (active.length === 0) return 0
-  const done = active.filter((h) => h.weekDays[TODAY_INDEX] === true).length
-  return Math.round((done / active.length) * 100)
+  const today = new Date()
+  const { done, total } = computeDayStats(_habits, today, today)
+  return total > 0 ? Math.round((done / total) * 100) : 0
 }
 
 // ── React subscriptions ───────────────────────────────────────────────────────
@@ -152,6 +152,8 @@ export async function addHabit(input: {
     status: 'active',
     category: input.category,
     weekDays,
+    completions: {},
+    createdDate: toDateKey(new Date()),
   }
 
   if (!_currentUid) throw new Error('STORE_NOT_INITIALIZED: habits store has no authenticated user')
@@ -173,24 +175,52 @@ export async function updateHabit(id: string, updates: Partial<Habit>): Promise<
   await updateDoc(habitDoc(_currentUid, id), sanitizeForFirestore(updates as Record<string, unknown>))
 }
 
-export async function toggleToday(id: string): Promise<void> {
+/**
+ * Toggle a single habit's completion on one real calendar date, identified
+ * by its local "YYYY-MM-DD" key (see toDateKey()). A habit is never marked
+ * done automatically — this is the sole write path for completion, shared
+ * by every entry point (the Habits page's day buttons, its "mark today"
+ * shortcut, and the dashboard widget).
+ *
+ * Silently no-ops for a day that isn't markable (not scheduled that
+ * weekday, in the future, or before the habit's creation date) — callers
+ * should also disable the corresponding UI control, this is defense in
+ * depth. On a Firestore failure the optimistic update is rolled back (so a
+ * wrong result never stays on screen) and the error is rethrown for the
+ * caller to show its own error toast.
+ */
+export async function toggleHabitDay(id: string, dateKey: string, today: Date = new Date()): Promise<void> {
   if (!_currentUid) return
 
   const habit = _habits.find((h) => h.id === id)
   if (!habit) return
 
-  const isDone = habit.weekDays[TODAY_INDEX] === true
-  const nextDays = [...habit.weekDays]
-  nextDays[TODAY_INDEX] = !isDone
-  const nextStreak = isDone ? Math.max(0, habit.streak - 1) : habit.streak + 1
+  const date = parseDateKey(dateKey)
+  if (!isDayMarkableForHabit(habit, date, today)) return
 
-  const updates = { weekDays: nextDays, streak: nextStreak }
+  const wasDone = habit.completions?.[dateKey] === true
+  const nextCompletions = { ...habit.completions }
+  if (wasDone) {
+    delete nextCompletions[dateKey]
+  } else {
+    nextCompletions[dateKey] = true
+  }
+
+  const updates = { completions: nextCompletions }
+  const previous = _habits
 
   // Optimistic
   _habits = _habits.map((h) => (h.id === id ? { ...h, ...updates } : h))
   emit()
 
-  await updateDoc(habitDoc(_currentUid, id), sanitizeForFirestore(updates))
+  try {
+    await updateDoc(habitDoc(_currentUid, id), sanitizeForFirestore(updates))
+  } catch (err) {
+    // Revert — never leave a false/optimistic result on screen.
+    _habits = previous
+    emit()
+    throw err
+  }
 }
 
 export async function setStatus(id: string, status: HabitStatus): Promise<void> {

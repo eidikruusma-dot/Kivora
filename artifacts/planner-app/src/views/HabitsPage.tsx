@@ -29,17 +29,25 @@ import {
   Briefcase,
   ChevronDown,
 } from "lucide-react";
-import { getCurrentWeekDays } from "@/data/habitsData";
+import {
+  getCurrentWeekDays,
+  getCurrentWeekDates,
+  toDateKey,
+  isDayMarkableForHabit,
+  isHabitDoneOnDate,
+  computeWeekStats,
+  computeHabitStreak,
+} from "@/data/habitsData";
 import type { Habit, HabitStatus, HabitCategory } from "@/data/habitsData";
+import { addWeeks, formatDaySingle } from "@/lib/calendar/dateUtils";
 import {
   getAllHabits,
   addHabit,
   updateHabit,
-  toggleToday,
+  toggleHabitDay,
   setStatus,
   deleteHabit,
   subscribeHabits,
-  TODAY_INDEX,
   useHabitsLoading,
 } from "@/lib/habitsStore";
 import LinkedItemsPanel from "@/components/links/LinkedItemsPanel";
@@ -114,17 +122,6 @@ function DayDot({ done, color }: { done: boolean | null; color: string }) {
   );
 }
 
-function computeWeekTotals(habits: Habit[]) {
-  const activeHabits = habits.filter((h) => h.status === "active");
-  const total = activeHabits.length;
-  // habit.weekDays is always a fixed-length 7 array (Monday=0…Sunday=6),
-  // independent of which calendar week is currently displayed.
-  return Array.from({ length: 7 }, (_, i) => {
-    const done = activeHabits.filter((h) => h.weekDays[i] === true).length;
-    return { done, total };
-  });
-}
-
 interface HabitForm {
   title: string;
   description: string;
@@ -162,10 +159,26 @@ export default function HabitsPage() {
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), []);
   const isDark = useIsDark();
 
-  // Always the real current week (Monday–Sunday, local time) — recomputed
-  // on every render so it's correct on open, after a refresh, and if the
-  // tab is left open across midnight. Never a fixed/demo week.
-  const WEEK_DAYS = getCurrentWeekDays();
+  // "Now", recomputed on every render — correct on open, after a refresh,
+  // and if the tab is left open across midnight. Never a fixed/demo date.
+  const today = new Date();
+
+  // Prev/Next week navigation for the header band only — 0 = the real
+  // current week. The sidebar's "This week" stat always reflects the real
+  // current week regardless of weekOffset (see currentWeekDates below).
+  const [weekOffset, setWeekOffset] = useState(0);
+  const weekReferenceDate = addWeeks(today, weekOffset);
+  const weekDates = getCurrentWeekDates(weekReferenceDate);
+  const WEEK_DAYS = getCurrentWeekDays(weekReferenceDate);
+  const weekTotals = computeWeekStats(habits, weekDates, today);
+
+  const currentWeekDates = getCurrentWeekDates(today);
+  const currentWeekTotals = computeWeekStats(habits, currentWeekDates, today);
+
+  // Single in-flight guard shared by every day-toggle button on the page —
+  // prevents a double click from firing a second overlapping Firestore
+  // write while the first is still settling.
+  const [pendingToggleKey, setPendingToggleKey] = useState<string | null>(null);
 
   const STATUS_LABEL_LANG: Record<HabitStatus, string> = {
     active: t("habits.status.active", lang),
@@ -213,6 +226,7 @@ export default function HabitsPage() {
     setFilter("all");
     setManageOpen(false);
     setDeleteId(null);
+    setWeekOffset(0);
   }, [location.key]);
 
   // Deep-link: highlight specific habit navigated from a linked items panel
@@ -273,24 +287,32 @@ export default function HabitsPage() {
 
   const displayed = filtered;
 
-  const weekTotals = computeWeekTotals(habits);
-  const weekDone = weekTotals.reduce((s, d) => s + d.done, 0);
-  const weekTotal = weekTotals.reduce((s, d) => s + d.total, 0);
+  // Always the REAL current week's totals, regardless of weekOffset — "See
+  // nädal" (this week) in the sidebar never changes while browsing other
+  // weeks in the header band above.
+  const weekDone = currentWeekTotals.reduce((s, d) => s + d.done, 0);
+  const weekTotal = currentWeekTotals.reduce((s, d) => s + d.total, 0);
   const pct = weekTotal > 0 ? Math.round((weekDone / weekTotal) * 100) : 0;
 
+  // Streak is derived fresh from each habit's own completions — never a
+  // separately-maintained counter that could drift out of sync with what's
+  // actually stored.
+  const habitStreaks = new Map(habits.map((h) => [h.id, computeHabitStreak(h, today)]));
+  const streakOf = (h: Habit) => habitStreaks.get(h.id) ?? 0;
+
   const longestStreak = habits.reduce<Habit | null>((best, h) => {
-    if (!best || h.streak > best.streak) return h;
+    if (!best || streakOf(h) > streakOf(best)) return h;
     return best;
   }, null);
 
   const suurepärane = habits.filter(
-    (h) => h.status === "active" && h.streak >= 10,
+    (h) => h.status === "active" && streakOf(h) >= 10,
   ).length;
   const hea = habits.filter(
-    (h) => h.status === "active" && h.streak >= 5 && h.streak < 10,
+    (h) => h.status === "active" && streakOf(h) >= 5 && streakOf(h) < 10,
   ).length;
   const vajab = habits.filter(
-    (h) => h.status === "active" && h.streak < 5,
+    (h) => h.status === "active" && streakOf(h) < 5,
   ).length;
 
   const circumference = 97.4;
@@ -411,8 +433,22 @@ export default function HabitsPage() {
     setAppearanceExpanded(false);
   };
 
-  const handleToggleToday = (id: string) => {
-    toggleToday(id);
+  // Sole entry point for marking/unmarking a habit done on a real calendar
+  // date (identified by its local "YYYY-MM-DD" key). Guarded by
+  // pendingToggleKey so a double click can't fire a second overlapping
+  // Firestore write, and shows the existing generic error toast — reverting
+  // to the store's own (already-rolled-back) state — if the write fails.
+  const handleToggleDay = async (habitId: string, dateKey: string) => {
+    if (pendingToggleKey) return;
+    const key = `${habitId}:${dateKey}`;
+    setPendingToggleKey(key);
+    try {
+      await toggleHabitDay(habitId, dateKey, today);
+    } catch {
+      toast.error(lang === 'et' ? 'Harjumuse märkimine ebaõnnestus' : 'Failed to update habit');
+    } finally {
+      setPendingToggleKey(null);
+    }
   };
 
   const handlePause = (id: string) => {
@@ -507,6 +543,7 @@ export default function HabitsPage() {
         <div className="bg-white rounded-2xl border border-[#ECECF2] p-5">
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setWeekOffset((o) => o - 1)}
               aria-label={lang === 'et' ? 'Eelmine nädal' : 'Previous week'}
               className="w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] transition-colors flex-shrink-0"
             >
@@ -515,9 +552,12 @@ export default function HabitsPage() {
 
             <div className="flex-1 grid grid-cols-7 gap-0.5 sm:gap-1">
               {WEEK_DAYS.map((wd, i) => {
+                const date = weekDates[i];
+                const dateKey = toDateKey(date);
+                const todayKey = toDateKey(today);
                 const { done, total } = weekTotals[i];
-                const isPast = i < TODAY_INDEX;
-                const isToday = i === TODAY_INDEX;
+                const isPast = dateKey < todayKey;
+                const isToday = dateKey === todayKey;
                 const hasData = total > 0;
                 // Any completion on a past/today day = fully completed circle
                 const anyDone = done > 0;
@@ -582,6 +622,7 @@ export default function HabitsPage() {
             </div>
 
             <button
+              onClick={() => setWeekOffset((o) => o + 1)}
               aria-label={lang === 'et' ? 'Järgmine nädal' : 'Next week'}
               className="w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] transition-colors flex-shrink-0"
             >
@@ -593,7 +634,6 @@ export default function HabitsPage() {
         {/* Habits list */}
         <div className="bg-white rounded-2xl border border-[#ECECF2] overflow-hidden">
           {displayed.map((habit, idx) => {
-            const isDoneToday = habit.weekDays[TODAY_INDEX] === true;
             return (
               <div
                 key={habit.id}
@@ -631,10 +671,10 @@ export default function HabitsPage() {
                         {t("habits.streak.paused", lang)}
                       </p>
                     </>
-                  ) : habit.streak > 0 ? (
+                  ) : streakOf(habit) > 0 ? (
                     <>
                       <p className="text-sm font-bold text-[#1A1F36]">
-                        {habit.streak}
+                        {streakOf(habit)}
                       </p>
                       <p className="text-xs text-[#94A3B8]">
                         {t("habits.streak.days", lang)}
@@ -663,14 +703,29 @@ export default function HabitsPage() {
                     ))}
                   </div>
                   <div className="flex items-center gap-1.5">
-                    {habit.weekDays.map((done, i) => (
-                      <div
-                        key={i}
-                        className="w-4 flex items-center justify-center"
-                      >
-                        <DayDot done={done} color={habit.iconColor} />
-                      </div>
-                    ))}
+                    {weekDates.map((date) => {
+                      const dateKey = toDateKey(date);
+                      const markable = habit.status === "active" && isDayMarkableForHabit(habit, date, today);
+                      const done = isHabitDoneOnDate(habit, date);
+                      const pendingKey = `${habit.id}:${dateKey}`;
+                      const dayLabel = formatDaySingle(date, lang);
+                      return (
+                        <div key={dateKey} className="w-4 flex items-center justify-center">
+                          <button
+                            type="button"
+                            disabled={!markable || pendingToggleKey === pendingKey}
+                            onClick={() => handleToggleDay(habit.id, dateKey)}
+                            aria-pressed={done}
+                            aria-label={`${habit.title} — ${dayLabel} — ${
+                              done ? t("habits.day.unmark", lang) : t("habits.day.mark", lang)
+                            }`}
+                            className="w-4 h-4 flex items-center justify-center rounded-full bg-transparent border-0 p-0 disabled:cursor-default enabled:cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6F5AE8]/40"
+                          >
+                            <DayDot done={markable ? done : null} color={habit.iconColor} />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -821,7 +876,7 @@ export default function HabitsPage() {
         </div>
 
         {/* Pikim seeria */}
-        {longestStreak && longestStreak.streak > 0 && (
+        {longestStreak && streakOf(longestStreak) > 0 && (
           <div className="bg-white rounded-2xl border border-[#ECECF2] p-5">
             <h3 className="text-sm font-semibold text-[#1A1F36] mb-4">
               {t("habits.streak.title", lang)}
@@ -836,7 +891,7 @@ export default function HabitsPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-lg font-bold text-[#1A1F36]">
-                  {longestStreak.streak} {t("habits.streak.days", lang)}
+                  {streakOf(longestStreak)} {t("habits.streak.days", lang)}
                 </p>
                 <p className="text-xs text-[#64748B]">{longestStreak.title}</p>
                 <p className="text-xs text-[#94A3B8]">
@@ -1210,7 +1265,11 @@ export default function HabitsPage() {
             </div>
 
             <div className="px-5 py-4 flex flex-col gap-2">
-              {habits.map((habit) => (
+              {habits.map((habit) => {
+                const todayKey = toDateKey(today);
+                const markableToday = habit.status === "active" && isDayMarkableForHabit(habit, today, today);
+                const doneToday = isHabitDoneOnDate(habit, today);
+                return (
                 <div
                   key={habit.id}
                   className="flex items-center gap-3 p-3 rounded-xl border border-[#ECECF2] hover:bg-[#FAFAF8] transition-colors"
@@ -1231,13 +1290,18 @@ export default function HabitsPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => handleToggleToday(habit.id)}
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                        habit.weekDays[TODAY_INDEX] === true
+                      onClick={() => handleToggleDay(habit.id, todayKey)}
+                      disabled={!markableToday || pendingToggleKey === `${habit.id}:${todayKey}`}
+                      aria-pressed={doneToday}
+                      aria-label={`${habit.title} — ${formatDaySingle(today, lang)} — ${
+                        doneToday ? t("habits.day.unmark", lang) : t("habits.day.mark", lang)
+                      }`}
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-default ${
+                        doneToday
                           ? "text-[#16A34A] bg-[#DCFCE7] hover:bg-[#BBF7D0]"
                           : "text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#16A34A]"
                       }`}
-                      title={habit.weekDays[TODAY_INDEX] === true ? t("habits.menu.cancelToday", lang) : t("habits.menu.markDone", lang)}
+                      title={doneToday ? t("habits.menu.cancelToday", lang) : t("habits.menu.markDone", lang)}
                     >
                       <Check size={14} />
                     </button>
@@ -1274,7 +1338,8 @@ export default function HabitsPage() {
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
               {habits.length === 0 && (
                 <p className="text-sm text-[#94A3B8] py-6 text-center">
                   {t("habits.manage.empty", lang)}

@@ -251,7 +251,6 @@ describe('no changes to recurrence or save payload behavior', () => {
     expect(SRC).toMatch(/if \(!form\.title\.trim\(\)\) \{/)
     expect(SRC).toMatch(/goalPerDay: Math\.max\(1, Number\(e\.target\.value\)\),/)
     expect(SRC).toMatch(/const handleDelete = \(id: string\) => \{/)
-    expect(SRC).toMatch(/function computeWeekTotals\(habits: Habit\[\]\) \{/)
-    expect(SRC).toMatch(/const weekTotals = computeWeekTotals\(habits\);/)
+    expect(SRC).toMatch(/const weekTotals = computeWeekStats\(habits, weekDates, today\);/)
   })
 })

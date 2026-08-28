@@ -194,7 +194,7 @@ describe('all existing category-default and customization behavior remains intac
   })
 
   it('the weekly date strip, filters, and stats are untouched by this layout fix', () => {
-    expect(SRC).toMatch(/function computeWeekTotals\(habits: Habit\[\]\) \{/)
+    expect(SRC).toMatch(/computeWeekStats\(habits, weekDates, today\)/)
     expect(SRC).toMatch(/const filtered = habits\.filter\(\(h\) => \{/)
     expect(SRC).toMatch(/const longestStreak = habits\.reduce<Habit \| null>/)
   })

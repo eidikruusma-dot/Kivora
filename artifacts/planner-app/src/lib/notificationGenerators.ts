@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { dispatch } from '@/lib/notificationItemsStore'
 import { getAllTasks } from '@/lib/tasksStore'
-import { getAllHabits, TODAY_INDEX } from '@/lib/habitsStore'
+import { getAllHabits } from '@/lib/habitsStore'
+import { isHabitScheduledOnDate, isHabitDoneOnDate } from '@/data/habitsData'
 import { getAllGoals } from '@/lib/goalsStore'
 import { getLocalLanguage } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
@@ -69,10 +70,11 @@ export function genTaskNotifications(): void {
 export function genHabitNotifications(): void {
   const lang = getLocalLanguage()
   const habits = getAllHabits()
+  const today = new Date()
 
   // Count active habits scheduled for today that are NOT yet done
   const undoneCount = habits.filter(
-    (h) => h.status === 'active' && h.weekDays[TODAY_INDEX] === false,
+    (h) => h.status === 'active' && isHabitScheduledOnDate(h, today) && !isHabitDoneOnDate(h, today),
   ).length
 
   if (undoneCount > 0) {
