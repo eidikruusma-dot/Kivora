@@ -1,3 +1,5 @@
+import { startOfWeek, addDays, WEEKDAYS_ET, MONTHS_ET } from '@/lib/calendar/dateUtils'
+
 export type HabitStatus = 'active' | 'paused' | 'completed'
 export type HabitCategory = 'Isiklik' | 'Tervis' | 'Töö' | 'Kool'
 
@@ -20,15 +22,19 @@ export interface Habit {
   weekDays: (boolean | null)[]  // index 0=E … 6=P
 }
 
-export const WEEK_DAYS: { short: string; date: string }[] = [
-  { short: 'E', date: '21. juuli' },
-  { short: 'T', date: '22. juuli' },
-  { short: 'K', date: '23. juuli' },
-  { short: 'N', date: '24. juuli' },
-  { short: 'R', date: '25. juuli' },
-  { short: 'L', date: '26. juuli' },
-  { short: 'P', date: '27. juuli' },
-]
+/**
+ * The current Monday–Sunday week's short day labels + calendar dates,
+ * computed fresh from local time (never UTC) — never a fixed/demo week.
+ * Pass an explicit `referenceDate` in tests to pin "today".
+ */
+export function getCurrentWeekDays(referenceDate: Date = new Date()): { short: string; date: string }[] {
+  const monday = startOfWeek(referenceDate, 'monday')
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = addDays(monday, i)
+    const month = MONTHS_ET[d.getMonth()].toLowerCase()
+    return { short: WEEKDAYS_ET[i], date: `${d.getDate()}. ${month}` }
+  })
+}
 
 // Intentionally empty — new users start with no demo habits.
 export const mockHabits: Habit[] = []

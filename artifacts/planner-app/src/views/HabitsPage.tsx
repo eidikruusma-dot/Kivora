@@ -29,7 +29,7 @@ import {
   Briefcase,
   ChevronDown,
 } from "lucide-react";
-import { WEEK_DAYS } from "@/data/habitsData";
+import { getCurrentWeekDays } from "@/data/habitsData";
 import type { Habit, HabitStatus, HabitCategory } from "@/data/habitsData";
 import {
   getAllHabits,
@@ -117,7 +117,9 @@ function DayDot({ done, color }: { done: boolean | null; color: string }) {
 function computeWeekTotals(habits: Habit[]) {
   const activeHabits = habits.filter((h) => h.status === "active");
   const total = activeHabits.length;
-  return WEEK_DAYS.map((_, i) => {
+  // habit.weekDays is always a fixed-length 7 array (Monday=0…Sunday=6),
+  // independent of which calendar week is currently displayed.
+  return Array.from({ length: 7 }, (_, i) => {
     const done = activeHabits.filter((h) => h.weekDays[i] === true).length;
     return { done, total };
   });
@@ -159,6 +161,11 @@ export default function HabitsPage() {
   const [lang, setLang] = useState<AppLang>(getLocalLanguage);
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), []);
   const isDark = useIsDark();
+
+  // Always the real current week (Monday–Sunday, local time) — recomputed
+  // on every render so it's correct on open, after a refresh, and if the
+  // tab is left open across midnight. Never a fixed/demo week.
+  const WEEK_DAYS = getCurrentWeekDays();
 
   const STATUS_LABEL_LANG: Record<HabitStatus, string> = {
     active: t("habits.status.active", lang),
@@ -509,8 +516,8 @@ export default function HabitsPage() {
             <div className="flex-1 grid grid-cols-7 gap-0.5 sm:gap-1">
               {WEEK_DAYS.map((wd, i) => {
                 const { done, total } = weekTotals[i];
-                const isPast = i < 2;
-                const isToday = i === 1;
+                const isPast = i < TODAY_INDEX;
+                const isToday = i === TODAY_INDEX;
                 const hasData = total > 0;
                 // Any completion on a past/today day = fully completed circle
                 const anyDone = done > 0;
