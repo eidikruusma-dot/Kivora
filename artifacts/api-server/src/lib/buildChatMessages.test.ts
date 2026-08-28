@@ -217,9 +217,9 @@ group("20. the CURRENT_KIVORA_STATE text explicitly forbids resolving actions fr
   );
 });
 
-// ── 22. Destructive-action confirmation wording is untouched by this refactor ──
+// ── 22. Destructive-action confirmation wording is present in the stable system prompt ──
 
-group("22. the destructive-action confirmation policy text is still present in the stable system prompt, unchanged", () => {
+group("22. the destructive-action confirmation policy text is present in the stable system prompt", () => {
   const result = buildChatMessages({
     lang: "et",
     mode: "chat",
@@ -228,8 +228,61 @@ group("22. the destructive-action confirmation policy text is still present in t
   });
   assert(
     typeof result[0]!.content === "string" &&
-      (result[0]!.content as string).includes("KUSTUTAMINE — KÜSI ALATI ENNE KINNITUST"),
-    "the always-confirm-before-delete instruction is present verbatim in the stable system prompt",
+      (result[0]!.content as string).includes("KUSTUTAMINE — rakendus ise tagab kinnitus-enne-täitmist reegli"),
+    "the confirm-before-execute-is-the-app's-job instruction is present verbatim in the stable system prompt",
+  );
+});
+
+// ── 23. Root-cause fix for a live incident: the model must ALWAYS emit the ──
+// ── delete_* action, even on the first ask — never withhold it while only ──
+// ── asking a question in free text. See aiDeleteTwoTurnConfirmationFlow    ──
+// ── .test.ts (planner-app) for the full two-turn reproduction. The OLD     ──
+// ── prompt told the model to hold the action back on the first request,   ──
+// ── which meant the code-level confirm-before-execute gate (aiActions.ts) ──
+// ── never received anything to track — a short "jah"/"yes" on the next    ──
+// ── turn had no pending action to resolve, and the model's own            ──
+// ── subsequent delete_* emission was treated as a brand-new first         ──
+// ── proposal, asking the same confirmation question again forever.        ──
+
+group("23. the model is told to ALWAYS emit the delete_* action, including on the first ask — never to withhold it", () => {
+  const et = buildChatMessages({ lang: "et", mode: "chat", ...DATES, messages: [userMsg("hi")] });
+  const en = buildChatMessages({ lang: "en", mode: "chat", ...DATES, messages: [userMsg("hi")] });
+  const etPrompt = et[0]!.content as string;
+  const enPrompt = en[0]!.content as string;
+
+  assert(
+    etPrompt.includes("käivita ALATI täpne delete_* toiming"),
+    "ET: instructs the model to ALWAYS emit the exact delete_* action, every time a deletion is requested",
+  );
+  assert(
+    etPrompt.includes("kaasa arvatud esimesel korral"),
+    "ET: explicitly includes the very first ask, not just later confirmations",
+  );
+  assert(
+    !etPrompt.includes("ÄRA veel seda delete_* toimingut emiteeri"),
+    "ET: the old 'do NOT emit the action yet' instruction is gone — it caused the code gate to never receive a pending action on the first ask",
+  );
+
+  assert(
+    enPrompt.includes("ALWAYS emit the exact delete_* action"),
+    "EN: instructs the model to ALWAYS emit the exact delete_* action, every time a deletion is requested",
+  );
+  assert(
+    enPrompt.includes("including the very first time"),
+    "EN: explicitly includes the very first ask, not just later confirmations",
+  );
+  assert(
+    !enPrompt.includes("do NOT emit that delete_* action yet"),
+    "EN: the old 'do NOT emit the action yet' instruction is gone — it caused the code gate to never receive a pending action on the first ask",
+  );
+
+  assert(
+    etPrompt.includes("Rakendus, mitte sina, otsustab") || etPrompt.includes("Ei otsusta mitte sina, vaid rakendus"),
+    "ET: makes clear the APP decides execute-vs-confirm, not the model",
+  );
+  assert(
+    enPrompt.includes("You do not decide whether it actually executes"),
+    "EN: makes clear the APP decides execute-vs-confirm, not the model",
   );
 });
 
