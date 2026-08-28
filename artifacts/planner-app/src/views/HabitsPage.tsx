@@ -920,10 +920,10 @@ export default function HabitsPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="habit-modal-title"
-            className="kv-modal-enter bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[90dvh] overflow-y-auto"
+            className="kv-modal-enter bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90dvh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#F4F4F0] sticky top-0 bg-white">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#F4F4F0] flex-shrink-0">
               <h2 id="habit-modal-title" className="text-base font-semibold text-[#1A1F36]">
                 {editingId
                   ? t("habits.modal.editTitle", lang)
@@ -938,7 +938,8 @@ export default function HabitsPage() {
               </button>
             </div>
 
-            <div className="px-5 py-4 flex flex-col gap-4">
+            {/* Form body — the only scrolling region inside the dialog */}
+            <div className="px-5 py-4 flex flex-col gap-4 min-h-0 flex-1 overflow-y-auto">
               {/* Name */}
               <div>
                 <label htmlFor="habit-modal-input" className="block text-xs font-medium text-[#64748B] mb-1.5">
@@ -1139,18 +1140,18 @@ export default function HabitsPage() {
               {formError && (
                 <p className="text-sm text-[#E11D48]">{formError}</p>
               )}
+
+              {editingId && (
+                <LinkedItemsPanel
+                  type="habit"
+                  entityId={editingId}
+                  lang={lang}
+                />
+              )}
             </div>
 
-            {editingId && (
-              <LinkedItemsPanel
-                type="habit"
-                entityId={editingId}
-                lang={lang}
-                className="px-5 pb-2"
-              />
-            )}
-
-            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#F4F4F0] sticky bottom-0 bg-white">
+            {/* Footer — flex-shrink-0, never scrolls, always visible */}
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#F4F4F0] flex-shrink-0">
               <button
                 onClick={handleCancelForm}
                 disabled={saving}
