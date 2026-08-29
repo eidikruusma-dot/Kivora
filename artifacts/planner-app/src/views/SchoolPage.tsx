@@ -5281,14 +5281,14 @@ function TaskDetailModal({
                     {task.parts!.map((part) => (
                       <label
                         key={part.id}
-                        className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-[#ECECF2] hover:bg-[#F8F7FC] transition-colors cursor-pointer"
+                        className="flex items-start gap-2.5 px-3 py-2.5 rounded-lg border border-[#ECECF2] hover:bg-[#F8F7FC] transition-colors cursor-pointer"
                       >
                         <button
                           onClick={(e) => {
                             e.preventDefault();
                             onTogglePart(task.id, part.id);
                           }}
-                          className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                          className={`mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
                             part.done
                               ? "bg-[#6F5AE8] border-[#6F5AE8] text-white"
                               : "bg-white border-[#CBD5E1] hover:border-[#6F5AE8]"
@@ -5297,7 +5297,7 @@ function TaskDetailModal({
                           {part.done && <Check size={13} strokeWidth={3} />}
                         </button>
                         <span
-                          className={`text-sm ${part.done ? "text-[#94A3B8] line-through" : "text-[#1A1F36]"}`}
+                          className={`flex-1 min-w-0 text-sm leading-snug break-words ${part.done ? "text-[#94A3B8] line-through" : "text-[#1A1F36]"}`}
                         >
                           {part.label ||
                             tr("school.task.parts.partN", lang).replace(
