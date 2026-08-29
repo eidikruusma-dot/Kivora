@@ -409,71 +409,6 @@ const INITIAL_EXAMS: Exam[] = [
   },
 ];
 
-// All hours are 0 — study time is tracked by real user activity, not seeded with demo data.
-const STUDY_HOURS: { day: string; hours: number; label: string }[] = [
-  { day: "E", hours: 0, label: "0h" },
-  { day: "T", hours: 0, label: "0h" },
-  { day: "K", hours: 0, label: "0h" },
-  { day: "N", hours: 0, label: "0h" },
-  { day: "R", hours: 0, label: "0h" },
-  { day: "L", hours: 0, label: "0h" },
-  { day: "P", hours: 0, label: "0h" },
-];
-
-const MAX_HOURS = 4;
-
-// ── Study hours computation from scheduled lessons ─────────────────────────
-// Maps the ET weekday names stored in ScheduleLesson.day to the short day
-// labels used by the chart, then sums hours from startTime/endTime pairs.
-export function computeStudyHoursFromLessons(
-  lessons: ScheduleLesson[],
-): { day: string; hours: number; label: string }[] {
-  const DAY_MAP = [
-    { et: "Esmaspäev", short: "E" },
-    { et: "Teisipäev", short: "T" },
-    { et: "Kolmapäev", short: "K" },
-    { et: "Neljapäev", short: "N" },
-    { et: "Reede",     short: "R" },
-    { et: "Laupäev",   short: "L" },
-    { et: "Pühapäev",  short: "P" },
-  ];
-  const acc: Record<string, number> = {};
-  DAY_MAP.forEach((d) => { acc[d.short] = 0; });
-  for (const l of lessons) {
-    if (!l.day || !l.startTime || !l.endTime) continue;
-    const dayInfo = DAY_MAP.find((d) => d.et === l.day);
-    if (!dayInfo) continue;
-    const [sh, sm] = l.startTime.split(":").map(Number);
-    const [eh, em] = l.endTime.split(":").map(Number);
-    if ([sh, sm, eh, em].some(isNaN)) continue;
-    const hrs = ((eh * 60 + em) - (sh * 60 + sm)) / 60;
-    if (hrs > 0) acc[dayInfo.short] += hrs;
-  }
-  return DAY_MAP.map((d) => {
-    const h = Math.round(acc[d.short] * 10) / 10;
-    return { day: d.short, hours: h, label: h > 0 ? `${h}h` : "0h" };
-  });
-}
-
-// ── Planned/estimated study time (School change #14A) ──────────────────────
-// A learning block contributes either its real day+startTime+endTime
-// duration (via computeStudyHoursFromLessons above, unchanged) or — only
-// when it has no complete recurring time triple, e.g. a flexible/e-learning
-// block using startDate/endDate instead — its own plannedStudyMinutes
-// estimate. Never both for the same block, and this never feeds the
-// per-weekday bars (a date-ranged block has no single weekday to attach
-// to): it only adds to total workload figures.
-export function computePlannedStudyMinutes(lessons: ScheduleLesson[]): number {
-  let total = 0;
-  for (const l of lessons) {
-    const hasRealSchedule = !!(l.day && l.startTime && l.endTime);
-    if (hasRealSchedule) continue;
-    if (typeof l.plannedStudyMinutes === "number" && l.plannedStudyMinutes > 0) {
-      total += l.plannedStudyMinutes;
-    }
-  }
-  return total;
-}
 
 // ── Progress ring ──────────────────────────────────────────────────────────
 
@@ -586,19 +521,6 @@ export default function SchoolPage() {
   const todayWeekdayET = DAYS_ET[getLocalWeekdayIndex()];
   const todayLabel = formatDateWithWeekday(todayISO, lang);
   const todayLessons = filterLessonsForToday(scheduleLessons, todayISO, todayWeekdayET);
-
-  // Compute real study hours from scheduled lessons (startTime/endTime pairs)
-  const liveStudyHours = useMemo(
-    () => computeStudyHoursFromLessons(scheduleLessons),
-    [scheduleLessons],
-  );
-  // Planned/estimated minutes from blocks with no real day+startTime+endTime
-  // — School change #14A. Added only to total workload figures below, never
-  // to the per-weekday bars in liveStudyHours.
-  const plannedStudyMinutes = useMemo(
-    () => computePlannedStudyMinutes(scheduleLessons),
-    [scheduleLessons],
-  );
 
   // Reset to default tab and close all panels whenever the user navigates to School.
   // scheduleMode is intentionally preserved — it's a persisted configuration.
@@ -756,21 +678,6 @@ export default function SchoolPage() {
               sub={tr("school.stat.examsSub", lang)}
             />
             <StatCard
-              icon={<Clock size={18} strokeWidth={1.8} />}
-              iconBg="#EFF6FF"
-              iconColor="#2563EB"
-              value={(() => {
-                const realMinutes = Math.round(liveStudyHours.reduce((s, d) => s + d.hours, 0) * 60);
-                const totalMinutes = realMinutes + plannedStudyMinutes;
-                if (totalMinutes === 0) return '0h';
-                const h = Math.floor(totalMinutes / 60);
-                const m = totalMinutes % 60;
-                return m > 0 ? `${h}h ${m}m` : `${h}h`;
-              })()}
-              label={tr("school.stat.studyTime", lang)}
-              sub={tr("school.stat.studyTimeSub", lang)}
-            />
-            <StatCard
               icon={<Star size={18} strokeWidth={1.8} />}
               iconBg="#FFF1F2"
               iconColor="#DC2626"
@@ -865,8 +772,6 @@ export default function SchoolPage() {
                 subjects={subjects}
                 scheduleLessons={scheduleLessons}
                 scheduleMode={scheduleMode}
-                studyHours={liveStudyHours}
-                plannedStudyMinutes={plannedStudyMinutes}
                 onNavigate={setActiveTab}
               />
             )}
@@ -885,7 +790,6 @@ export default function SchoolPage() {
       {/* ── Right sidebar ─────────────────────────────────────────────── */}
       <aside className="w-full md:w-80 flex-shrink-0 flex flex-col gap-4">
         <UpcomingExams exams={exams} onShowAll={() => setShowAllExams(true)} />
-        <StudyTimeChart data={liveStudyHours} />
         <MaterialsLinks />
         <AIStudyHelper
           subjects={subjects}
@@ -2290,8 +2194,6 @@ function UlevaadeTab({
   subjects,
   scheduleLessons,
   scheduleMode,
-  studyHours,
-  plannedStudyMinutes,
   onNavigate,
 }: {
   tasks: Task[];
@@ -2299,8 +2201,6 @@ function UlevaadeTab({
   subjects: Subject[];
   scheduleLessons: ScheduleLesson[];
   scheduleMode: ScheduleMode;
-  studyHours: { day: string; hours: number; label: string }[];
-  plannedStudyMinutes: number;
   onNavigate: (tab: TabId) => void;
 }) {
   const lang = getLocalLanguage();
@@ -2358,13 +2258,7 @@ function UlevaadeTab({
   // 5. Õpitavad ained
   const activeSubjectsCount = subjects.length;
 
-  // 6. Õppimise statistika (real hours from scheduled lessons via prop, plus
-  // planned/estimated minutes from blocks with no real day+startTime+endTime
-  // — School change #14A. Combined in minutes to avoid float drift, then
-  // converted back to hours for the existing display below.
-  const totalStudyMinutes =
-    Math.round(studyHours.reduce((sum, d) => sum + d.hours, 0) * 60) + plannedStudyMinutes;
-  const totalStudyHours = totalStudyMinutes / 60;
+  // 6. Õppimise statistika
   const completedTestsCount = exams.filter(
     (e) => e.type === "kontrolltöö" && e.status === "tehtud",
   ).length;
@@ -2606,32 +2500,6 @@ function UlevaadeTab({
         >
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-[#94A3B8]">
-                {tr("school.uv.statsTime", lang)}
-              </span>
-              <span className="text-xs font-semibold text-[#1A1F36]">
-                {Math.floor(totalStudyHours)}h{" "}
-                {Math.round((totalStudyHours % 1) * 60)}m
-              </span>
-            </div>
-            <div className="flex items-end justify-between gap-1 h-12">
-              {studyHours.map((d) => {
-                const heightPct = (d.hours / MAX_HOURS) * 100;
-                return (
-                  <div
-                    key={d.day}
-                    className="flex flex-col items-center gap-1 flex-1"
-                  >
-                    <div
-                      className="w-full rounded-t-md bg-[#EDE9FB]"
-                      style={{ height: `${heightPct}%` }}
-                    />
-                    <span className="text-[10px] text-[#94A3B8]">{d.day}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex items-center justify-between pt-2 border-t border-[#F3F3F8]">
               <div>
                 <p className="text-xs text-[#94A3B8]">
                   {tr("school.stat.tasksDone", lang)}
@@ -2837,46 +2705,6 @@ function UpcomingExams({
         {tr("school.uv.viewAll", lang)}
         <ChevronRight size={13} strokeWidth={2} />
       </button>
-    </div>
-  );
-}
-
-function StudyTimeChart({ data }: { data: typeof STUDY_HOURS }) {
-  const lang = getLocalLanguage();
-  const totalHours = data.reduce((s, d) => s + d.hours, 0);
-  const total = totalHours === 0 ? '0h' : (() => {
-    const h = Math.floor(totalHours);
-    const m = Math.round((totalHours % 1) * 60);
-    return m > 0 ? `${h}h ${m}m` : `${h}h`;
-  })();
-  return (
-    <div className="bg-white rounded-2xl border border-[#ECECF2] p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[#1A1F36]">
-          {tr("school.studytime.title", lang)}
-        </h3>
-        <span className="text-sm font-bold text-[#1A1F36]">{total}</span>
-      </div>
-      <div className="flex items-end justify-between gap-1 h-20">
-        {data.map((d) => {
-          const heightPct = (d.hours / MAX_HOURS) * 100;
-          return (
-            <div
-              key={d.day}
-              className="flex flex-col items-center gap-1.5 flex-1"
-            >
-              <span className="text-[9px] text-[#94A3B8] font-medium">
-                {d.label}
-              </span>
-              <div
-                className="w-full rounded-t-md bg-[#EDE9FB]"
-                style={{ height: `${heightPct}%` }}
-              />
-              <span className="text-[10px] text-[#94A3B8]">{d.day}</span>
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }

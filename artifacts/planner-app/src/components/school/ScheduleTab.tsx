@@ -9,21 +9,6 @@ import { formatDateRange } from '@/lib/dateUtils'
 
 export type ScheduleMode = 'traditional' | 'elearning' | 'none'
 
-/**
- * Human-readable formatting for a learning block's planned/estimated study
- * time — School change #14A. Not locale-dependent (the rest of this
- * feature's h/min figures, e.g. the study-time stat card, are also plain
- * ET/EN-neutral abbreviations, not routed through translations).
- * Examples: 360 -> "6 h", 90 -> "1 h 30 min", 45 -> "45 min".
- */
-export function formatPlannedStudyTime(minutes: number): string {
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  if (h > 0 && m > 0) return `${h} h ${m} min`
-  if (h > 0) return `${h} h`
-  return `${m} min`
-}
-
 export interface ScheduleLesson {
   id: string
   subject: string
@@ -43,10 +28,6 @@ export interface ScheduleLesson {
   cardBg: string
   /** Free-text assessment guide/rules for this specific learning block (not the Subject) */
   assessment?: string
-  /** Planned/estimated study workload in minutes — School change #14A. Not a
-   * timer: a user-entered estimate, only meaningful for totals when this
-   * block lacks a complete day+startTime+endTime. */
-  plannedStudyMinutes?: number
 }
 
 export function getDays(lang: AppLang): string[] {
@@ -469,17 +450,6 @@ function LessonDetailModal({
               <p className="text-sm text-[#1A1F36] whitespace-pre-wrap">{lesson.assessment}</p>
             </div>
           )}
-
-          {!!lesson.plannedStudyMinutes && lesson.plannedStudyMinutes > 0 && (
-            <div>
-              <p className="text-xs font-medium text-[#64748B] mb-1">
-                {t('sched.field.plannedStudyTime', lang)}
-              </p>
-              <p className="text-sm text-[#1A1F36]">
-                {formatPlannedStudyTime(lesson.plannedStudyMinutes)}
-              </p>
-            </div>
-          )}
         </div>
 
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2] flex-shrink-0">
@@ -540,14 +510,6 @@ function LessonModal({
   // Hindamine / Assessment — belongs to this specific learning block, not
   // the Subject (see SchoolPage.tsx's Subject.assessment, added separately).
   const [assessment, setAssessment] = useState(lesson?.assessment ?? '')
-  // Planeeritud õppeaeg / Planned study time — School change #14A. Stored as
-  // plannedStudyMinutes; this input keeps the friendlier "hours" the user
-  // types in (decimals allowed, e.g. "1.5"), converted to minutes on save.
-  const [plannedStudyHours, setPlannedStudyHours] = useState(
-    lesson?.plannedStudyMinutes
-      ? String(Math.round((lesson.plannedStudyMinutes / 60) * 100) / 100)
-      : '',
-  )
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -660,14 +622,6 @@ function LessonModal({
       dotColor = c.dot
       cardBg = c.bg
     }
-    // Friendly hours input -> integer minutes for storage (School change
-    // #14A). Empty/invalid/non-positive input clears the field.
-    const parsedHours = parseFloat(plannedStudyHours.trim().replace(',', '.'))
-    const plannedStudyMinutes =
-      plannedStudyHours.trim() && !isNaN(parsedHours) && parsedHours > 0
-        ? Math.round(parsedHours * 60)
-        : undefined
-
     setError('')
     setSaving(true)
     try {
@@ -688,7 +642,6 @@ function LessonModal({
         room: room || undefined,
         teacher: teacher || undefined,
         assessment: assessment.trim() || undefined,
-        plannedStudyMinutes,
         dotColor,
         cardBg,
       })
@@ -922,20 +875,6 @@ function LessonModal({
               placeholder={t('sched.field.assessmentPh', lang)}
               rows={5}
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] resize-y"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
-              {t('sched.field.plannedStudyTime', lang)} {optional}
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={plannedStudyHours}
-              onChange={(e) => setPlannedStudyHours(e.target.value)}
-              placeholder={t('sched.field.plannedStudyTimePh', lang)}
-              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             />
           </div>
         </div>

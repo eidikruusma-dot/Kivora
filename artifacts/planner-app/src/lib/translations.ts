@@ -995,8 +995,6 @@ export type TranslationKey =
     | "school.stat.tasksSub"
     | "school.stat.exams"
     | "school.stat.examsSub"
-    | "school.stat.time"
-    | "school.stat.timeSub"
     | "school.stat.progress"
     | "school.stat.progressSub"
     | "school.empty.subjects"
@@ -1208,7 +1206,6 @@ export type TranslationKey =
     | "school.schedule.noTodayTraditional"
     | "school.schedule.noTodayElearning"
     | "school.schedule.upcoming"
-    | "school.studytime.title"
     | "school.days"
     | "school.field.examNameLabel"
     | "school.field.examDateLabel"
@@ -1274,8 +1271,6 @@ export type TranslationKey =
     | "sched.field.teacherPh"
     | "sched.field.assessment"
     | "sched.field.assessmentPh"
-    | "sched.field.plannedStudyTime"
-    | "sched.field.plannedStudyTimePh"
     | "sched.field.optional"
     | "sched.field.error.subject"
     | "sched.field.error.startDate"
@@ -1304,7 +1299,6 @@ export type TranslationKey =
     | "school.uv.subjectsSub"
     | "school.uv.openSubjects"
     | "school.uv.stats"
-    | "school.uv.statsTime"
     | "school.uv.openStats"
     | "school.uv.openTasks"
     | "school.uv.openTests"
@@ -1335,8 +1329,6 @@ export type TranslationKey =
     | "goals.rec.reason"
     | "goals.rec.goalDefault"
     // ── SchoolPage remaining ──────────────────────────────────────────────────
-    | "school.stat.studyTime"
-    | "school.stat.studyTimeSub"
     | "school.filter.allSubjects"
     | "school.uv.viewAll"
     | "school.uv.viewSchedule"
@@ -3021,8 +3013,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.stat.tasksSub": "Tuleb täita",
         "school.stat.exams": "Kontrolltööd",
         "school.stat.examsSub": "Järgmise 30 päeva jooksul",
-        "school.stat.time": "Õppetöö aeg",
-        "school.stat.timeSub": "Sel nädalal",
         "school.stat.progress": "Edenemine",
         "school.stat.progressSub": "Keskmine",
         "school.empty.subjects":
@@ -3204,8 +3194,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
             "Oled saavutanud {pct}% eesmärgist. Jätka samas tempos, et jõuda tähtajaks.",
         "goals.rec.goalDefault": "Eesmärk",
         // ── SchoolPage remaining
-        "school.stat.studyTime": "Õppetöö aeg",
-        "school.stat.studyTimeSub": "Sel nädalal",
         "school.uv.viewAll": "Vaata kõiki",
         "school.uv.viewSchedule": "Vaata kogu tunniplaani",
         "school.ai.title": "AI õpiabi",
@@ -3301,8 +3289,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "sched.field.teacherPh": "nt. M. Tamm",
         "sched.field.assessment": "Hindamine",
         "sched.field.assessmentPh": "nt 07.09 – Kursust sissejuhatav test",
-        "sched.field.plannedStudyTime": "Planeeritud õppeaeg",
-        "sched.field.plannedStudyTimePh": "nt 6 (tundides)",
         "sched.field.optional": "valikuline",
         "sched.field.error.subject": "Sisesta aine või tegevuse nimi.",
         "sched.field.error.startDate": "Sisesta alguskuupäev.",
@@ -3331,7 +3317,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.uv.subjectsSub": "aktiivset ainet sel õppeperioodil",
         "school.uv.openSubjects": "Ava ained",
         "school.uv.stats": "Õppimise statistika",
-        "school.uv.statsTime": "Õppimise aeg sel nädalal",
         "school.uv.openStats": "Ava detailid",
         "school.uv.openTasks": "Ava ülesanded",
         "school.uv.openTests": "Ava kontrolltööd",
@@ -3504,7 +3489,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.schedule.noTodayElearning":
             "Tänaseks pole õppimisblokke lisatud.",
         "school.schedule.upcoming": "Lähenevad kontrolltööd ja eksamid",
-        "school.studytime.title": "Õppetöö aeg nädalas",
         "school.days": "päeva",
         "school.field.examNameLabel": "Eksami nimi",
         "school.field.examDateLabel": "Kuupäev",
@@ -5070,8 +5054,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.stat.tasksSub": "To complete",
         "school.stat.exams": "Tests",
         "school.stat.examsSub": "In the next 30 days",
-        "school.stat.time": "Study time",
-        "school.stat.timeSub": "This week",
         "school.stat.progress": "Progress",
         "school.stat.progressSub": "Average",
         "school.empty.subjects": 'Click "Add subject" to add a new subject.',
@@ -5250,8 +5232,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
             "You've achieved {pct}% of this goal. Keep up the pace to reach the deadline.",
         "goals.rec.goalDefault": "Goal",
         // ── SchoolPage remaining
-        "school.stat.studyTime": "Study time",
-        "school.stat.studyTimeSub": "This week",
         "school.uv.viewAll": "View all",
         "school.uv.viewSchedule": "View full schedule",
         "school.ai.title": "AI Study Help",
@@ -5345,8 +5325,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "sched.field.teacherPh": "e.g. M. Smith",
         "sched.field.assessment": "Assessment",
         "sched.field.assessmentPh": "e.g. Sep 7 – Introductory test",
-        "sched.field.plannedStudyTime": "Planned study time",
-        "sched.field.plannedStudyTimePh": "e.g. 6 (hours)",
         "sched.field.optional": "optional",
         "sched.field.error.subject": "Please enter a subject or activity name.",
         "sched.field.error.startDate": "Please enter a start date.",
@@ -5375,7 +5353,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.uv.subjectsSub": "active subjects this period",
         "school.uv.openSubjects": "Open subjects",
         "school.uv.stats": "Study statistics",
-        "school.uv.statsTime": "Study time this week",
         "school.uv.openStats": "Open details",
         "school.uv.openTasks": "Open tasks",
         "school.uv.openTests": "Open tests",
@@ -5546,7 +5523,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.schedule.noTodayTraditional": "No lessons added for today.",
         "school.schedule.noTodayElearning": "No study blocks added for today.",
         "school.schedule.upcoming": "Upcoming tests and exams",
-        "school.studytime.title": "Study time per week",
         "school.days": "days",
         "school.field.examNameLabel": "Exam name",
         "school.field.examDateLabel": "Date",
