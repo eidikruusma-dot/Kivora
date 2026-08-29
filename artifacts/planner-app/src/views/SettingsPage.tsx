@@ -10,7 +10,6 @@ import KuupaevJaAegPage from '@/views/settings/KuupaevJaAegPage'
 import KeelPage from '@/views/settings/KeelPage'
 import EPostPage from '@/views/settings/EPostPage'
 import PrivaatsusPage from '@/views/settings/PrivaatsusPage'
-import SünkroonimisePage from '@/views/settings/SünkroonimisePage'
 import VarundaminePage from '@/views/settings/VarundaminePage'
 import AndmeteEksportPage from '@/views/settings/AndmeteEksportPage'
 import AndmeteKustutaminePage from '@/views/settings/AndmeteKustutaminePage'
@@ -39,7 +38,6 @@ import {
   Info,
   ChevronRight,
   HardDrive,
-  RefreshCw,
   Headphones,
   ArrowLeft,
   LayoutGrid,
@@ -161,13 +159,6 @@ function getSections(lang: AppLang): Section[] {
       heading: t('settings.section.data', lang),
       cards: [
         {
-          icon: <RefreshCw size={22} strokeWidth={1.8} />,
-          iconBg: '#EDE9FB', iconColor: '#6F5AE8',
-          routeKey: 'Sünkroonimine',
-          title: t('settings.card.sync', lang),
-          description: t('settings.desc.sync', lang),
-        },
-        {
           icon: <UploadCloud size={22} strokeWidth={1.8} />,
           iconBg: '#DCFCE7', iconColor: '#16A34A',
           routeKey: 'Varundamine',
@@ -270,12 +261,6 @@ function getQuickActions(lang: AppLang): QuickAction[] {
       routeKey: 'Andmete eksport',
     },
     {
-      icon: <RefreshCw size={15} strokeWidth={1.8} />,
-      iconBg: '#FEF9C3', iconColor: '#CA8A04',
-      label: t('settings.quick.checkSync', lang),
-      routeKey: 'Sünkroonimine',
-    },
-    {
       icon: <Headphones size={15} strokeWidth={1.8} />,
       iconBg: '#FEE2E2', iconColor: '#DC2626',
       label: t('settings.quick.contactSupport', lang),
@@ -334,10 +319,6 @@ export default function SettingsPage() {
 
   if (openView === 'Keel') {
     return <KeelPage onBack={() => setOpenView(null)} />
-  }
-
-  if (openView === 'Sünkroonimine') {
-    return <SünkroonimisePage onBack={() => setOpenView(null)} />
   }
 
   if (openView === 'Varundamine') {

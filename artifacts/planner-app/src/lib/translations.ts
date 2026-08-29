@@ -34,7 +34,6 @@ export type TranslationKey =
     | "settings.card.notifications"
     | "settings.card.datetime"
     | "settings.card.language"
-    | "settings.card.sync"
     | "settings.card.backup"
     | "settings.card.export"
     | "settings.card.delete"
@@ -50,7 +49,6 @@ export type TranslationKey =
     | "settings.quick.title"
     | "settings.quick.changePassword"
     | "settings.quick.downloadData"
-    | "settings.quick.checkSync"
     | "settings.quick.contactSupport"
     // ── Settings card descriptions ────────────────────────────────────────
     | "settings.desc.profile"
@@ -61,7 +59,6 @@ export type TranslationKey =
     | "settings.desc.notifications"
     | "settings.desc.datetime"
     | "settings.desc.language"
-    | "settings.desc.sync"
     | "settings.desc.backup"
     | "settings.desc.export"
     | "settings.desc.delete"
@@ -920,18 +917,6 @@ export type TranslationKey =
     | "privacySettings.search.title" | "privacySettings.search.desc"
     | "privacySettings.search.toggle" | "privacySettings.search.toggle.desc"
     | "privacySettings.save" | "privacySettings.saved" | "privacySettings.saving"
-    // ── Synchronization settings page ──────────────────────────────────────
-    | "sync.title" | "sync.subtitle"
-    | "sync.status.title" | "sync.status.desc"
-    | "sync.status.active" | "sync.status.inactive"
-    | "sync.status.lastSync" | "sync.status.never"
-    | "sync.auto.title" | "sync.auto.desc"
-    | "sync.auto.toggle" | "sync.auto.toggle.desc"
-    | "sync.mobile.title" | "sync.mobile.desc"
-    | "sync.mobile.toggle" | "sync.mobile.toggle.desc"
-    | "sync.manual.title" | "sync.manual.desc"
-    | "sync.manual.button" | "sync.manual.syncing" | "sync.manual.done" | "sync.manual.note"
-    | "sync.save" | "sync.saved" | "sync.saving"
     // ── Backup settings page ────────────────────────────────────────────────
     | "backup.title" | "backup.subtitle"
     | "backup.status.title" | "backup.status.desc"
@@ -1853,7 +1838,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "settings.card.notifications": "Teavitused",
         "settings.card.datetime": "Kuupäev ja aeg",
         "settings.card.language": "Keel",
-        "settings.card.sync": "Sünkroonimine",
         "settings.card.backup": "Varundamine",
         "settings.card.export": "Andmete eksport",
         "settings.card.delete": "Andmete kustutamine",
@@ -1869,7 +1853,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "settings.quick.title": "Kiirtoimingud",
         "settings.quick.changePassword": "Muuda parooli",
         "settings.quick.downloadData": "Laadi alla andmed",
-        "settings.quick.checkSync": "Kontrolli sünkroonimist",
         "settings.quick.contactSupport": "Võta ühendust toega",
         // settings card descriptions
         "settings.desc.profile":
@@ -1886,8 +1869,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "settings.desc.datetime":
             "Vali ajavöönd, kuupäevavorming ja kellaaja formaat.",
         "settings.desc.language": "Rakenduse keel ja piirkonna seaded.",
-        "settings.desc.sync":
-            "Sünkrooni andmeid seadmete vahel ja vaata staatust.",
         "settings.desc.backup":
             "Loo varukoopia oma andmetest ja taasta neid vajadusel.",
         "settings.desc.export": "Ekspordi oma andmed erinevates vormingutes.",
@@ -2869,32 +2850,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "privacySettings.save": "Salvesta privaatsusseaded",
         "privacySettings.saved": "Seaded salvestatud",
         "privacySettings.saving": "Salvestab…",
-        // sync settings
-        "sync.title": "Sünkroonimine",
-        "sync.subtitle": "Halda, kuidas ja millal Kivora sinu andmeid seadmete vahel sünkroonib.",
-        "sync.status.title": "Sünkroonimise olek",
-        "sync.status.desc": "Vaata, kas sünkroonimine on aktiivne ja millal toimus viimane edukas sünkroonimine",
-        "sync.status.active": "Sünkroonimine aktiivne",
-        "sync.status.inactive": "Mitteaktiivne",
-        "sync.status.lastSync": "Viimane sünkroonimine",
-        "sync.status.never": "Mitte kunagi",
-        "sync.auto.title": "Automaatne sünkroonimine",
-        "sync.auto.desc": "Lase Kivoral sünkroonida andmeid automaatselt taustal",
-        "sync.auto.toggle": "Luba automaatne sünkroonimine",
-        "sync.auto.toggle.desc": "Kivora sünkroonib muudatusi taustal, kui oled ühendatud internetiga",
-        "sync.mobile.title": "Sünkroonimine mobiilse andmeside kaudu",
-        "sync.mobile.desc": "Luba sünkroonimine ka siis, kui Wi-Fi pole saadaval",
-        "sync.mobile.toggle": "Sünkrooni mobiilse andmeside kaudu",
-        "sync.mobile.toggle.desc": "Kasutab mobiilset andmesidet, kui Wi-Fi pole saadaval. Võib mõjutada andmemahtu.",
-        "sync.manual.title": "Käsitsi sünkroonimine",
-        "sync.manual.desc": "Käivita sünkroonimine kohe käsitsi",
-        "sync.manual.button": "Sünkrooni kohe",
-        "sync.manual.syncing": "Sünkroonib…",
-        "sync.manual.done": "Sünkroonimine lõpetatud",
-        "sync.manual.note": "Käsitsi sünkroonimine laadib uusimad andmed alla ja laeb muutused üles kõigis ühendatud seadmetes.",
-        "sync.save": "Salvesta seaded",
-        "sync.saved": "Seaded salvestatud",
-        "sync.saving": "Salvestab…",
         // backup settings
         "backup.title": "Varundamine",
         "backup.subtitle": "Loo täielikud hetktõmmised oma andmetest ja taasta varasem olek.",
@@ -3895,7 +3850,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "settings.card.notifications": "Notifications",
         "settings.card.datetime": "Date & Time",
         "settings.card.language": "Language",
-        "settings.card.sync": "Sync",
         "settings.card.backup": "Backup",
         "settings.card.export": "Data Export",
         "settings.card.delete": "Delete Data",
@@ -3911,7 +3865,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "settings.quick.title": "Quick Actions",
         "settings.quick.changePassword": "Change password",
         "settings.quick.downloadData": "Download data",
-        "settings.quick.checkSync": "Check sync status",
         "settings.quick.contactSupport": "Contact support",
         // settings card descriptions
         "settings.desc.profile":
@@ -3929,7 +3882,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "settings.desc.datetime":
             "Choose time zone, date format and time format.",
         "settings.desc.language": "App language and regional settings.",
-        "settings.desc.sync": "Sync data across devices and view status.",
         "settings.desc.backup":
             "Create a backup of your data and restore it when needed.",
         "settings.desc.export": "Export your data in various formats.",
@@ -4912,32 +4864,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "privacySettings.save": "Save privacy settings",
         "privacySettings.saved": "Settings saved",
         "privacySettings.saving": "Saving…",
-        // sync settings
-        "sync.title": "Synchronization",
-        "sync.subtitle": "Manage how and when Kivora syncs your data across devices.",
-        "sync.status.title": "Sync status",
-        "sync.status.desc": "See whether synchronization is active and when the last successful sync occurred",
-        "sync.status.active": "Active",
-        "sync.status.inactive": "Inactive",
-        "sync.status.lastSync": "Last synced",
-        "sync.status.never": "Never synced",
-        "sync.auto.title": "Automatic synchronization",
-        "sync.auto.desc": "Let Kivora sync your data automatically in the background",
-        "sync.auto.toggle": "Enable automatic synchronization",
-        "sync.auto.toggle.desc": "Kivora will sync changes in the background whenever you are connected to the internet",
-        "sync.mobile.title": "Sync over mobile data",
-        "sync.mobile.desc": "Allow synchronization even when Wi-Fi is not available",
-        "sync.mobile.toggle": "Sync over mobile data",
-        "sync.mobile.toggle.desc": "Uses mobile data when Wi-Fi is unavailable. May affect your data allowance.",
-        "sync.manual.title": "Manual synchronization",
-        "sync.manual.desc": "Trigger a sync immediately",
-        "sync.manual.button": "Sync now",
-        "sync.manual.syncing": "Syncing…",
-        "sync.manual.done": "Sync complete",
-        "sync.manual.note": "A manual sync downloads the latest data and uploads any local changes across all connected devices.",
-        "sync.save": "Save settings",
-        "sync.saved": "Settings saved",
-        "sync.saving": "Saving…",
         // backup settings
         "backup.title": "Backup",
         "backup.subtitle": "Create full snapshots of your data and restore a previous state.",
