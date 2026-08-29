@@ -742,6 +742,7 @@ export type TranslationKey =
     | "feedback.email.label" | "feedback.email.placeholder"
     | "feedback.contact.label"
     | "feedback.submit" | "feedback.submitting" | "feedback.success" | "feedback.saved"
+    | "feedback.error"
     | "feedback.validation.required"
     // ── What's New page ───────────────────────────────────────────────────────
     | "whatsNew.title" | "whatsNew.subtitle"
@@ -2620,6 +2621,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "feedback.submitting": "Saadab…",
         "feedback.success": "Aitäh! Sinu tagasiside on saadetud.",
         "feedback.saved": "Tagasiside salvestati, kuid e-posti kättetoimetamist ei saanud kinnitada.",
+        "feedback.error": "Tagasiside salvestamine ebaõnnestus. Palun proovi uuesti.",
         "feedback.validation.required": "Sõnum on kohustuslik.",
         // whats new page
         "whatsNew.title": "Mis on uut?",
@@ -4616,6 +4618,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "feedback.submitting": "Submitting…",
         "feedback.success": "Thank you! Your feedback has been submitted.",
         "feedback.saved": "Feedback saved but email delivery could not be confirmed.",
+        "feedback.error": "Failed to save your feedback. Please try again.",
         "feedback.validation.required": "A message is required.",
         // whats new page
         "whatsNew.title": "What's New?",

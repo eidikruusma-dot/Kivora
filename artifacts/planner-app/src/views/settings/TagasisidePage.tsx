@@ -119,6 +119,7 @@ export default function TagasisidePage({ onBack }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [saveOnly, setSaveOnly] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
 
   const trimmedMessage = message.trim();
   const isValid = trimmedMessage.length > 0;
@@ -133,6 +134,7 @@ export default function TagasisidePage({ onBack }: Props) {
 
     setSubmitting(true);
     setSaveOnly(false);
+    setSaveFailed(false);
 
     // 1. Persist to Firestore before attempting email delivery
     let docRef: Awaited<ReturnType<typeof addDoc>> | null = null;
@@ -151,7 +153,8 @@ export default function TagasisidePage({ onBack }: Props) {
       });
     } catch {
       setSubmitting(false);
-      return; // silent fail — form validation already passed; Firestore error is infrastructure
+      setSaveFailed(true);
+      return;
     }
 
     // 2. Attempt email delivery via API
@@ -203,6 +206,7 @@ export default function TagasisidePage({ onBack }: Props) {
 
   const handleDismissSuccess = () => setSubmitted(false);
   const handleDismissSaveOnly = () => setSaveOnly(false);
+  const handleDismissSaveFailed = () => setSaveFailed(false);
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto w-full">
@@ -253,6 +257,24 @@ export default function TagasisidePage({ onBack }: Props) {
             <span className="flex-1">{t("feedback.saved", lang)}</span>
             <button
               onClick={handleDismissSaveOnly}
+              className="opacity-60 hover:opacity-100 w-6 h-6 flex items-center justify-center"
+              aria-label="dismiss"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {/* Error banner (Firestore submission itself failed) */}
+        {saveFailed && (
+          <div
+            role="alert"
+            className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm border bg-red-50 text-red-700 border-red-200"
+          >
+            <AlertCircle size={16} className="flex-shrink-0" />
+            <span className="flex-1">{t("feedback.error", lang)}</span>
+            <button
+              onClick={handleDismissSaveFailed}
               className="opacity-60 hover:opacity-100 w-6 h-6 flex items-center justify-center"
               aria-label="dismiss"
             >
