@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import {
   ArrowLeft,
   HardDrive,
-  RefreshCw,
   CheckCircle2,
   AlertCircle,
   Loader2,
@@ -19,7 +18,7 @@ import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
 import { dispatch as dispatchNotif } from '@/lib/notificationItemsStore'
 import { useAuth } from '@/context/AuthContext'
-import { loadSettings, saveSettings } from '@/lib/settingsStore'
+import { loadSettings } from '@/lib/settingsStore'
 import {
   createBackup,
   listBackups,
@@ -103,48 +102,6 @@ function ToggleRow({
           }`}
         />
       </button>
-    </div>
-  )
-}
-
-type Frequency = 'daily' | 'weekly' | 'monthly'
-
-const FREQ_OPTIONS: {
-  value: Frequency
-  labelKey: 'backup.freq.daily' | 'backup.freq.weekly' | 'backup.freq.monthly'
-}[] = [
-  { value: 'daily',   labelKey: 'backup.freq.daily' },
-  { value: 'weekly',  labelKey: 'backup.freq.weekly' },
-  { value: 'monthly', labelKey: 'backup.freq.monthly' },
-]
-
-function FrequencySelector({
-  value,
-  onChange,
-  lang,
-}: {
-  value: Frequency
-  onChange: (v: Frequency) => void
-  lang: AppLang
-}) {
-  return (
-    <div className="flex gap-2 flex-wrap">
-      {FREQ_OPTIONS.map((opt) => {
-        const active = value === opt.value
-        return (
-          <button
-            key={opt.value}
-            onClick={() => onChange(opt.value)}
-            className={`h-9 px-4 rounded-xl border text-sm font-medium transition-all ${
-              active
-                ? 'border-[#6F5AE8] bg-[#F4F2FF] text-[#6F5AE8]'
-                : 'border-[#E2E8F0] bg-white text-[#64748B] hover:border-[#CBD5E1] hover:bg-[#FAFAFA]'
-            }`}
-          >
-            {t(opt.labelKey, lang)}
-          </button>
-        )
-      })}
     </div>
   )
 }
@@ -258,7 +215,7 @@ function RestoreModal({
 
 interface BackupSettings {
   autoBackup: boolean
-  frequency: Frequency
+  frequency: 'daily' | 'weekly' | 'monthly'
   lastBackupAt: string | null
 }
 
@@ -298,10 +255,6 @@ export default function VarundaminePage({ onBack }: Props) {
 
   const [settings, setSettings] = useState<BackupSettings>(DEFAULTS)
 
-  // Settings save state
-  const [saving, setSaving]   = useState(false)
-  const [saved, setSaved]     = useState(false)
-
   // Manual backup state
   const [creating, setCreating]         = useState(false)
   const [createDone, setCreateDone]     = useState(false)
@@ -337,19 +290,6 @@ export default function VarundaminePage({ onBack }: Props) {
   }, [uid])
 
   const lastBackup = settings.lastBackupAt ? new Date(settings.lastBackupAt) : null
-
-  function update<K extends keyof BackupSettings>(key: K, value: BackupSettings[K]) {
-    setSettings((prev) => ({ ...prev, [key]: value }))
-  }
-
-  async function handleSave() {
-    if (!uid) return
-    setSaving(true)
-    await saveSettings(uid, 'backup', settings)
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
-  }
 
   async function handleCreateBackup() {
     if (!uid) return
@@ -499,53 +439,7 @@ export default function VarundaminePage({ onBack }: Props) {
           </div>
         </SectionCard>
 
-        {/* ── 2. Automatic backups ── */}
-        <SectionCard
-          icon={<RefreshCw size={20} strokeWidth={1.8} />}
-          iconBg="#EDE9FB"
-          iconColor="#6F5AE8"
-          title={t('backup.auto.title', lang)}
-          description={t('backup.auto.desc', lang)}
-        >
-          <div className="space-y-4">
-            <div className="-my-1">
-              <ToggleRow
-                label={t('backup.auto.toggle', lang)}
-                description={t('backup.auto.toggle.desc', lang)}
-                checked={settings.autoBackup}
-                onChange={(v) => update('autoBackup', v)}
-              />
-            </div>
-
-            {/* Always-visible "not yet active" notice */}
-            <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-100 rounded-xl">
-              <Info size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-700 leading-relaxed">
-                {t('backup.auto.notActive', lang)}
-              </p>
-            </div>
-
-            {settings.autoBackup && (
-              <div className="pt-1 border-t border-[#F0F0F0]">
-                <div className="mb-3">
-                  <p className="text-sm font-medium text-[#1A1F36]">
-                    {t('backup.freq.title', lang)}
-                  </p>
-                  <p className="text-xs text-[#94A3B8] mt-0.5">
-                    {t('backup.freq.desc', lang)}
-                  </p>
-                </div>
-                <FrequencySelector
-                  value={settings.frequency}
-                  onChange={(v) => update('frequency', v)}
-                  lang={lang}
-                />
-              </div>
-            )}
-          </div>
-        </SectionCard>
-
-        {/* ── 3. Manual backup ── */}
+        {/* ── 2. Manual backup ── */}
         <SectionCard
           icon={<Archive size={20} strokeWidth={1.8} />}
           iconBg="#FEF9C3"
@@ -589,7 +483,7 @@ export default function VarundaminePage({ onBack }: Props) {
           </div>
         </SectionCard>
 
-        {/* ── 4. Backup history ── */}
+        {/* ── 3. Backup history ── */}
         <SectionCard
           icon={<History size={20} strokeWidth={1.8} />}
           iconBg="#EFF6FF"
@@ -660,24 +554,6 @@ export default function VarundaminePage({ onBack }: Props) {
             {t('backup.history.habits', lang)}
           </div>
         </SectionCard>
-
-        {/* ── Save bar (auto-backup settings only) ── */}
-        <div className="flex items-center justify-end gap-3 pb-2">
-          {saved && (
-            <div className="flex items-center gap-1.5 text-sm text-green-600">
-              <CheckCircle2 size={15} />
-              {t('backup.saved', lang)}
-            </div>
-          )}
-          <button
-            onClick={handleSave}
-            disabled={saving || !uid}
-            className="h-10 px-5 rounded-xl bg-[#6F5AE8] text-white text-sm font-medium flex items-center gap-2 hover:bg-[#5B4AD5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving && <Loader2 size={15} className="animate-spin" />}
-            {saving ? t('backup.saving', lang) : t('backup.save', lang)}
-          </button>
-        </div>
       </div>
 
       {/* ── Restore confirmation modal ── */}

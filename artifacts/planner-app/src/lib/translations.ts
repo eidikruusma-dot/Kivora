@@ -918,14 +918,8 @@ export type TranslationKey =
     | "backup.status.title" | "backup.status.desc"
     | "backup.status.ok" | "backup.status.none" | "backup.status.error"
     | "backup.status.lastBackup" | "backup.status.never"
-    | "backup.auto.title" | "backup.auto.desc"
-    | "backup.auto.toggle" | "backup.auto.toggle.desc"
-    | "backup.auto.notActive"
-    | "backup.freq.title" | "backup.freq.desc"
-    | "backup.freq.daily" | "backup.freq.weekly" | "backup.freq.monthly"
     | "backup.manual.title" | "backup.manual.desc"
     | "backup.manual.button" | "backup.manual.creating" | "backup.manual.done" | "backup.manual.note"
-    | "backup.save" | "backup.saved" | "backup.saving"
     | "backup.history.title" | "backup.history.desc" | "backup.history.empty" | "backup.history.loading"
     | "backup.history.items" | "backup.history.delete" | "backup.history.restore" | "backup.history.deleting"
     | "backup.history.habits"
@@ -2852,25 +2846,12 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "backup.status.error": "Varundamine ebaõnnestus",
         "backup.status.lastBackup": "Viimane varukoopia",
         "backup.status.never": "Pole varundatud",
-        "backup.auto.title": "Automaatne varundamine",
-        "backup.auto.desc": "Säästa eelistus automaatse varundamise jaoks",
-        "backup.auto.toggle": "Luba automaatne varundamine",
-        "backup.auto.toggle.desc": "Selle eelistuse salvestamine on ettevalmistus funktsiooni aktiveerimiseks",
-        "backup.auto.notActive": "Automaatne varundamine pole veel aktiivne. Selle sisselülitamine salvestab eelistuse, kuid varukoopiaid luuakse praegu ainult käsitsi.",
-        "backup.freq.title": "Varundamise sagedus",
-        "backup.freq.desc": "Vali, kui tihti luuakse automaatne varukoopia",
-        "backup.freq.daily": "Iga päev",
-        "backup.freq.weekly": "Kord nädalas",
-        "backup.freq.monthly": "Kord kuus",
         "backup.manual.title": "Käsitsi varundamine",
         "backup.manual.desc": "Loo kohe täielik varukoopia kõigist sinu andmetest",
         "backup.manual.button": "Loo varukoopia",
         "backup.manual.creating": "Varundab…",
         "backup.manual.done": "Varukoopia salvestatud",
         "backup.manual.note": "Sisaldab ülesandeid, märkmeid, kalendrisündmusi, eesmärke, kooliandmeid, AI-vestlusi, teatisi ja seoseid. Harjumusi ei saa varundada (need on ainult mälus).",
-        "backup.save": "Salvesta seaded",
-        "backup.saved": "Seaded salvestatud",
-        "backup.saving": "Salvestab…",
         "backup.history.title": "Varukoopiate ajalugu",
         "backup.history.desc": "Kuni 10 viimast varukoopiat. Klõpsa \"Taasta\", et naasta varasema seisundini.",
         "backup.history.empty": "Varukoopiad puuduvad",
@@ -4862,25 +4843,12 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "backup.status.error": "Backup failed",
         "backup.status.lastBackup": "Last backup",
         "backup.status.never": "Never backed up",
-        "backup.auto.title": "Automatic backups",
-        "backup.auto.desc": "Save your preference for automatic backups",
-        "backup.auto.toggle": "Enable automatic backups",
-        "backup.auto.toggle.desc": "Saves your preference for when this feature is enabled",
-        "backup.auto.notActive": "Automatic backups are not yet active. Turning this on saves your preference, but backups are currently created manually only.",
-        "backup.freq.title": "Backup frequency",
-        "backup.freq.desc": "Choose how often an automatic backup should be created",
-        "backup.freq.daily": "Daily",
-        "backup.freq.weekly": "Weekly",
-        "backup.freq.monthly": "Monthly",
         "backup.manual.title": "Manual backup",
         "backup.manual.desc": "Create a full backup of all your data right now",
         "backup.manual.button": "Create backup",
         "backup.manual.creating": "Creating backup…",
         "backup.manual.done": "Backup saved",
         "backup.manual.note": "Includes tasks, notes, calendar events, goals, school items, AI conversations, notifications, and entity links. Habits cannot be backed up (they are stored in memory only).",
-        "backup.save": "Save settings",
-        "backup.saved": "Settings saved",
-        "backup.saving": "Saving…",
         "backup.history.title": "Backup history",
         "backup.history.desc": "Up to 10 most recent backups. Click Restore to return to a previous state.",
         "backup.history.empty": "No backups yet",
