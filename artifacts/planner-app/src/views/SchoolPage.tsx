@@ -76,7 +76,7 @@ import { encodeSchoolId, decodeSchoolId } from "@/types/entityLinks";
 import { removeLinksForEntity } from "@/lib/entityLinksStore";
 import PostSaveLinkSuggestionsDialog from "@/components/links/PostSaveLinkSuggestionsDialog";
 import AutoLinkToast from "@/components/links/AutoLinkToast";
-import { runAutomaticLinking, type AutoLinkResult } from "@/lib/automaticLinking";
+import { runAutomaticLinking, syncSchoolCalendarEvent, type AutoLinkResult } from "@/lib/automaticLinking";
 import { getLocalDateString, getLocalWeekdayIndex, formatDateWithWeekday, formatDateRange, msUntilNextLocalMidnight } from "@/lib/dateUtils";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -620,7 +620,13 @@ export default function SchoolPage() {
       e.daysLeft <= 30,
   ).length;
 
-  const updateTask  = (id: number, patch: Partial<Task>) => storeUpdateSchoolTask(id, patch);
+  const updateTask  = async (id: number, patch: Partial<Task>) => {
+    await storeUpdateSchoolTask(id, patch);
+    // Keep an already-auto-created Calendar event (if any) on the task's
+    // current deadline — no-ops when the patch doesn't touch the deadline,
+    // when there's no such event, or when it's already on that date.
+    await syncSchoolCalendarEvent('task', id, patch.deadline);
+  };
   const deleteTask  = (id: number) => {
     const task = tasks.find((t) => t.id === id);
     if (task?.linkedTaskId) { tasksStoreDeleteTask(task.linkedTaskId); }
@@ -649,7 +655,13 @@ export default function SchoolPage() {
     setSelectedSubject(null);
   };
 
-  const updateExam = (id: number, patch: Partial<ExamItem>) => storeUpdateSchoolExam(id, patch);
+  const updateExam = async (id: number, patch: Partial<ExamItem>) => {
+    await storeUpdateSchoolExam(id, patch);
+    // Same as updateTask above, for exams/tests — no-ops when the patch
+    // doesn't touch the date, when there's no auto-created event, or when
+    // it's already on that date (e.g. markDone/markUndone's {status} patch).
+    await syncSchoolCalendarEvent('exam', id, patch.date);
+  };
   const deleteExam = (id: number) => { removeLinksForEntity('school', encodeSchoolId('exam', id)); storeDeleteSchoolExam(id); };
   const addExam    = (exam: Exam) => addSchoolExam(exam);
 

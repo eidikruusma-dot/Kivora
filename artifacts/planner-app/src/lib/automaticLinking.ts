@@ -27,7 +27,7 @@ import { getAllGoals } from '@/lib/goalsStore'
 import { getAllHabits } from '@/lib/habitsStore'
 import { getAllChats } from '@/lib/aiConversationsStore'
 import { getAllSchoolTasks, getAllSchoolExams } from '@/lib/schoolStore'
-import { decodeSchoolId } from '@/types/entityLinks'
+import { decodeSchoolId, encodeSchoolId, type SchoolEntityKind } from '@/types/entityLinks'
 import type { EntityType } from '@/types/entityLinks'
 import type { AppLang } from '@/lib/languageStore'
 import type { Task } from '@/types'
@@ -291,5 +291,55 @@ export async function syncTaskCalendarEvent(task: Task): Promise<void> {
     await updateCalendarEvent(updated)
   } catch {
     // Calendar write failed — don't surface as error to the task-save flow
+  }
+}
+
+// ── School item edit → linked calendar event sync ────────────────────────────
+
+/**
+ * Keeps a School task's or exam's auto-created calendar event (if any) on
+ * the same date as the item after an edit — the School equivalent of
+ * syncTaskCalendarEvent above, reusing the exact same "owned scheduled
+ * link" lookup and updateCalendarEvent() write, so the update lands on the
+ * SAME event id and never creates a second event.
+ *
+ * No-op if:
+ *   - the item has no date, or
+ *   - it has no calendar event this service created for it (an item with
+ *     no existing auto-created event never gains one here — only
+ *     runAutomaticLinking creates new events), or
+ *   - the event is already on that date (avoids a pointless write).
+ *
+ * Scoped to date only — the event's own title/time/allDay are left exactly
+ * as they were (created once, by runAutomaticLinking, on the item's first
+ * save); this fix addresses the stale-date defect only, not any other
+ * field drifting out of sync.
+ */
+export async function syncSchoolCalendarEvent(
+  kind: SchoolEntityKind,
+  rawId: string | number,
+  date: string | undefined,
+): Promise<void> {
+  if (!date) return
+  const schoolId = encodeSchoolId(kind, rawId)
+
+  const ownedLink = getLinksForEntity('school', schoolId).find(
+    (l) =>
+      l.relationType === 'scheduled' &&
+      l.fromType === 'school' &&
+      l.fromId === schoolId &&
+      l.toType === 'calendar' &&
+      l.toId.startsWith(AUTO_CREATED_CALENDAR_EVENT_PREFIX),
+  )
+  if (!ownedLink) return
+
+  const existing = getAllEvents().find((e) => e.id === ownedLink.toId)
+  if (!existing) return
+  if (existing.date === date) return
+
+  try {
+    await updateCalendarEvent({ ...existing, date })
+  } catch {
+    // Calendar write failed — don't surface as error to the school-save flow
   }
 }
