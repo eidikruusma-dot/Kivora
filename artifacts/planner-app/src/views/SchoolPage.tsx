@@ -5095,10 +5095,10 @@ function TaskDetailModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md md:max-w-2xl bg-white rounded-2xl shadow-xl"
+        className="w-full max-w-md md:max-w-2xl bg-white rounded-2xl shadow-xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2] flex-shrink-0">
           <h2 className="text-base font-semibold text-[#1A1F36]">
             {tr("school.modal.taskData", lang)}
           </h2>
@@ -5186,7 +5186,7 @@ function TaskDetailModal({
         </div>
 
         {confirmDelete ? (
-          <div className="px-5 py-6">
+          <div className="px-5 py-6 flex-1 overflow-y-auto">
             <p className="text-sm text-[#1A1F36] mb-1">
               Kas soovid ülesande „{task.title}“ kindlasti kustutada?
             </p>
@@ -5210,7 +5210,7 @@ function TaskDetailModal({
           </div>
         ) : (
           <>
-            <div className="px-5 py-4 flex flex-col gap-4">
+            <div className="px-5 py-4 flex flex-col gap-4 flex-1 overflow-y-auto">
               <div className="flex items-center gap-3">
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -5369,7 +5369,7 @@ function TaskDetailModal({
               </div>
             </div>
 
-            <div className="flex items-center justify-end px-5 py-4 border-t border-[#ECECF2]">
+            <div className="flex items-center justify-end px-5 py-4 border-t border-[#ECECF2] flex-shrink-0">
               <button
                 onClick={onClose}
                 className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
