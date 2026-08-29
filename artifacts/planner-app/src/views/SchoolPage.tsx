@@ -5079,6 +5079,7 @@ function TaskDetailModal({
   const isDark = useIsDark();
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const status = statusFromProgress(task.progress);
   const isDone = status === "tehtud";
   const hasParts = task.parts && task.parts.length > 0;
@@ -5340,11 +5341,32 @@ function TaskDetailModal({
                 ) : null;
               })()}
 
-              <LinkedItemsPanel
-                type="school"
-                entityId={encodeSchoolId("task", task.id)}
-                lang={lang}
-              />
+              {/* Recommendations + Connected items are secondary to the
+                  task's own data — collapsed by default to keep the modal
+                  compact, same disclosure pattern as the show-all toggles
+                  above (chevron rotates, nothing is hidden permanently). */}
+              <div className="border-t border-[#ECECF2] pt-3">
+                <button
+                  onClick={() => setMoreOpen((v) => !v)}
+                  className="w-full flex items-center justify-between text-xs font-medium text-[#94A3B8] hover:text-[#6F5AE8] transition-colors"
+                >
+                  {tr("school.section.more", lang)}
+                  <ChevronDown
+                    size={14}
+                    strokeWidth={2}
+                    className={`transition-transform ${moreOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {moreOpen && (
+                  <div className="mt-2.5">
+                    <LinkedItemsPanel
+                      type="school"
+                      entityId={encodeSchoolId("task", task.id)}
+                      lang={lang}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center justify-end px-5 py-4 border-t border-[#ECECF2]">

@@ -1189,6 +1189,7 @@ export type TranslationKey =
     | "school.action.addAssessment"
     | "school.section.upcoming"
     | "school.section.history"
+    | "school.section.more"
     | "school.confirm.irreversible"
     | "school.confirm.deleteTask"
     | "school.empty.tasksWidget"
@@ -3476,6 +3477,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.action.addAssessment": "Lisa hindamine",
         "school.section.upcoming": "Tulevad ülesanded",
         "school.section.history": "Ajalugu",
+        "school.section.more": "Rohkem",
         "school.confirm.irreversible": "Seda tegevust ei saa tagasi võtta.",
         "school.confirm.deleteTask":
             'Kas soovid ülesande „{title}" kindlasti kustutada?',
@@ -5517,6 +5519,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.action.addAssessment": "Add assessment",
         "school.section.upcoming": "Tasks",
         "school.section.history": "History",
+        "school.section.more": "More",
         "school.confirm.irreversible": "This action cannot be undone.",
         "school.confirm.deleteTask":
             'Are you sure you want to delete the assignment \"{title}\"?',
