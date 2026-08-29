@@ -250,6 +250,8 @@ export interface SchoolSubject {
   color: string
   bg: string
   icon: React.ReactNode  // reconstructed from color; not stored
+  /** Free-text course assessment info (grading schedule/rules) — School change #12A */
+  assessment?: string
 }
 
 // Mirrors ScheduleTab's ScheduleLesson interface
@@ -316,6 +318,7 @@ interface StoredSubject {
   room?: string
   color: string
   bg: string
+  assessment?: string
 }
 
 interface StoredLesson {

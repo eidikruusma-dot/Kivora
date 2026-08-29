@@ -58,6 +58,7 @@ import {
   updateSchoolExam as storeUpdateSchoolExam,
   deleteSchoolExam as storeDeleteSchoolExam,
   addSchoolSubject,
+  updateSchoolSubject as storeUpdateSchoolSubject,
   deleteSchoolSubject as storeDeleteSchoolSubject,
   classifySubject,
   addSchoolLesson,
@@ -235,6 +236,8 @@ interface Subject {
   color: string;
   bg: string;
   icon: React.ReactNode;
+  /** Free-text course assessment info (grading schedule/rules) — School change #12A */
+  assessment?: string;
 }
 
 interface Exam {
@@ -682,6 +685,8 @@ export default function SchoolPage() {
   const deleteLesson = (id: string) => storeDeleteSchoolLesson(id);
 
   const addSubject = (subject: Subject) => addSchoolSubject(subject);
+  const updateSubject = (id: string, patch: Partial<Omit<Subject, "icon">>) =>
+    storeUpdateSchoolSubject(id, patch);
 
   return (
     <div className="school-page flex flex-col md:flex-row gap-6 p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto w-full">
@@ -1061,6 +1066,7 @@ export default function SchoolPage() {
           subject={selectedSubject}
           onClose={() => setSelectedSubject(null)}
           onDelete={deleteSubject}
+          onSaveAssessment={(id, assessment) => updateSubject(id, { assessment })}
         />
       )}
       {postSave && (
@@ -1174,12 +1180,37 @@ function SubjectDetailModal({
   subject,
   onClose,
   onDelete,
+  onSaveAssessment,
 }: {
   subject: Subject;
   onClose: () => void;
   onDelete?: (id: string) => void;
+  onSaveAssessment?: (id: string, assessment: string | undefined) => void;
 }) {
   const lang = getLocalLanguage();
+  // Tracked as local state (rather than read straight from the `subject`
+  // prop) so Save reflects immediately: `subject` is a snapshot handed in
+  // once when the modal opened and — same as every other School detail
+  // modal in this file — is never kept in sync with the live store while
+  // open.
+  const [assessment, setAssessment] = useState(subject.assessment);
+  const [editingAssessment, setEditingAssessment] = useState(false);
+  const [assessmentDraft, setAssessmentDraft] = useState("");
+
+  const startEditingAssessment = () => {
+    setAssessmentDraft(assessment ?? "");
+    setEditingAssessment(true);
+  };
+  const saveAssessment = () => {
+    const next = assessmentDraft.trim() || undefined;
+    onSaveAssessment?.(subject.id, next);
+    setAssessment(next);
+    setEditingAssessment(false);
+  };
+  const cancelAssessmentEdit = () => {
+    setEditingAssessment(false);
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
@@ -1231,6 +1262,59 @@ function SubjectDetailModal({
               <p className="text-sm text-[#1A1F36]">{subject.room}</p>
             </div>
           )}
+
+          {/* Hindamine / Assessment — School change #12A: a free-text field
+              on the existing Subject document, not a new entity/collection. */}
+          <div>
+            <p className="text-xs font-medium text-[#64748B] mb-1">
+              {tr("school.field.assessment", lang)}
+            </p>
+            {editingAssessment ? (
+              <div className="flex flex-col gap-2">
+                <textarea
+                  value={assessmentDraft}
+                  onChange={(e) => setAssessmentDraft(e.target.value)}
+                  placeholder={tr("school.field.assessmentPh", lang)}
+                  rows={5}
+                  autoFocus
+                  className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] resize-y"
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={cancelAssessmentEdit}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+                  >
+                    {tr("school.action.cancel", lang)}
+                  </button>
+                  <button
+                    onClick={saveAssessment}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
+                  >
+                    {tr("school.action.save", lang)}
+                  </button>
+                </div>
+              </div>
+            ) : assessment ? (
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm text-[#1A1F36] whitespace-pre-wrap flex-1">
+                  {assessment}
+                </p>
+                <button
+                  onClick={startEditingAssessment}
+                  className="text-[#94A3B8] hover:text-[#1A1F36] transition-colors flex-shrink-0"
+                >
+                  <Pencil size={14} strokeWidth={2} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={startEditingAssessment}
+                className="text-sm text-[#6F5AE8] hover:text-[#5B48D8] transition-colors"
+              >
+                + {tr("school.action.addAssessment", lang)}
+              </button>
+            )}
+          </div>
         </div>
 
         <LinkedItemsPanel

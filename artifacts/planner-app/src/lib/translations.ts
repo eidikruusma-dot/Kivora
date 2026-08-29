@@ -1183,6 +1183,9 @@ export type TranslationKey =
     | "school.field.subjectName"
     | "school.field.color"
     | "school.field.optional"
+    | "school.field.assessment"
+    | "school.field.assessmentPh"
+    | "school.action.addAssessment"
     | "school.section.upcoming"
     | "school.section.history"
     | "school.confirm.irreversible"
@@ -3456,6 +3459,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.field.subjectName": "Aine nimi",
         "school.field.color": "Värv",
         "school.field.optional": "(valikuline)",
+        "school.field.assessment": "Hindamine",
+        "school.field.assessmentPh": "nt 07.09 – Kursust sissejuhatav test",
+        "school.action.addAssessment": "Lisa hindamine",
         "school.section.upcoming": "Tulevad ülesanded",
         "school.section.history": "Ajalugu",
         "school.confirm.irreversible": "Seda tegevust ei saa tagasi võtta.",
@@ -5486,6 +5492,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.field.subjectName": "Subject name",
         "school.field.color": "Colour",
         "school.field.optional": "(optional)",
+        "school.field.assessment": "Assessment",
+        "school.field.assessmentPh": "e.g. Sep 7 – Introductory test",
+        "school.action.addAssessment": "Add assessment",
         "school.section.upcoming": "Tasks",
         "school.section.history": "History",
         "school.confirm.irreversible": "This action cannot be undone.",
