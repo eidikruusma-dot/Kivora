@@ -1535,6 +1535,28 @@ function TasksTab({
   const visible = showAll ? sorted : sorted.slice(0, 4);
   const hasMore = sorted.length > 4;
 
+  // Group the currently visible tasks by subject (School change #6) — the
+  // filter/sort/show-more behavior above is unchanged; this only decides how
+  // that same `visible` list is arranged into sections. Subject sections are
+  // ordered alphabetically (stable regardless of the deadline sort direction
+  // toggle); tasks keep the relative order they already have within
+  // `visible` (i.e. the existing deadline sort), so nothing is re-sorted.
+  // Built directly from `visible`, so a subject with zero visible tasks can
+  // never produce a group.
+  const visibleSubjectsAlpha = Array.from(
+    new Set(visible.map((t) => t.subject)),
+  ).sort((a, b) => a.localeCompare(b, "et"));
+  const groupedVisible = visibleSubjectsAlpha.map((subject) => {
+    const groupTasks = visible.filter((t) => t.subject === subject);
+    const [first] = groupTasks;
+    return {
+      subject,
+      color: first.subjectColor,
+      bg: first.subjectBg,
+      tasks: groupTasks,
+    };
+  });
+
   return (
     <div>
       {/* Filter row */}
@@ -1617,9 +1639,28 @@ function TasksTab({
         </div>
       </div>
 
-      {/* Task rows */}
-      <div className="flex flex-col divide-y divide-[#F3F3F8]">
-        {visible.map((task) => (
+      {/* Task rows, grouped by subject (School change #6) */}
+      <div className="flex flex-col gap-6">
+        {groupedVisible.map((group) => (
+          <div key={group.subject}>
+            {/* Subject block heading */}
+            <div
+              className="flex items-center gap-2 mb-1.5 pb-1.5 border-b-2"
+              style={{ borderColor: group.color }}
+            >
+              <span
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ background: group.color }}
+              />
+              <h4
+                className="text-xs font-semibold uppercase tracking-wide"
+                style={{ color: group.color }}
+              >
+                {group.subject}
+              </h4>
+            </div>
+            <div className="flex flex-col divide-y divide-[#F3F3F8]">
+              {group.tasks.map((task) => (
           <div key={task.id} className="flex items-center gap-4 py-4">
             {/* Subject icon */}
             <div
@@ -1807,6 +1848,9 @@ function TasksTab({
                 </div>
               </div>
             )}
+          </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
