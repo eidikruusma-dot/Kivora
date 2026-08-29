@@ -922,6 +922,14 @@ export default function SchoolPage() {
             deleteExam(id);
             setSelectedExam(null);
           }}
+          onMarkDone={(id) => {
+            updateExam(id, { status: "tehtud" });
+            setSelectedExam(null);
+          }}
+          onMarkUndone={(id) => {
+            updateExam(id, { status: "ootel" });
+            setSelectedExam(null);
+          }}
         />
       )}
       {addingExam && (
@@ -3318,11 +3326,15 @@ function ExamDetailModal({
   onClose,
   onEdit,
   onDelete,
+  onMarkDone,
+  onMarkUndone,
 }: {
   exam: Exam;
   onClose: () => void;
   onEdit: (exam: Exam) => void;
   onDelete: (id: number) => void;
+  onMarkDone: (id: number) => void;
+  onMarkUndone: (id: number) => void;
 }) {
   const lang = getLocalLanguage();
   const isDark = useIsDark();
@@ -3473,6 +3485,23 @@ function ExamDetailModal({
                 {tr("school.action.delete", lang)}
               </button>
               <div className="flex items-center gap-2">
+                {exam.status === "tehtud" ? (
+                  <button
+                    onClick={() => onMarkUndone(exam.id)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-[#1A1F36] border border-[#ECECF2] hover:bg-[#F8F7F4] transition-colors"
+                  >
+                    <Check size={14} strokeWidth={2} />
+                    {tr("school.action.markUndone", lang)}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => onMarkDone(exam.id)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-[#1A1F36] border border-[#ECECF2] hover:bg-[#F8F7F4] transition-colors"
+                  >
+                    <Check size={14} strokeWidth={2} />
+                    {tr("school.action.markDone", lang)}
+                  </button>
+                )}
                 <button
                   onClick={onClose}
                   className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
