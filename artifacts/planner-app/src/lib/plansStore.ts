@@ -430,10 +430,20 @@ export async function addPlanItem(planId: string, label: string, note?: string):
   await mutatePlanItems(planId, (items) => [...items, newItem])
 }
 
+/**
+ * `date`/`startTime`/`endTime` are only ever meaningful for a Work Schedule
+ * shift item (see buildWorkScheduleItems) — every other template's items
+ * simply never pass them, so omitting them here leaves those items exactly
+ * as before. When they ARE passed, updating them here is enough to move a
+ * shift's derived Calendar entry: planItemToCalendarEvent recomputes the
+ * entry fresh from this same item on every render, so a moved date/time (or
+ * a cleared one) is reflected immediately, under the SAME entry id — never
+ * a second, stale, or orphaned entry.
+ */
 export async function updatePlanItem(
   planId: string,
   itemId: string,
-  patch: { label?: string; note?: string },
+  patch: { label?: string; note?: string; date?: string; startTime?: string; endTime?: string },
 ): Promise<void> {
   await mutatePlanItems(planId, (items) => {
     const index = items.findIndex((item) => item.id === itemId)
@@ -442,8 +452,18 @@ export async function updatePlanItem(
     const nextLabel = patch.label !== undefined ? patch.label.trim() : item.label
     if (!isValidItemLabel(nextLabel)) throw new Error('INVALID_ITEM_LABEL')
     const nextNote = patch.note !== undefined ? patch.note.trim() : item.note
+    const nextDate = patch.date !== undefined ? patch.date : item.date
+    const nextStartTime = patch.startTime !== undefined ? patch.startTime : item.startTime
+    const nextEndTime = patch.endTime !== undefined ? patch.endTime : item.endTime
     const next = [...items]
-    next[index] = { ...item, label: nextLabel, note: nextNote || undefined }
+    next[index] = {
+      ...item,
+      label: nextLabel,
+      note: nextNote || undefined,
+      date: nextDate || undefined,
+      startTime: nextStartTime || undefined,
+      endTime: nextEndTime || undefined,
+    }
     return next
   })
 }

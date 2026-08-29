@@ -15,6 +15,7 @@ import {
   formatDateRange,
   formatPlanDate,
   isValidItemLabel,
+  isValidShiftTimes,
   addPlanItem,
   updatePlanItem,
   togglePlanItem,
@@ -45,6 +46,9 @@ export default function PlanDetailPage() {
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
   const [editLabel, setEditLabel] = useState('')
   const [editNote, setEditNote] = useState('')
+  const [editDate, setEditDate] = useState('')
+  const [editStartTime, setEditStartTime] = useState('')
+  const [editEndTime, setEditEndTime] = useState('')
 
   const [deleteConfirmItemId, setDeleteConfirmItemId] = useState<string | null>(null)
 
@@ -88,6 +92,9 @@ export default function PlanDetailPage() {
     setEditingItemId(item.id)
     setEditLabel(item.label)
     setEditNote(item.note ?? '')
+    setEditDate(item.date ?? '')
+    setEditStartTime(item.startTime ?? '')
+    setEditEndTime(item.endTime ?? '')
     setItemError('')
   }
 
@@ -95,20 +102,48 @@ export default function PlanDetailPage() {
     setEditingItemId(null)
     setEditLabel('')
     setEditNote('')
+    setEditDate('')
+    setEditStartTime('')
+    setEditEndTime('')
   }
 
+  /**
+   * Work Schedule items are edited with dedicated date/start/end fields
+   * instead of a free-text label — the label is always the shift's own
+   * time range (matching buildWorkScheduleItems), so it's regenerated here
+   * rather than left editable and free to drift out of sync with the times.
+   * Every other template keeps editing exactly as before (label + note).
+   */
   async function saveEditItem() {
     if (!plan || !editingItemId) return
     if (savingItemIds.has(editingItemId)) return
-    if (!isValidItemLabel(editLabel)) {
+
+    const isWorkScheduleItem = plan.type === 'workSchedule'
+    if (isWorkScheduleItem) {
+      if (!editDate || !isValidShiftTimes(editStartTime, editEndTime)) {
+        setItemError(t('plans.workSchedule.errorShiftFields', lang))
+        return
+      }
+    } else if (!isValidItemLabel(editLabel)) {
       setItemError(t('plans.detail.errorItemLabel', lang))
       return
     }
+
     const id = editingItemId
     markSaving(id, true)
     setItemError('')
     try {
-      await updatePlanItem(plan.id, id, { label: editLabel, note: editNote })
+      if (isWorkScheduleItem) {
+        await updatePlanItem(plan.id, id, {
+          label: `${editStartTime}–${editEndTime}`,
+          note: editNote,
+          date: editDate,
+          startTime: editStartTime,
+          endTime: editEndTime,
+        })
+      } else {
+        await updatePlanItem(plan.id, id, { label: editLabel, note: editNote })
+      }
       setEditingItemId(null)
     } catch {
       setItemError(t('plans.detail.errorSaveItem', lang))
@@ -309,15 +344,58 @@ export default function PlanDetailPage() {
             const isSaving = savingItemIds.has(item.id)
 
             if (isEditing) {
+              const isWorkScheduleItem = plan.type === 'workSchedule'
+              const canSave = isWorkScheduleItem
+                ? Boolean(editDate) && isValidShiftTimes(editStartTime, editEndTime)
+                : isValidItemLabel(editLabel)
               return (
                 <div key={item.id} className="px-5 py-3.5 flex flex-col gap-2">
-                  <input
-                    autoFocus
-                    value={editLabel}
-                    onChange={(e) => setEditLabel(e.target.value)}
-                    placeholder={t('plans.detail.itemLabelPlaceholder', lang)}
-                    className={inputClass}
-                  />
+                  {isWorkScheduleItem ? (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem] sm:items-end">
+                      <div className="col-span-2 sm:col-span-1">
+                        <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
+                          {t('plans.workSchedule.shiftDateLabel', lang)}
+                        </label>
+                        <input
+                          autoFocus
+                          type="date"
+                          value={editDate}
+                          onChange={(e) => { setEditDate(e.target.value); setItemError('') }}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
+                          {t('plans.workSchedule.shiftStartLabel', lang)}
+                        </label>
+                        <input
+                          type="time"
+                          value={editStartTime}
+                          onChange={(e) => { setEditStartTime(e.target.value); setItemError('') }}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
+                          {t('plans.workSchedule.shiftEndLabel', lang)}
+                        </label>
+                        <input
+                          type="time"
+                          value={editEndTime}
+                          onChange={(e) => { setEditEndTime(e.target.value); setItemError('') }}
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <input
+                      autoFocus
+                      value={editLabel}
+                      onChange={(e) => setEditLabel(e.target.value)}
+                      placeholder={t('plans.detail.itemLabelPlaceholder', lang)}
+                      className={inputClass}
+                    />
+                  )}
                   <input
                     value={editNote}
                     onChange={(e) => setEditNote(e.target.value)}
@@ -334,7 +412,7 @@ export default function PlanDetailPage() {
                     </button>
                     <button
                       onClick={saveEditItem}
-                      disabled={isSaving || !isValidItemLabel(editLabel)}
+                      disabled={isSaving || !canSave}
                       className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B48D8] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isSaving && <Loader2 size={13} className="animate-spin" />}

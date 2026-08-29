@@ -1715,6 +1715,7 @@ export type TranslationKey =
     | "plans.workSchedule.shiftEndLabel"
     | "plans.workSchedule.addToCalendarLabel"
     | "plans.workSchedule.errorNoShifts"
+    | "plans.workSchedule.errorShiftFields"
     | "plans.workSchedule.submit"
     | "plans.template.blank.title"
     | "plans.template.blank.desc"
@@ -3746,6 +3747,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.workSchedule.shiftEndLabel": "Lõpuaeg",
         "plans.workSchedule.addToCalendarLabel": "Lisa loodud vahetused kalendrisse",
         "plans.workSchedule.errorNoShifts": "Lisa vähemalt üks kehtiv töövahetus (kuupäev, algus- ja lõpuaeg, kus lõpuaeg on hilisem kui algusaeg).",
+        "plans.workSchedule.errorShiftFields": "Vali kuupäev ning lõpuaeg, mis on hilisem kui algusaeg.",
         "plans.workSchedule.submit": "Loo töögraafik",
         "plans.template.blank.title": "Tühi plaan",
         "plans.template.blank.desc": "Alusta täiesti tühjalt lehelt.",
@@ -5769,6 +5771,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.workSchedule.shiftEndLabel": "End time",
         "plans.workSchedule.addToCalendarLabel": "Add the generated shifts to Calendar",
         "plans.workSchedule.errorNoShifts": "Add at least one valid shift (date, start and end time, with end time after start time).",
+        "plans.workSchedule.errorShiftFields": "Choose a date, and an end time after the start time.",
         "plans.workSchedule.submit": "Create work schedule",
         "plans.template.blank.title": "Blank plan",
         "plans.template.blank.desc": "Start completely from scratch.",
