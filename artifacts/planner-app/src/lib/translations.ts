@@ -72,6 +72,8 @@ export type TranslationKey =
     | "settings.wip"
     | "School link custom"
     | "School link none"
+    | "school.empty.googleDrive"
+    | "school.hint.otherLinkTypes"
     // ── Public nav ────────────────────────────────────────────────────────────
     | "pub.nav.features"
     | "pub.nav.howItWorks"
@@ -1899,6 +1901,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "settings.wip": "See seadete vaade on arendamisel.",
         "School link custom": "Lisa lisalink",
         "School link none": "Ühtegi lisalinki pole lisatud.",
+        "school.empty.googleDrive": "Google Drive linki pole lisatud.",
+        "school.hint.otherLinkTypes": "OneDrive, Dropbox vms",
         // public nav
         "pub.nav.features": "Funktsioonid",
         "pub.nav.howItWorks": "Kuidas see töötab",
@@ -3024,7 +3028,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.widget.exams": "Lähenevad kontrolltööd",
         "school.widget.allExams": "Lähenevad eksamid",
         "school.widget.subjects": "Õpitavad ained",
-        "school.widget.stats": "Õppimise statistika",
+        "school.widget.stats": "Õppematerjalid",
         "school.form.namePlaceholder": "Nimi (nt OneDrive)",
         "school.form.notesPlaceholder": "Valikulised märkmed",
         "cal.allDay": "Kogu päev",
@@ -3939,6 +3943,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "settings.wip": "This settings view is under development.",
         "School link custom": "Add another link",
         "School link none": "No additional links added yet.",
+        "school.empty.googleDrive": "No Google Drive link added yet.",
+        "school.hint.otherLinkTypes": "OneDrive, Dropbox, etc.",
         // public nav
         "pub.nav.features": "Features",
         "pub.nav.howItWorks": "How it works",
@@ -5064,7 +5070,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.widget.exams": "Upcoming tests",
         "school.widget.allExams": "Upcoming exams",
         "school.widget.subjects": "Subjects",
-        "school.widget.stats": "Study statistics",
+        "school.widget.stats": "Study materials",
         "school.form.namePlaceholder": "Name (e.g. OneDrive)",
         "school.form.notesPlaceholder": "Optional notes",
         "cal.allDay": "All day",

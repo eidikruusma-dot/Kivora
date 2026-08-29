@@ -2831,7 +2831,7 @@ function MaterialsLinks() {
                 Google Drive
               </p>
               <p className="text-[11px] text-[#94A3B8] mt-0.5 truncate">
-                {stored.googleDrive || tr("school.empty.schedule", lang)}
+                {stored.googleDrive || tr("school.empty.googleDrive", lang)}
               </p>
             </div>
             {stored.googleDrive ? (
@@ -2858,7 +2858,7 @@ function MaterialsLinks() {
                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#6F5AE8] hover:bg-[#F8F7FC] transition-colors flex-shrink-0"
               >
                 <Plus size={13} strokeWidth={2.5} />
-                {tr("school.action.addSubject", lang)}
+                {tr("school.action.addLink", lang)}
               </button>
             )}
           </div>
@@ -2908,7 +2908,7 @@ function MaterialsLinks() {
                 {tr("School link custom", lang)}
               </p>
               <p className="text-[11px] text-[#94A3B8] mt-0.5">
-                OneDrive, Dropbox vms
+                {tr("school.hint.otherLinkTypes", lang)}
               </p>
             </div>
             <button
@@ -2920,7 +2920,7 @@ function MaterialsLinks() {
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#6F5AE8] hover:bg-[#F8F7FC] transition-colors flex-shrink-0"
             >
               <Plus size={13} strokeWidth={2.5} />
-              {tr("school.action.addTask", lang)}
+              {tr("school.action.addLink", lang)}
             </button>
           </div>
 
