@@ -122,13 +122,14 @@ export async function deleteAllUserData(uid: string): Promise<void> {
   await deleteCollection(uid, 'tasks')
   await deleteCollection(uid, 'calendarEvents')
   await deleteCollection(uid, 'notes')
-  await deleteCollection(uid, 'habits')          // usually empty — in-memory store
+  await deleteCollection(uid, 'habits')
   await deleteCollection(uid, 'goals')
   await deleteCollection(uid, 'schoolItems')
   await deleteAIConversations(uid)               // handles nested messages
   await deleteCollection(uid, 'notifications')
   await deleteCollection(uid, 'settings')
   await deleteCollection(uid, 'entityLinks')
+  await deleteCollection(uid, 'pushSubscriptions')
   await deleteAllBackups(uid)                    // handles nested chunks
   await deleteDoc(doc(db, 'users', uid))         // profile root — last
 }

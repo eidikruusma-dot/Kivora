@@ -390,9 +390,6 @@ export default function AndmeteKustutaminePage({ onBack }: Props) {
       return;
     }
 
-    // Clear in-memory habits store
-    getAllHabits().forEach((h) => deleteHabit(h.id));
-
     // Navigate — onAuthStateChanged tears down all Firestore listeners
     navigate("/");
   }
