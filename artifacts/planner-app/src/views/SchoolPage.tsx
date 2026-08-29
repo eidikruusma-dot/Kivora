@@ -3135,6 +3135,183 @@ function AIStudyHelper({
 
 // ── Exams tab (kontrolltööd) ────────────────────────────────────────────────
 
+interface SubjectExamGroup {
+  subject: string;
+  color: string;
+  bg: string;
+  exams: Exam[];
+}
+
+// Same alphabetical-subject-grouping approach as School Tasks History
+// (SchoolPage.tsx's groupTasksBySubjectAlpha, School change #7), adapted for
+// Exam's own subjectless-field naming (iconColor/iconBg instead of
+// subjectColor/subjectBg) — kept as its own small function rather than
+// reusing that one, so School Tasks History stays untouched. A group is
+// only ever built from a subject actually present in `list`, so an empty
+// subject group can never be produced.
+function groupExamsBySubjectAlpha(list: Exam[]): SubjectExamGroup[] {
+  const subjectsAlpha = Array.from(new Set(list.map((e) => e.subject))).sort(
+    (a, b) => a.localeCompare(b, "et"),
+  );
+  return subjectsAlpha.map((subject) => {
+    const groupExams = list.filter((e) => e.subject === subject);
+    const [first] = groupExams;
+    return {
+      subject,
+      color: first.iconColor,
+      bg: first.iconBg,
+      exams: groupExams,
+    };
+  });
+}
+
+// A single exam row — the exact same markup ExamsTab always rendered
+// inline, pulled out to a standalone component only so it can be rendered
+// from both the active list and the History section (School change #9)
+// without duplicating this markup.
+function ExamRow({
+  exam,
+  lang,
+  isDark,
+  onExamClick,
+}: {
+  exam: Exam;
+  lang: AppLang;
+  isDark: boolean;
+  onExamClick: (exam: Exam) => void;
+}) {
+  return (
+    <div className="flex items-center gap-4 py-4">
+      <div
+        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+        style={{ background: isDark ? darkBg(exam.iconBg) : exam.iconBg, color: isDark ? darkText(exam.iconColor) : exam.iconColor }}
+      >
+        <Calendar size={16} strokeWidth={1.8} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <button
+          onClick={() => onExamClick(exam)}
+          className="text-sm font-semibold text-[#1A1F36] truncate text-left hover:text-[#6F5AE8] transition-colors block w-full"
+        >
+          {exam.title}
+        </button>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="text-xs font-medium text-[#6F5AE8]">
+            {exam.subject}
+          </span>
+          <span className="text-xs text-[#94A3B8]">·</span>
+          <span className="text-xs text-[#94A3B8]">{formatDateDisplay(exam.date)}</span>
+        </div>
+      </div>
+      <div className="hidden sm:flex flex-col items-end flex-shrink-0">
+        <span className="text-[11px] font-medium text-[#1A1F36]">
+          {formatDateDisplay(exam.date)}
+        </span>
+        <span className="text-[11px] text-[#94A3B8] flex items-center gap-1 mt-0.5">
+          <Clock size={10} strokeWidth={2} />
+          {exam.status === "tehtud"
+            ? tr("school.detail.doneLabel", lang)
+            : exam.daysLeft <= 0
+              ? tr("school.task.today", lang)
+              : tr("school.task.daysLeft", lang).replace(
+                  "{n}",
+                  String(exam.daysLeft),
+                )}
+        </span>
+      </div>
+      {exam.moodleUrl && exam.moodleUrl.trim() !== "" && (
+        <a
+          href={exam.moodleUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#ECECF2] text-xs font-medium text-[#1A1F36] hover:border-[#6F5AE8]/40 hover:bg-[#F8F7FC] transition-colors flex-shrink-0"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {tr("school.action.openMoodle", lang)}
+          <ExternalLink size={11} strokeWidth={2} className="text-[#94A3B8]" />
+        </a>
+      )}
+      <span
+        className="flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full"
+        style={{
+          background:
+            exam.status === "tehtud"
+              ? "#DCFCE7"
+              : exam.daysLeft <= 10
+                ? "#FEF9C3"
+                : exam.daysLeft <= 20
+                  ? "#DCFCE7"
+                  : "#EDE9FB",
+          color:
+            exam.status === "tehtud"
+              ? "#15803D"
+              : exam.daysLeft <= 10
+                ? "#854D0E"
+                : exam.daysLeft <= 20
+                  ? "#15803D"
+                  : "#6F5AE8",
+        }}
+      >
+        {exam.status === "tehtud"
+          ? tr("school.detail.doneLabel", lang)
+          : exam.daysLeft <= 0
+            ? tr("school.task.today", lang)
+            : tr("school.task.daysShort", lang).replace(
+                "{n}",
+                String(exam.daysLeft),
+              )}
+      </span>
+    </div>
+  );
+}
+
+function SubjectExamGroups({
+  groups,
+  lang,
+  isDark,
+  onExamClick,
+}: {
+  groups: SubjectExamGroup[];
+  lang: AppLang;
+  isDark: boolean;
+  onExamClick: (exam: Exam) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      {groups.map((group) => (
+        <div key={group.subject}>
+          <div
+            className="flex items-center gap-2 mb-1.5 pb-1.5 border-b-2"
+            style={{ borderColor: group.color }}
+          >
+            <span
+              className="w-2 h-2 rounded-full flex-shrink-0"
+              style={{ background: group.color }}
+            />
+            <h4
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: group.color }}
+            >
+              {group.subject}
+            </h4>
+          </div>
+          <div className="flex flex-col divide-y divide-[#F3F3F8]">
+            {group.exams.map((exam) => (
+              <ExamRow
+                key={exam.id}
+                exam={exam}
+                lang={lang}
+                isDark={isDark}
+                onExamClick={onExamClick}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ExamsTab({
   exams,
   onAdd,
@@ -3151,11 +3328,28 @@ function ExamsTab({
   const lang = getLocalLanguage();
   const isDark = useIsDark();
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
-  const sorted = [...exams].sort((a, b) => {
+
+  // Active vs History split (School change #9) — derived purely from the
+  // existing `status` field, never a new field/collection/migration. A
+  // completed test is only ever in `completedExams`, an active one only
+  // ever in `activeExams`, so it can never appear in both.
+  const activeExams = exams.filter((e) => e.status === "ootel");
+  const completedExams = exams.filter((e) => e.status === "tehtud");
+
+  const sorted = [...activeExams].sort((a, b) => {
     if (a.status === "tehtud" && b.status !== "tehtud") return 1;
     if (a.status !== "tehtud" && b.status === "tehtud") return -1;
     return a.daysLeft - b.daysLeft;
   });
+
+  // History: every completed test, grouped by subject (School change #9).
+  // Reopening a test (Märgi tegemata in ExamDetailModal, School change #8)
+  // sets its status back to "ootel", which moves it out of
+  // `completedExams`/History and back into `activeExams` on the very next
+  // render — there is no separate archive state to reconcile.
+  const historyGroups = groupExamsBySubjectAlpha(
+    [...completedExams].sort((a, b) => a.daysLeft - b.daysLeft),
+  );
 
   return (
     <div>
@@ -3187,92 +3381,32 @@ function ExamsTab({
       ) : (
         <div className="flex flex-col divide-y divide-[#F3F3F8]">
           {sorted.map((exam) => (
-            <div key={exam.id} className="flex items-center gap-4 py-4">
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: isDark ? darkBg(exam.iconBg) : exam.iconBg, color: isDark ? darkText(exam.iconColor) : exam.iconColor }}
-              >
-                <Calendar size={16} strokeWidth={1.8} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <button
-                  onClick={() => onExamClick(exam)}
-                  className="text-sm font-semibold text-[#1A1F36] truncate text-left hover:text-[#6F5AE8] transition-colors block w-full"
-                >
-                  {exam.title}
-                </button>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs font-medium text-[#6F5AE8]">
-                    {exam.subject}
-                  </span>
-                  <span className="text-xs text-[#94A3B8]">·</span>
-                  <span className="text-xs text-[#94A3B8]">{formatDateDisplay(exam.date)}</span>
-                </div>
-              </div>
-              <div className="hidden sm:flex flex-col items-end flex-shrink-0">
-                <span className="text-[11px] font-medium text-[#1A1F36]">
-                  {formatDateDisplay(exam.date)}
-                </span>
-                <span className="text-[11px] text-[#94A3B8] flex items-center gap-1 mt-0.5">
-                  <Clock size={10} strokeWidth={2} />
-                  {exam.status === "tehtud"
-                    ? tr("school.detail.doneLabel", lang)
-                    : exam.daysLeft <= 0
-                      ? tr("school.task.today", lang)
-                      : tr("school.task.daysLeft", lang).replace(
-                          "{n}",
-                          String(exam.daysLeft),
-                        )}
-                </span>
-              </div>
-              {exam.moodleUrl && exam.moodleUrl.trim() !== "" && (
-                <a
-                  href={exam.moodleUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#ECECF2] text-xs font-medium text-[#1A1F36] hover:border-[#6F5AE8]/40 hover:bg-[#F8F7FC] transition-colors flex-shrink-0"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {tr("school.action.openMoodle", lang)}
-                  <ExternalLink
-                    size={11}
-                    strokeWidth={2}
-                    className="text-[#94A3B8]"
-                  />
-                </a>
-              )}
-              <span
-                className="flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                style={{
-                  background:
-                    exam.status === "tehtud"
-                      ? "#DCFCE7"
-                      : exam.daysLeft <= 10
-                        ? "#FEF9C3"
-                        : exam.daysLeft <= 20
-                          ? "#DCFCE7"
-                          : "#EDE9FB",
-                  color:
-                    exam.status === "tehtud"
-                      ? "#15803D"
-                      : exam.daysLeft <= 10
-                        ? "#854D0E"
-                        : exam.daysLeft <= 20
-                          ? "#15803D"
-                          : "#6F5AE8",
-                }}
-              >
-                {exam.status === "tehtud"
-                  ? tr("school.detail.doneLabel", lang)
-                  : exam.daysLeft <= 0
-                    ? tr("school.task.today", lang)
-                    : tr("school.task.daysShort", lang).replace(
-                        "{n}",
-                        String(exam.daysLeft),
-                      )}
-              </span>
-            </div>
+            <ExamRow
+              key={exam.id}
+              exam={exam}
+              lang={lang}
+              isDark={isDark}
+              onExamClick={onExamClick}
+            />
           ))}
+        </div>
+      )}
+
+      {/* History — completed Kontrolltööd, grouped by subject (School
+          change #9). Derived only from status === "tehtud"; marking one
+          incomplete again removes it from here and puts it back above on
+          the very next render. */}
+      {historyGroups.length > 0 && (
+        <div className="mt-8 pt-6 border-t border-[#ECECF2]">
+          <h3 className="text-sm font-semibold text-[#1A1F36] mb-4">
+            {tr("school.section.history", lang)}
+          </h3>
+          <SubjectExamGroups
+            groups={historyGroups}
+            lang={lang}
+            isDark={isDark}
+            onExamClick={onExamClick}
+          />
         </div>
       )}
     </div>
