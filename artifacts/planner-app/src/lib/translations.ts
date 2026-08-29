@@ -42,10 +42,6 @@ export type TranslationKey =
     | "settings.card.feedback"
     | "settings.card.appInfo"
     // ── Settings — sidebar ────────────────────────────────────────────────────
-    | "settings.usage.title"
-    | "settings.usage.storage"
-    | "settings.usage.ai"
-    | "settings.usage.projects"
     | "settings.quick.title"
     | "settings.quick.changePassword"
     | "settings.quick.downloadData"
@@ -1846,10 +1842,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "settings.card.feedback": "Tagasiside",
         "settings.card.appInfo": "Rakenduse info",
         // settings sidebar
-        "settings.usage.title": "Kasutus",
-        "settings.usage.storage": "Pilvesalvestus",
-        "settings.usage.ai": "AI päringud",
-        "settings.usage.projects": "Projektid",
         "settings.quick.title": "Kiirtoimingud",
         "settings.quick.changePassword": "Muuda parooli",
         "settings.quick.downloadData": "Laadi alla andmed",
@@ -3858,10 +3850,6 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "settings.card.feedback": "Feedback",
         "settings.card.appInfo": "App Info",
         // settings sidebar
-        "settings.usage.title": "Usage",
-        "settings.usage.storage": "Cloud Storage",
-        "settings.usage.ai": "AI Requests",
-        "settings.usage.projects": "Projects",
         "settings.quick.title": "Quick Actions",
         "settings.quick.changePassword": "Change password",
         "settings.quick.downloadData": "Download data",

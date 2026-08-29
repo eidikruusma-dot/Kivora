@@ -29,7 +29,6 @@ import {
   Clock,
   Globe,
   UploadCloud,
-  Cloud,
   Download,
   Trash2,
   HelpCircle,
@@ -37,7 +36,6 @@ import {
   MessageSquare,
   Info,
   ChevronRight,
-  HardDrive,
   Headphones,
   ArrowLeft,
   LayoutGrid,
@@ -57,17 +55,6 @@ interface SettingsCard {
 interface Section {
   heading: string
   cards: SettingsCard[]
-}
-
-interface UsageStat {
-  icon: React.ReactNode
-  iconBg: string
-  iconColor: string
-  label: string
-  used: string
-  total: string
-  pct: number
-  barColor: string
 }
 
 interface QuickAction {
@@ -217,35 +204,6 @@ function getSections(lang: AppLang): Section[] {
   ]
 }
 
-function getUsageStats(lang: AppLang): UsageStat[] {
-  return [
-    {
-      icon: <HardDrive size={16} strokeWidth={1.8} />,
-      iconBg: '#EDE9FB', iconColor: '#6F5AE8',
-      label: t('settings.usage.storage', lang),
-      used: '—', total: '—',
-      pct: 0,
-      barColor: '#6F5AE8',
-    },
-    {
-      icon: <Sparkles size={16} strokeWidth={1.8} />,
-      iconBg: '#DCFCE7', iconColor: '#16A34A',
-      label: t('settings.usage.ai', lang),
-      used: '—', total: '—',
-      pct: 0,
-      barColor: '#16A34A',
-    },
-    {
-      icon: <Cloud size={16} strokeWidth={1.8} />,
-      iconBg: '#FEF9C3', iconColor: '#CA8A04',
-      label: t('settings.usage.projects', lang),
-      used: '—', total: '—',
-      pct: 0,
-      barColor: '#CA8A04',
-    },
-  ]
-}
-
 function getQuickActions(lang: AppLang): QuickAction[] {
   return [
     {
@@ -383,7 +341,6 @@ export default function SettingsPage() {
 
       {/* ── Right sidebar ─────────────────────────────────────────────── */}
       <aside className="w-full md:w-72 flex-shrink-0 flex flex-col gap-4">
-        <UsageCard title={t('settings.usage.title', lang)} stats={getUsageStats(lang)} />
         <QuickActionsCard
           title={t('settings.quick.title', lang)}
           actions={getQuickActions(lang)}
@@ -438,41 +395,6 @@ function SettingCard({ card, onClick }: { card: SettingsCard; onClick: () => voi
       <p className="text-sm font-semibold text-[#1A1F36] mb-1">{card.title}</p>
       <p className="text-xs text-[#94A3B8] leading-relaxed">{card.description}</p>
     </button>
-  )
-}
-
-function UsageCard({ title, stats }: { title: string; stats: UsageStat[] }) {
-  return (
-    <div className="bg-white rounded-2xl border border-[#ECECF2] p-5">
-      <h3 className="text-sm font-semibold text-[#1A1F36] mb-4">{title}</h3>
-      <div className="flex flex-col gap-4">
-        {stats.map((s) => (
-          <div key={s.label}>
-            <div className="flex items-center gap-2.5 mb-2">
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{ background: s.iconBg, color: s.iconColor }}
-              >
-                {s.icon}
-              </div>
-              <span className="text-xs font-medium text-[#1A1F36] flex-1">{s.label}</span>
-              <span className="text-xs text-[#94A3B8] font-medium">
-                {s.used} / {s.total}
-              </span>
-              <span className="text-xs font-semibold" style={{ color: s.iconColor }}>
-                {s.pct}%
-              </span>
-            </div>
-            <div className="h-1.5 rounded-full bg-[#F1F0F8] overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all"
-                style={{ width: `${s.pct}%`, background: s.barColor }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
   )
 }
 
