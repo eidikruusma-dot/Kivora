@@ -43,8 +43,16 @@ import { resolve } from 'node:path'
 
 const SCHOOL_PAGE_SRC = readFileSync(resolve(process.cwd(), 'src/views/SchoolPage.tsx'), 'utf8')
 
+// School change #7 pulled the per-subject-group and per-task-row rendering
+// TasksTab used to inline directly into two standalone components
+// (SubjectTaskGroups, TaskRow) defined just above TasksTab, so that the new
+// History section (change #7) can reuse them instead of duplicating this
+// markup. This helper captures that whole region — from the grouping
+// interface through the end of TasksTab itself — so the structural
+// assertions below still see the same grouping/heading/row markup as
+// before, just relocated.
 function tasksTabSource(): string {
-  const match = SCHOOL_PAGE_SRC.match(/function TasksTab\(\{[\s\S]*?\n}\n/)
+  const match = SCHOOL_PAGE_SRC.match(/interface SubjectTaskGroup \{[\s\S]*?\nfunction TasksTab\([\s\S]*?\n}\n/)
   expect(match).not.toBeNull()
   return match![0]
 }
@@ -181,16 +189,18 @@ describe('within-group task order is preserved from the (already deadline-sorted
 // ── Structural: the real source implements this exact algorithm ────────────
 
 describe('SchoolPage.tsx TasksTab implements this exact grouping (structural)', () => {
-  it('derives distinct subjects from `visible`, sorted with localeCompare(..., "et")', () => {
+  it('derives distinct subjects from the grouped list, sorted with localeCompare(..., "et")', () => {
     const src = tasksTabSource()
     expect(src).toMatch(
-      /Array\.from\(\s*\n?\s*new Set\(visible\.map\(\(t\) => t\.subject\)\),?\s*\n?\s*\)\.sort\(\(a, b\) => a\.localeCompare\(b, "et"\)\)/,
+      /Array\.from\(new Set\(list\.map\(\(t\) => t\.subject\)\)\)\.sort\(\s*\n?\s*\(a, b\) => a\.localeCompare\(b, "et"\),?\s*\n?\s*\)/,
     )
   })
 
-  it('builds each group by filtering `visible` for that subject (never a separate/duplicated list)', () => {
+  it('builds each group by filtering the input list for that subject (never a separate/duplicated list) — used for both the active groups (`visible`) and History (`completedTasks`)', () => {
     const src = tasksTabSource()
-    expect(src).toMatch(/visible\.filter\(\(t\) => t\.subject === subject\)/)
+    expect(src).toMatch(/list\.filter\(\(t\) => t\.subject === subject\)/)
+    expect(src).toMatch(/groupTasksBySubjectAlpha\(visible\)/)
+    expect(src).toMatch(/groupTasksBySubjectAlpha\(\s*\n?\s*sortTasksByDeadline\(completedTasks, sortDir\),?\s*\n?\s*\)/)
   })
 
   it('takes the group accent color/bg from the group\'s own first task (existing subjectColor/subjectBg, not a new field)', () => {
@@ -220,7 +230,7 @@ describe('3. each subject block renders a visible heading with the subject name'
 describe('subject blocks are always directly visible — not folders, accordions, or collapsed sections', () => {
   it('the grouped rendering block has no collapse/expand state or <details> element', () => {
     const src = tasksTabSource()
-    const groupedBlock = src.match(/\{groupedVisible\.map\(\(group\) => \([\s\S]*?\n {8}\)\)\}/)?.[0] ?? ''
+    const groupedBlock = src.match(/\{groups\.map\(\(group\) => \([\s\S]*?\n {6}\)\)\}/)?.[0] ?? ''
     expect(groupedBlock).not.toMatch(/<details/)
     expect(groupedBlock).not.toMatch(/collapsed/i)
     expect(groupedBlock).not.toMatch(/isOpen/i)

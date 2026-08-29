@@ -1496,6 +1496,318 @@ function StatCard({
   );
 }
 
+interface SubjectTaskGroup {
+  subject: string;
+  color: string;
+  bg: string;
+  tasks: Task[];
+}
+
+// Groups `list` by its existing `subject` field, ordering subjects
+// alphabetically (stable regardless of any deadline-sort toggle) and
+// preserving each task's existing relative order within its group. A group
+// is only ever built from a subject actually present in `list`, so an empty
+// subject group can never be produced. Reused for both TasksTab's active
+// groups (School change #6) and its History groups (School change #7), so
+// the two use identical subject-grouping and color-accent logic.
+function groupTasksBySubjectAlpha(list: Task[]): SubjectTaskGroup[] {
+  const subjectsAlpha = Array.from(new Set(list.map((t) => t.subject))).sort(
+    (a, b) => a.localeCompare(b, "et"),
+  );
+  return subjectsAlpha.map((subject) => {
+    const groupTasks = list.filter((t) => t.subject === subject);
+    const [first] = groupTasks;
+    return {
+      subject,
+      color: first.subjectColor,
+      bg: first.subjectBg,
+      tasks: groupTasks,
+    };
+  });
+}
+
+function sortTasksByDeadline(list: Task[], dir: "asc" | "desc"): Task[] {
+  return [...list].sort((a, b) => {
+    const diff = parseDeadline(a.deadline) - parseDeadline(b.deadline);
+    return dir === "asc" ? diff : -diff;
+  });
+}
+
+// A single task row — the exact same markup/behavior TasksTab always
+// rendered inline, pulled out to a standalone component only so it can be
+// rendered from both the active subject groups and the History section
+// (School change #7) without duplicating this markup. Menu-open and
+// delete-confirm state stay lifted in TasksTab and are shared across both
+// sections; that's safe because a given task id is never active and
+// completed at the same time.
+function TaskRow({
+  task,
+  lang,
+  openMenuId,
+  setOpenMenuId,
+  confirmDeleteId,
+  setConfirmDeleteId,
+  onTaskClick,
+  onEdit,
+  onMarkDone,
+  onMarkUndone,
+  onDelete,
+}: {
+  task: Task;
+  lang: AppLang;
+  openMenuId: number | null;
+  setOpenMenuId: (id: number | null) => void;
+  confirmDeleteId: number | null;
+  setConfirmDeleteId: (id: number | null) => void;
+  onTaskClick: (task: Task) => void;
+  onEdit: (task: Task) => void;
+  onMarkDone: (id: number) => void;
+  onMarkUndone: (id: number) => void;
+  onDelete: (id: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-4 py-4">
+      {/* Subject icon */}
+      <div
+        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+        style={{ background: task.subjectBg, color: task.subjectColor }}
+      >
+        {task.subjectIcon}
+      </div>
+
+      {/* Title + meta */}
+      <div className="flex-1 min-w-0">
+        <button
+          onClick={() => onTaskClick(task)}
+          className="text-sm font-semibold text-[#1A1F36] truncate text-left hover:text-[#6F5AE8] transition-colors block w-full"
+        >
+          {task.title}
+        </button>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span
+            className="text-xs font-medium"
+            style={{ color: task.subjectColor }}
+          >
+            {task.subject}
+          </span>
+          <span className="text-xs text-[#94A3B8]">
+            {getTaskTypeLabel(task.type, lang)}
+          </span>
+        </div>
+      </div>
+
+      {/* Deadline */}
+      <div className="hidden sm:flex flex-col items-end flex-shrink-0 w-32">
+        <span className="text-[11px] font-medium text-[#6F5AE8]">
+          {task.deadlineLabel}
+        </span>
+        <span className="text-[11px] text-[#94A3B8]">{task.deadline}</span>
+      </div>
+
+      {/* Progress ring */}
+      <div className="flex-shrink-0 flex items-center gap-1.5">
+        <ProgressRing pct={task.progress} color={task.subjectColor} />
+        <span className="text-xs font-semibold text-[#1A1F36] w-8">
+          {task.progress}%
+        </span>
+      </div>
+
+      {/* Moodle button */}
+      {task.moodleUrl &&
+        task.moodleUrl.trim() !== "" &&
+        task.moodleUrl !== "#" && (
+          <a
+            href={task.moodleUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#ECECF2] text-xs font-medium text-[#1A1F36] hover:border-[#6F5AE8]/40 hover:bg-[#F8F7FC] transition-colors flex-shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {tr("school.action.openMoodle", lang)}
+            <ExternalLink size={11} strokeWidth={2} className="text-[#94A3B8]" />
+          </a>
+        )}
+
+      {/* Row three-dot menu */}
+      <div className="relative flex-shrink-0">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpenMenuId(openMenuId === task.id ? null : task.id);
+          }}
+          className="text-[#94A3B8] hover:text-[#1A1F36] transition-colors"
+        >
+          <MoreHorizontal size={16} />
+        </button>
+        {openMenuId === task.id && (
+          <>
+            <div
+              className="fixed inset-0 z-10"
+              onClick={() => setOpenMenuId(null)}
+            />
+            <div className="absolute right-0 z-20 mt-1 w-44 bg-white rounded-lg border border-[#ECECF2] shadow-lg overflow-hidden">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenMenuId(null);
+                  onEdit(task);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
+              >
+                <Pencil size={14} strokeWidth={2} className="text-[#64748B]" />
+                {tr("school.action.edit", lang)}
+              </button>
+              {statusFromProgress(task.progress) === "tehtud" ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenMenuId(null);
+                    onMarkUndone(task.id);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
+                >
+                  <Check size={14} strokeWidth={2} className="text-[#64748B]" />
+                  {tr("school.action.markUndone", lang)}
+                </button>
+              ) : (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenMenuId(null);
+                    onMarkDone(task.id);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
+                >
+                  <Check size={14} strokeWidth={2} className="text-[#64748B]" />
+                  {tr("school.action.markDone", lang)}
+                </button>
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenMenuId(null);
+                  setConfirmDeleteId(task.id);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#DC2626] hover:bg-[#FEF2F2] transition-colors"
+              >
+                <Trash2 size={14} strokeWidth={2} />
+                {tr("school.action.delete", lang)}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {confirmDeleteId === task.id && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          onClick={() => setConfirmDeleteId(null)}
+        >
+          <div
+            className="w-full max-w-sm bg-white rounded-2xl shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-5">
+              <p className="text-sm text-[#1A1F36] mb-1">
+                Kas soovid ülesande „{task.title}“ kindlasti kustutada?
+              </p>
+              <p className="text-xs text-[#94A3B8] mb-5">
+                {tr("school.confirm.irreversible", lang)}
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  onClick={() => setConfirmDeleteId(null)}
+                  className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+                >
+                  {tr("school.action.discard", lang)}
+                </button>
+                <button
+                  onClick={() => {
+                    onDelete(task.id);
+                    setConfirmDeleteId(null);
+                  }}
+                  className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium bg-[#DC2626] text-white hover:bg-[#B91C1C] transition-colors"
+                >
+                  {tr("school.action.delete", lang)}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SubjectTaskGroups({
+  groups,
+  lang,
+  openMenuId,
+  setOpenMenuId,
+  confirmDeleteId,
+  setConfirmDeleteId,
+  onTaskClick,
+  onEdit,
+  onMarkDone,
+  onMarkUndone,
+  onDelete,
+}: {
+  groups: SubjectTaskGroup[];
+  lang: AppLang;
+  openMenuId: number | null;
+  setOpenMenuId: (id: number | null) => void;
+  confirmDeleteId: number | null;
+  setConfirmDeleteId: (id: number | null) => void;
+  onTaskClick: (task: Task) => void;
+  onEdit: (task: Task) => void;
+  onMarkDone: (id: number) => void;
+  onMarkUndone: (id: number) => void;
+  onDelete: (id: number) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      {groups.map((group) => (
+        <div key={group.subject}>
+          {/* Subject block heading */}
+          <div
+            className="flex items-center gap-2 mb-1.5 pb-1.5 border-b-2"
+            style={{ borderColor: group.color }}
+          >
+            <span
+              className="w-2 h-2 rounded-full flex-shrink-0"
+              style={{ background: group.color }}
+            />
+            <h4
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: group.color }}
+            >
+              {group.subject}
+            </h4>
+          </div>
+          <div className="flex flex-col divide-y divide-[#F3F3F8]">
+            {group.tasks.map((task) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                lang={lang}
+                openMenuId={openMenuId}
+                setOpenMenuId={setOpenMenuId}
+                confirmDeleteId={confirmDeleteId}
+                setConfirmDeleteId={setConfirmDeleteId}
+                onTaskClick={onTaskClick}
+                onEdit={onEdit}
+                onMarkDone={onMarkDone}
+                onMarkUndone={onMarkUndone}
+                onDelete={onDelete}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function TasksTab({
   tasks,
   onTaskClick,
@@ -1521,41 +1833,39 @@ function TasksTab({
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
+  // Active vs History split (School change #7) — derived purely from the
+  // existing completion signal (progress >= 100, the same mapping
+  // statusFromProgress already uses), never a new field or persisted flag.
+  // `tasks` still holds every School task exactly as stored; this is a
+  // display-only split of that same array.
+  const activeTasks = tasks.filter((t) => t.progress < 100);
+  const completedTasks = tasks.filter((t) => t.progress >= 100);
+
   const subjects = Array.from(new Set(tasks.map((t) => t.subject)));
 
   const filtered = subjectFilter
-    ? tasks.filter((t) => t.subject === subjectFilter)
-    : tasks;
+    ? activeTasks.filter((t) => t.subject === subjectFilter)
+    : activeTasks;
 
-  const sorted = [...filtered].sort((a, b) => {
-    const diff = parseDeadline(a.deadline) - parseDeadline(b.deadline);
-    return sortDir === "asc" ? diff : -diff;
-  });
+  const sorted = sortTasksByDeadline(filtered, sortDir);
 
   const visible = showAll ? sorted : sorted.slice(0, 4);
   const hasMore = sorted.length > 4;
 
-  // Group the currently visible tasks by subject (School change #6) — the
-  // filter/sort/show-more behavior above is unchanged; this only decides how
-  // that same `visible` list is arranged into sections. Subject sections are
-  // ordered alphabetically (stable regardless of the deadline sort direction
-  // toggle); tasks keep the relative order they already have within
-  // `visible` (i.e. the existing deadline sort), so nothing is re-sorted.
-  // Built directly from `visible`, so a subject with zero visible tasks can
-  // never produce a group.
-  const visibleSubjectsAlpha = Array.from(
-    new Set(visible.map((t) => t.subject)),
-  ).sort((a, b) => a.localeCompare(b, "et"));
-  const groupedVisible = visibleSubjectsAlpha.map((subject) => {
-    const groupTasks = visible.filter((t) => t.subject === subject);
-    const [first] = groupTasks;
-    return {
-      subject,
-      color: first.subjectColor,
-      bg: first.subjectBg,
-      tasks: groupTasks,
-    };
-  });
+  // Group the currently visible ACTIVE tasks by subject (School change #6)
+  // — the filter/sort/show-more behavior above is unchanged; this only
+  // decides how that same `visible` list is arranged into sections.
+  const groupedVisible = groupTasksBySubjectAlpha(visible);
+
+  // History: every completed task, grouped by subject the same way (School
+  // change #7). Deliberately not wired to the active-only subject
+  // filter/show-more controls above, per "keep History simple". Reopening a
+  // task (its progress drops below 100) removes it from `completedTasks`
+  // and puts it back in `activeTasks` on the very next render — there is no
+  // separate archive state to reconcile.
+  const historyGroups = groupTasksBySubjectAlpha(
+    sortTasksByDeadline(completedTasks, sortDir),
+  );
 
   return (
     <div>
@@ -1640,220 +1950,19 @@ function TasksTab({
       </div>
 
       {/* Task rows, grouped by subject (School change #6) */}
-      <div className="flex flex-col gap-6">
-        {groupedVisible.map((group) => (
-          <div key={group.subject}>
-            {/* Subject block heading */}
-            <div
-              className="flex items-center gap-2 mb-1.5 pb-1.5 border-b-2"
-              style={{ borderColor: group.color }}
-            >
-              <span
-                className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ background: group.color }}
-              />
-              <h4
-                className="text-xs font-semibold uppercase tracking-wide"
-                style={{ color: group.color }}
-              >
-                {group.subject}
-              </h4>
-            </div>
-            <div className="flex flex-col divide-y divide-[#F3F3F8]">
-              {group.tasks.map((task) => (
-          <div key={task.id} className="flex items-center gap-4 py-4">
-            {/* Subject icon */}
-            <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: task.subjectBg, color: task.subjectColor }}
-            >
-              {task.subjectIcon}
-            </div>
-
-            {/* Title + meta */}
-            <div className="flex-1 min-w-0">
-              <button
-                onClick={() => onTaskClick(task)}
-                className="text-sm font-semibold text-[#1A1F36] truncate text-left hover:text-[#6F5AE8] transition-colors block w-full"
-              >
-                {task.title}
-              </button>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span
-                  className="text-xs font-medium"
-                  style={{ color: task.subjectColor }}
-                >
-                  {task.subject}
-                </span>
-                <span className="text-xs text-[#94A3B8]">
-                  {getTaskTypeLabel(task.type, lang)}
-                </span>
-              </div>
-            </div>
-
-            {/* Deadline */}
-            <div className="hidden sm:flex flex-col items-end flex-shrink-0 w-32">
-              <span className="text-[11px] font-medium text-[#6F5AE8]">
-                {task.deadlineLabel}
-              </span>
-              <span className="text-[11px] text-[#94A3B8]">
-                {task.deadline}
-              </span>
-            </div>
-
-            {/* Progress ring */}
-            <div className="flex-shrink-0 flex items-center gap-1.5">
-              <ProgressRing pct={task.progress} color={task.subjectColor} />
-              <span className="text-xs font-semibold text-[#1A1F36] w-8">
-                {task.progress}%
-              </span>
-            </div>
-
-            {/* Moodle button */}
-            {task.moodleUrl &&
-              task.moodleUrl.trim() !== "" &&
-              task.moodleUrl !== "#" && (
-                <a
-                  href={task.moodleUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#ECECF2] text-xs font-medium text-[#1A1F36] hover:border-[#6F5AE8]/40 hover:bg-[#F8F7FC] transition-colors flex-shrink-0"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {tr("school.action.openMoodle", lang)}
-                  <ExternalLink
-                    size={11}
-                    strokeWidth={2}
-                    className="text-[#94A3B8]"
-                  />
-                </a>
-              )}
-
-            {/* Row three-dot menu */}
-            <div className="relative flex-shrink-0">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpenMenuId(openMenuId === task.id ? null : task.id);
-                }}
-                className="text-[#94A3B8] hover:text-[#1A1F36] transition-colors"
-              >
-                <MoreHorizontal size={16} />
-              </button>
-              {openMenuId === task.id && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setOpenMenuId(null)}
-                  />
-                  <div className="absolute right-0 z-20 mt-1 w-44 bg-white rounded-lg border border-[#ECECF2] shadow-lg overflow-hidden">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenMenuId(null);
-                        onEdit(task);
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
-                    >
-                      <Pencil
-                        size={14}
-                        strokeWidth={2}
-                        className="text-[#64748B]"
-                      />
-                      {tr("school.action.edit", lang)}
-                    </button>
-                    {statusFromProgress(task.progress) === "tehtud" ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenMenuId(null);
-                          onMarkUndone(task.id);
-                        }}
-                        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
-                      >
-                        <Check
-                          size={14}
-                          strokeWidth={2}
-                          className="text-[#64748B]"
-                        />
-                        {tr("school.action.markUndone", lang)}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenMenuId(null);
-                          onMarkDone(task.id);
-                        }}
-                        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
-                      >
-                        <Check
-                          size={14}
-                          strokeWidth={2}
-                          className="text-[#64748B]"
-                        />
-                        {tr("school.action.markDone", lang)}
-                      </button>
-                    )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenMenuId(null);
-                        setConfirmDeleteId(task.id);
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#DC2626] hover:bg-[#FEF2F2] transition-colors"
-                    >
-                      <Trash2 size={14} strokeWidth={2} />
-                      {tr("school.action.delete", lang)}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {confirmDeleteId === task.id && (
-              <div
-                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-                onClick={() => setConfirmDeleteId(null)}
-              >
-                <div
-                  className="w-full max-w-sm bg-white rounded-2xl shadow-xl"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="px-5 py-5">
-                    <p className="text-sm text-[#1A1F36] mb-1">
-                      Kas soovid ülesande „{task.title}“ kindlasti kustutada?
-                    </p>
-                    <p className="text-xs text-[#94A3B8] mb-5">
-                      {tr("school.confirm.irreversible", lang)}
-                    </p>
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => setConfirmDeleteId(null)}
-                        className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
-                      >
-                        {tr("school.action.discard", lang)}
-                      </button>
-                      <button
-                        onClick={() => {
-                          onDelete(task.id);
-                          setConfirmDeleteId(null);
-                        }}
-                        className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium bg-[#DC2626] text-white hover:bg-[#B91C1C] transition-colors"
-                      >
-                        {tr("school.action.delete", lang)}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+      <SubjectTaskGroups
+        groups={groupedVisible}
+        lang={lang}
+        openMenuId={openMenuId}
+        setOpenMenuId={setOpenMenuId}
+        confirmDeleteId={confirmDeleteId}
+        setConfirmDeleteId={setConfirmDeleteId}
+        onTaskClick={onTaskClick}
+        onEdit={onEdit}
+        onMarkDone={onMarkDone}
+        onMarkUndone={onMarkUndone}
+        onDelete={onDelete}
+      />
 
       {/* Show all toggle */}
       {hasMore && (
@@ -1870,6 +1979,30 @@ function TasksTab({
             className={`transition-transform ${showAll ? "rotate-180" : ""}`}
           />
         </button>
+      )}
+
+      {/* History — completed School tasks, grouped by subject (School change #7).
+          Derived only from progress >= 100; reopening a task removes it from
+          here and puts it back above on the very next render. */}
+      {historyGroups.length > 0 && (
+        <div className="mt-8 pt-6 border-t border-[#ECECF2]">
+          <h3 className="text-sm font-semibold text-[#1A1F36] mb-4">
+            {tr("school.section.history", lang)}
+          </h3>
+          <SubjectTaskGroups
+            groups={historyGroups}
+            lang={lang}
+            openMenuId={openMenuId}
+            setOpenMenuId={setOpenMenuId}
+            confirmDeleteId={confirmDeleteId}
+            setConfirmDeleteId={setConfirmDeleteId}
+            onTaskClick={onTaskClick}
+            onEdit={onEdit}
+            onMarkDone={onMarkDone}
+            onMarkUndone={onMarkUndone}
+            onDelete={onDelete}
+          />
+        </div>
       )}
     </div>
   );
