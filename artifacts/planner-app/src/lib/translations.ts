@@ -1062,6 +1062,7 @@ export type TranslationKey =
     | "school.empty.exams"
     | "school.empty.schedule"
     | "school.modal.subjectData"
+    | "school.modal.editSubject"
     | "school.modal.testData"
     | "school.modal.taskData"
     | "school.modal.editTask"
@@ -3073,6 +3074,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.empty.exams": "Eksameid pole.",
         "school.empty.schedule": "Tunniplaani pole.",
         "school.modal.subjectData": "Aine andmed",
+        "school.modal.editSubject": "Muuda ainet",
         "school.modal.testData": "Kontrolltöö andmed",
         "school.modal.taskData": "Ülesande andmed",
         "school.modal.editTask": "Muuda ülesannet",
@@ -5110,6 +5112,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.empty.exams": "No exams.",
         "school.empty.schedule": "No schedule.",
         "school.modal.subjectData": "Subject details",
+        "school.modal.editSubject": "Edit subject",
         "school.modal.testData": "Test details",
         "school.modal.taskData": "Task details",
         "school.modal.editTask": "Edit task",

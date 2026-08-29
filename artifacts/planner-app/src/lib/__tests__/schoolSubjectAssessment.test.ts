@@ -275,11 +275,17 @@ describe('call site: onSaveAssessment reuses the existing updateSchoolSubject fl
 })
 
 // ── Subject creation is untouched ───────────────────────────────────────────
+//
+// School change #12B later made SubjectFormModal a shared add/edit form (see
+// schoolSubjectEditFlow.test.ts), so `assessment` now appears in its source —
+// but only inside an `isEdit ? ... : {}` guard. The assertion below checks
+// that guard directly, so pure add-mode behavior (isEdit === false) is still
+// proven to never include an assessment key, regardless of that later change.
 
-describe('Subject creation (SubjectFormModal) is untouched by this change', () => {
-  it('SubjectFormModal\'s onSave payload does not reference assessment', () => {
+describe('Subject creation (SubjectFormModal) sends assessment only when editing, never when adding', () => {
+  it('SubjectFormModal\'s onSave payload gates assessment behind isEdit, so the add path is unaffected', () => {
     const formModalBlock = SCHOOL_PAGE_SRC.match(/function SubjectFormModal\(\{[\s\S]*?\n}\n/)?.[0] ?? ''
     const onSaveCallBlock = formModalBlock.match(/await onSave\(\{[\s\S]*?\}\);/)?.[0] ?? ''
-    expect(onSaveCallBlock).not.toMatch(/assessment/)
+    expect(onSaveCallBlock).toMatch(/\.\.\.\(isEdit \? \{ assessment: assessment\.trim\(\) \|\| undefined \} : \{\}\)/)
   })
 })

@@ -518,6 +518,7 @@ export default function SchoolPage() {
   const [postSave, setPostSave] = useState<{ type: 'school'; id: string } | null>(null);
   const [autoLink, setAutoLink] = useState<AutoLinkResult | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
+  const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
   const [quickAddSubject, setQuickAddSubject] = useState<string>("");
   const [confirmDeleteSubjectId, setConfirmDeleteSubjectId] = useState<string | null>(null);
   const [scheduleMode, setScheduleModeState] = useState<ScheduleMode>(() => {
@@ -1066,7 +1067,33 @@ export default function SchoolPage() {
           subject={selectedSubject}
           onClose={() => setSelectedSubject(null)}
           onDelete={deleteSubject}
+          onEdit={(s) => {
+            setEditingSubject(s);
+            setSelectedSubject(null);
+          }}
           onSaveAssessment={(id, assessment) => updateSubject(id, { assessment })}
+        />
+      )}
+      {editingSubject && (
+        <SubjectFormModal
+          subject={editingSubject}
+          subjects={subjects}
+          onClose={() => setEditingSubject(null)}
+          onSave={async (subject) => {
+            // Same await-then-close contract as the add flow above: a
+            // rejection propagates back to the modal, which keeps itself
+            // open and shows the error, rather than reporting false
+            // success.
+            await updateSubject(subject.id, {
+              name: subject.name,
+              teacher: subject.teacher,
+              room: subject.room,
+              color: subject.color,
+              bg: subject.bg,
+              assessment: subject.assessment,
+            });
+            setEditingSubject(null);
+          }}
         />
       )}
       {postSave && (
@@ -1174,17 +1201,20 @@ function AinedTab({
   );
 }
 
-// ── Subject detail modal (view only) ───────────────────────────────────────
+// ── Subject detail modal (view, inline assessment edit, and an Edit action
+//    that opens the full SubjectFormModal — School change #12A/#12B) ──────
 
 function SubjectDetailModal({
   subject,
   onClose,
   onDelete,
+  onEdit,
   onSaveAssessment,
 }: {
   subject: Subject;
   onClose: () => void;
   onDelete?: (id: string) => void;
+  onEdit?: (subject: Subject) => void;
   onSaveAssessment?: (id: string, assessment: string | undefined) => void;
 }) {
   const lang = getLocalLanguage();
@@ -1333,19 +1363,30 @@ function SubjectDetailModal({
               {lang === 'et' ? 'Kustuta' : 'Delete'}
             </button>
           )}
-          <button
-            onClick={onClose}
-            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors ml-auto"
-          >
-            {tr("school.action.close", lang)}
-          </button>
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+            >
+              {tr("school.action.close", lang)}
+            </button>
+            {onEdit && (
+              <button
+                onClick={() => onEdit(subject)}
+                className="flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
+              >
+                <Pencil size={14} strokeWidth={2} />
+                {tr("school.action.edit", lang)}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Subject form modal (add only) ──────────────────────────────────────────
+// ── Subject form modal (add, or edit an existing subject — School change #12B) ──
 
 const SUBJECT_PALETTE = [
   {
@@ -1376,22 +1417,38 @@ const SUBJECT_PALETTE = [
 ];
 
 function SubjectFormModal({
+  subject,
   subjects,
   onClose,
   onSave,
 }: {
+  /** When provided, the form edits this existing subject instead of
+   * creating a new one — School change #12B. */
+  subject?: Subject;
   subjects: Subject[];
   onClose: () => void;
   onSave: (s: Subject) => Promise<void>;
 }) {
+  const isEdit = !!subject;
   const lang = getLocalLanguage();
-  const [name, setName] = useState("");
-  const [teacher, setTeacher] = useState("");
-  const [room, setRoom] = useState("");
+  const [name, setName] = useState(subject?.name ?? "");
+  const [teacher, setTeacher] = useState(subject?.teacher ?? "");
+  const [room, setRoom] = useState(subject?.room ?? "");
   // Auto-suggested from the name via classifySubject (schoolStore.tsx) until
-  // the user manually picks a swatch — see colorManuallySet below.
-  const [colorIdx, setColorIdx] = useState(classifySubject("").colorIndex);
-  const [colorManuallySet, setColorManuallySet] = useState(false);
+  // the user manually picks a swatch — see colorManuallySet below. When
+  // editing, pre-fill from the subject's existing color instead and treat
+  // it as already "manually set" so retyping the name never silently
+  // changes an established subject's swatch.
+  const [colorIdx, setColorIdx] = useState(() => {
+    if (!subject) return classifySubject("").colorIndex;
+    const idx = SUBJECT_PALETTE.findIndex((p) => p.color === subject.color);
+    return idx >= 0 ? idx : 0;
+  });
+  const [colorManuallySet, setColorManuallySet] = useState(isEdit);
+  // Hindamine / Assessment — School change #12B: exposed only in the edit
+  // path (an existing subject's assessment field), never in the add form,
+  // so subject creation stays exactly as it was.
+  const [assessment, setAssessment] = useState(subject?.assessment ?? "");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -1401,7 +1458,7 @@ function SubjectFormModal({
       return;
     }
     const exists = subjects.some(
-      (s) => s.name.toLowerCase() === name.trim().toLowerCase(),
+      (s) => s.id !== subject?.id && s.name.toLowerCase() === name.trim().toLowerCase(),
     );
     if (exists) {
       setError("Sellise nimega aine on juba olemas.");
@@ -1412,13 +1469,14 @@ function SubjectFormModal({
     setSaving(true);
     try {
       await onSave({
-        id: `sub-${Date.now()}`,
+        id: subject?.id ?? `sub-${Date.now()}`,
         name: name.trim(),
         teacher: teacher.trim() || undefined,
         room: room.trim() || undefined,
         color: palette.color,
         bg: palette.bg,
         icon: palette.icon,
+        ...(isEdit ? { assessment: assessment.trim() || undefined } : {}),
       });
       // On success the parent closes this modal (onSave resolving unmounts
       // it), so there is nothing further to do here.
@@ -1444,7 +1502,7 @@ function SubjectFormModal({
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2] flex-shrink-0">
           <h2 className="text-base font-semibold text-[#1A1F36]">
-            {tr("school.action.addSubject", lang)}
+            {isEdit ? tr("school.modal.editSubject", lang) : tr("school.action.addSubject", lang)}
           </h2>
           <button
             onClick={onClose}
@@ -1532,6 +1590,24 @@ function SubjectFormModal({
               ))}
             </div>
           </div>
+
+          {isEdit && (
+            <div>
+              <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+                {tr("school.field.assessment", lang)}{" "}
+                <span className="text-[#CBD5E1] font-normal">
+                  {tr("school.field.optional", lang)}
+                </span>
+              </label>
+              <textarea
+                value={assessment}
+                onChange={(e) => setAssessment(e.target.value)}
+                placeholder={tr("school.field.assessmentPh", lang)}
+                rows={5}
+                className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] resize-y"
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2] flex-shrink-0">
