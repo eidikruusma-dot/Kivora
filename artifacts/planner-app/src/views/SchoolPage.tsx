@@ -3833,6 +3833,334 @@ function ExamFormModal({
 
 // ── Eksamid tab ───────────────────────────────────────────────────────────
 
+// A single Eksam row — the exact same markup EksamidTab always rendered
+// inline, pulled out to a standalone component only so it can be rendered
+// from both the active list and the History section (School change #11)
+// without duplicating this markup. Menu-open and delete-confirm state stay
+// lifted in EksamidTab and are shared across both sections — safe, since a
+// given exam id is never active and completed at the same time.
+function EksamRow({
+  exam,
+  lang,
+  isDark,
+  openMenuId,
+  setOpenMenuId,
+  confirmDeleteId,
+  setConfirmDeleteId,
+  onExamClick,
+  onEdit,
+  onMarkDone,
+  onMarkUndone,
+  onDelete,
+}: {
+  exam: Exam;
+  lang: AppLang;
+  isDark: boolean;
+  openMenuId: number | null;
+  setOpenMenuId: (id: number | null) => void;
+  confirmDeleteId: number | null;
+  setConfirmDeleteId: (id: number | null) => void;
+  onExamClick: (exam: Exam) => void;
+  onEdit: (exam: Exam) => void;
+  onMarkDone: (id: number) => void;
+  onMarkUndone: (id: number) => void;
+  onDelete: (id: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-4 py-4">
+      <div
+        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+        style={{ background: isDark ? darkBg(exam.iconBg) : exam.iconBg, color: isDark ? darkText(exam.iconColor) : exam.iconColor }}
+      >
+        <Calendar size={16} strokeWidth={1.8} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <button
+          onClick={() => onExamClick(exam)}
+          className="text-sm font-semibold text-[#1A1F36] truncate text-left hover:text-[#6F5AE8] transition-colors block w-full"
+        >
+          {exam.title}
+        </button>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="text-xs font-medium text-[#6F5AE8]">
+            {exam.subject}
+          </span>
+          <span className="text-xs text-[#94A3B8]">·</span>
+          <span className="text-xs text-[#94A3B8]">{formatDateDisplay(exam.date)}</span>
+          {exam.time && exam.time.trim() !== "" && (
+            <>
+              <span className="text-xs text-[#94A3B8]">·</span>
+              <span className="text-xs text-[#94A3B8]">
+                {exam.time}
+              </span>
+            </>
+          )}
+          {exam.location && exam.location.trim() !== "" && (
+            <>
+              <span className="text-xs text-[#94A3B8]">·</span>
+              <span className="text-xs text-[#94A3B8]">
+                {exam.location}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="hidden sm:flex flex-col items-end flex-shrink-0">
+        <span className="text-[11px] font-medium text-[#1A1F36]">
+          {formatDateDisplay(exam.date)}
+        </span>
+        <span className="text-[11px] text-[#94A3B8] flex items-center gap-1 mt-0.5">
+          <Clock size={10} strokeWidth={2} />
+          {exam.status === "tehtud"
+            ? tr("school.detail.doneLabel", lang)
+            : exam.daysLeft <= 0
+              ? tr("school.task.today", lang)
+              : tr("school.task.daysLeft", lang).replace(
+                  "{n}",
+                  String(exam.daysLeft),
+                )}
+        </span>
+      </div>
+      {exam.moodleUrl && exam.moodleUrl.trim() !== "" && (
+        <a
+          href={exam.moodleUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#ECECF2] text-xs font-medium text-[#1A1F36] hover:border-[#6F5AE8]/40 hover:bg-[#F8F7FC] transition-colors flex-shrink-0"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {tr("school.action.openMoodle", lang)}
+          <ExternalLink size={11} strokeWidth={2} className="text-[#94A3B8]" />
+        </a>
+      )}
+      <span
+        className="flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full"
+        style={{
+          background:
+            exam.status === "tehtud"
+              ? "#DCFCE7"
+              : exam.daysLeft <= 10
+                ? "#FEF9C3"
+                : exam.daysLeft <= 20
+                  ? "#DCFCE7"
+                  : "#EDE9FB",
+          color:
+            exam.status === "tehtud"
+              ? "#15803D"
+              : exam.daysLeft <= 10
+                ? "#854D0E"
+                : exam.daysLeft <= 20
+                  ? "#15803D"
+                  : "#6F5AE8",
+        }}
+      >
+        {exam.status === "tehtud"
+          ? tr("school.detail.doneLabel", lang)
+          : exam.daysLeft <= 0
+            ? tr("school.task.today", lang)
+            : tr("school.task.daysShort", lang).replace(
+                "{n}",
+                String(exam.daysLeft),
+              )}
+      </span>
+      <div className="relative flex-shrink-0">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpenMenuId(openMenuId === exam.id ? null : exam.id);
+          }}
+          className="text-[#94A3B8] hover:text-[#1A1F36] transition-colors"
+        >
+          <MoreHorizontal size={16} />
+        </button>
+        {openMenuId === exam.id && (
+          <>
+            <div
+              className="fixed inset-0 z-10"
+              onClick={() => setOpenMenuId(null)}
+            />
+            <div className="absolute right-0 z-20 mt-1 w-44 bg-white rounded-lg border border-[#ECECF2] shadow-lg overflow-hidden">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenMenuId(null);
+                  onEdit(exam);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
+              >
+                <Pencil
+                  size={14}
+                  strokeWidth={2}
+                  className="text-[#64748B]"
+                />
+                {tr("school.action.edit", lang)}
+              </button>
+              {exam.status === "tehtud" ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenMenuId(null);
+                    onMarkUndone(exam.id);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
+                >
+                  <Check
+                    size={14}
+                    strokeWidth={2}
+                    className="text-[#64748B]"
+                  />
+                  {tr("school.action.markUndone", lang)}
+                </button>
+              ) : (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenMenuId(null);
+                    onMarkDone(exam.id);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
+                >
+                  <Check
+                    size={14}
+                    strokeWidth={2}
+                    className="text-[#64748B]"
+                  />
+                  {tr("school.action.markDone", lang)}
+                </button>
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenMenuId(null);
+                  setConfirmDeleteId(exam.id);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#DC2626] hover:bg-[#FEF2F2] transition-colors"
+              >
+                <Trash2 size={14} strokeWidth={2} />
+                {tr("school.action.delete", lang)}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+      {confirmDeleteId === exam.id && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          onClick={() => setConfirmDeleteId(null)}
+        >
+          <div
+            className="w-full max-w-sm bg-white rounded-2xl shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-5">
+              <p className="text-sm text-[#1A1F36] mb-1">
+                Kas soovid eksami „{exam.title}“ kindlasti kustutada?
+              </p>
+              <p className="text-xs text-[#94A3B8] mb-5">
+                {tr("school.confirm.irreversible", lang)}
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  onClick={() => setConfirmDeleteId(null)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+                >
+                  {tr("school.action.discard", lang)}
+                </button>
+                <button
+                  onClick={() => {
+                    onDelete(exam.id);
+                    setConfirmDeleteId(null);
+                  }}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-[#DC2626] text-white hover:bg-[#B91C1C] transition-colors"
+                >
+                  {tr("school.action.delete", lang)}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Renders a list of subject groups (SubjectExamGroup, the same shape/color
+// approach groupExamsBySubjectAlpha already produces for Kontrolltööd
+// History, School change #9) using EksamRow's own richer row (with its
+// menu/delete-confirm state) rather than the simpler ExamRow — so Eksamid's
+// existing row-level actions are preserved in both its active list and its
+// History section (School change #11).
+function SubjectEksamGroups({
+  groups,
+  lang,
+  isDark,
+  openMenuId,
+  setOpenMenuId,
+  confirmDeleteId,
+  setConfirmDeleteId,
+  onExamClick,
+  onEdit,
+  onMarkDone,
+  onMarkUndone,
+  onDelete,
+}: {
+  groups: SubjectExamGroup[];
+  lang: AppLang;
+  isDark: boolean;
+  openMenuId: number | null;
+  setOpenMenuId: (id: number | null) => void;
+  confirmDeleteId: number | null;
+  setConfirmDeleteId: (id: number | null) => void;
+  onExamClick: (exam: Exam) => void;
+  onEdit: (exam: Exam) => void;
+  onMarkDone: (id: number) => void;
+  onMarkUndone: (id: number) => void;
+  onDelete: (id: number) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      {groups.map((group) => (
+        <div key={group.subject}>
+          <div
+            className="flex items-center gap-2 mb-1.5 pb-1.5 border-b-2"
+            style={{ borderColor: group.color }}
+          >
+            <span
+              className="w-2 h-2 rounded-full flex-shrink-0"
+              style={{ background: group.color }}
+            />
+            <h4
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: group.color }}
+            >
+              {group.subject}
+            </h4>
+          </div>
+          <div className="flex flex-col divide-y divide-[#F3F3F8]">
+            {group.exams.map((exam) => (
+              <EksamRow
+                key={exam.id}
+                exam={exam}
+                lang={lang}
+                isDark={isDark}
+                openMenuId={openMenuId}
+                setOpenMenuId={setOpenMenuId}
+                confirmDeleteId={confirmDeleteId}
+                setConfirmDeleteId={setConfirmDeleteId}
+                onExamClick={onExamClick}
+                onEdit={onEdit}
+                onMarkDone={onMarkDone}
+                onMarkUndone={onMarkUndone}
+                onDelete={onDelete}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function EksamidTab({
   exams,
   onAdd,
@@ -3855,11 +4183,29 @@ function EksamidTab({
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
-  const sorted = [...exams].sort((a, b) => {
+  // Active vs History split (School change #11) — derived purely from the
+  // existing `status` field, never a new field/collection/migration. A
+  // completed exam is only ever in `completedExams`, an active one only
+  // ever in `activeExams`, so it can never appear in both.
+  const activeExams = exams.filter((e) => e.status === "ootel");
+  const completedExams = exams.filter((e) => e.status === "tehtud");
+
+  const sorted = [...activeExams].sort((a, b) => {
     if (a.status === "tehtud" && b.status !== "tehtud") return 1;
     if (a.status !== "tehtud" && b.status === "tehtud") return -1;
     return a.daysLeft - b.daysLeft;
   });
+
+  // History: every completed exam, grouped by subject the same way
+  // Kontrolltööd History already does (groupExamsBySubjectAlpha, School
+  // change #9 — reused as-is, not duplicated). Marking one incomplete again
+  // (Märgi tegemata, already working per change #10) sets its status back
+  // to "ootel", which moves it out of `completedExams`/History and back
+  // into `activeExams` on the very next render — no separate archive state
+  // to reconcile.
+  const historyGroups = groupExamsBySubjectAlpha(
+    [...completedExams].sort((a, b) => a.daysLeft - b.daysLeft),
+  );
 
   return (
     <div>
@@ -3889,225 +4235,48 @@ function EksamidTab({
       ) : (
         <div className="flex flex-col divide-y divide-[#F3F3F8]">
           {sorted.map((exam) => (
-            <div key={exam.id} className="flex items-center gap-4 py-4">
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: isDark ? darkBg(exam.iconBg) : exam.iconBg, color: isDark ? darkText(exam.iconColor) : exam.iconColor }}
-              >
-                <Calendar size={16} strokeWidth={1.8} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <button
-                  onClick={() => onExamClick(exam)}
-                  className="text-sm font-semibold text-[#1A1F36] truncate text-left hover:text-[#6F5AE8] transition-colors block w-full"
-                >
-                  {exam.title}
-                </button>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs font-medium text-[#6F5AE8]">
-                    {exam.subject}
-                  </span>
-                  <span className="text-xs text-[#94A3B8]">·</span>
-                  <span className="text-xs text-[#94A3B8]">{formatDateDisplay(exam.date)}</span>
-                  {exam.time && exam.time.trim() !== "" && (
-                    <>
-                      <span className="text-xs text-[#94A3B8]">·</span>
-                      <span className="text-xs text-[#94A3B8]">
-                        {exam.time}
-                      </span>
-                    </>
-                  )}
-                  {exam.location && exam.location.trim() !== "" && (
-                    <>
-                      <span className="text-xs text-[#94A3B8]">·</span>
-                      <span className="text-xs text-[#94A3B8]">
-                        {exam.location}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
-              <div className="hidden sm:flex flex-col items-end flex-shrink-0">
-                <span className="text-[11px] font-medium text-[#1A1F36]">
-                  {formatDateDisplay(exam.date)}
-                </span>
-                <span className="text-[11px] text-[#94A3B8] flex items-center gap-1 mt-0.5">
-                  <Clock size={10} strokeWidth={2} />
-                  {exam.status === "tehtud"
-                    ? tr("school.detail.doneLabel", lang)
-                    : exam.daysLeft <= 0
-                      ? tr("school.task.today", lang)
-                      : tr("school.task.daysLeft", lang).replace(
-                          "{n}",
-                          String(exam.daysLeft),
-                        )}
-                </span>
-              </div>
-              {exam.moodleUrl && exam.moodleUrl.trim() !== "" && (
-                <a
-                  href={exam.moodleUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#ECECF2] text-xs font-medium text-[#1A1F36] hover:border-[#6F5AE8]/40 hover:bg-[#F8F7FC] transition-colors flex-shrink-0"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {tr("school.action.openMoodle", lang)}
-                  <ExternalLink
-                    size={11}
-                    strokeWidth={2}
-                    className="text-[#94A3B8]"
-                  />
-                </a>
-              )}
-              <span
-                className="flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                style={{
-                  background:
-                    exam.status === "tehtud"
-                      ? "#DCFCE7"
-                      : exam.daysLeft <= 10
-                        ? "#FEF9C3"
-                        : exam.daysLeft <= 20
-                          ? "#DCFCE7"
-                          : "#EDE9FB",
-                  color:
-                    exam.status === "tehtud"
-                      ? "#15803D"
-                      : exam.daysLeft <= 10
-                        ? "#854D0E"
-                        : exam.daysLeft <= 20
-                          ? "#15803D"
-                          : "#6F5AE8",
-                }}
-              >
-                {exam.status === "tehtud"
-                  ? tr("school.detail.doneLabel", lang)
-                  : exam.daysLeft <= 0
-                    ? tr("school.task.today", lang)
-                    : tr("school.task.daysShort", lang).replace(
-                        "{n}",
-                        String(exam.daysLeft),
-                      )}
-              </span>
-              <div className="relative flex-shrink-0">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenMenuId(openMenuId === exam.id ? null : exam.id);
-                  }}
-                  className="text-[#94A3B8] hover:text-[#1A1F36] transition-colors"
-                >
-                  <MoreHorizontal size={16} />
-                </button>
-                {openMenuId === exam.id && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-10"
-                      onClick={() => setOpenMenuId(null)}
-                    />
-                    <div className="absolute right-0 z-20 mt-1 w-44 bg-white rounded-lg border border-[#ECECF2] shadow-lg overflow-hidden">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenMenuId(null);
-                          onEdit(exam);
-                        }}
-                        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
-                      >
-                        <Pencil
-                          size={14}
-                          strokeWidth={2}
-                          className="text-[#64748B]"
-                        />
-                        {tr("school.action.edit", lang)}
-                      </button>
-                      {exam.status === "tehtud" ? (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenMenuId(null);
-                            onMarkUndone(exam.id);
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
-                        >
-                          <Check
-                            size={14}
-                            strokeWidth={2}
-                            className="text-[#64748B]"
-                          />
-                          {tr("school.action.markUndone", lang)}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenMenuId(null);
-                            onMarkDone(exam.id);
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
-                        >
-                          <Check
-                            size={14}
-                            strokeWidth={2}
-                            className="text-[#64748B]"
-                          />
-                          {tr("school.action.markDone", lang)}
-                        </button>
-                      )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenMenuId(null);
-                          setConfirmDeleteId(exam.id);
-                        }}
-                        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#DC2626] hover:bg-[#FEF2F2] transition-colors"
-                      >
-                        <Trash2 size={14} strokeWidth={2} />
-                        {tr("school.action.delete", lang)}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-              {confirmDeleteId === exam.id && (
-                <div
-                  className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-                  onClick={() => setConfirmDeleteId(null)}
-                >
-                  <div
-                    className="w-full max-w-sm bg-white rounded-2xl shadow-xl"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="px-5 py-5">
-                      <p className="text-sm text-[#1A1F36] mb-1">
-                        Kas soovid eksami „{exam.title}“ kindlasti kustutada?
-                      </p>
-                      <p className="text-xs text-[#94A3B8] mb-5">
-                        {tr("school.confirm.irreversible", lang)}
-                      </p>
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => setConfirmDeleteId(null)}
-                          className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
-                        >
-                          {tr("school.action.discard", lang)}
-                        </button>
-                        <button
-                          onClick={() => {
-                            onDelete(exam.id);
-                            setConfirmDeleteId(null);
-                          }}
-                          className="px-4 py-2 rounded-lg text-sm font-medium bg-[#DC2626] text-white hover:bg-[#B91C1C] transition-colors"
-                        >
-                          {tr("school.action.delete", lang)}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            <EksamRow
+              key={exam.id}
+              exam={exam}
+              lang={lang}
+              isDark={isDark}
+              openMenuId={openMenuId}
+              setOpenMenuId={setOpenMenuId}
+              confirmDeleteId={confirmDeleteId}
+              setConfirmDeleteId={setConfirmDeleteId}
+              onExamClick={onExamClick}
+              onEdit={onEdit}
+              onMarkDone={onMarkDone}
+              onMarkUndone={onMarkUndone}
+              onDelete={onDelete}
+            />
           ))}
+        </div>
+      )}
+
+      {/* History — completed Eksamid, grouped by subject (School change
+          #11). Derived only from status === "tehtud"; marking one
+          incomplete again removes it from here and puts it back above on
+          the very next render. */}
+      {historyGroups.length > 0 && (
+        <div className="mt-8 pt-6 border-t border-[#ECECF2]">
+          <h3 className="text-sm font-semibold text-[#1A1F36] mb-4">
+            {tr("school.section.history", lang)}
+          </h3>
+          <SubjectEksamGroups
+            groups={historyGroups}
+            lang={lang}
+            isDark={isDark}
+            openMenuId={openMenuId}
+            setOpenMenuId={setOpenMenuId}
+            confirmDeleteId={confirmDeleteId}
+            setConfirmDeleteId={setConfirmDeleteId}
+            onExamClick={onExamClick}
+            onEdit={onEdit}
+            onMarkDone={onMarkDone}
+            onMarkUndone={onMarkUndone}
+            onDelete={onDelete}
+          />
         </div>
       )}
     </div>

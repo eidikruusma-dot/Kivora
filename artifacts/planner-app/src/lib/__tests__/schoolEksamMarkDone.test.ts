@@ -38,8 +38,14 @@ import { resolve } from 'node:path'
 
 const SCHOOL_PAGE_SRC = readFileSync(resolve(process.cwd(), 'src/views/SchoolPage.tsx'), 'utf8')
 
+// School change #11 pulled EksamidTab's per-exam-row rendering out into a
+// standalone EksamRow component (defined just above EksamidTab) so the new
+// History section can reuse it instead of duplicating that markup. This
+// helper captures that whole region — from EksamRow through the end of
+// EksamidTab itself — so these change #10 structural assertions still see
+// the same row-menu markup as before, just relocated.
 function eksamidTabSource(): string {
-  const match = SCHOOL_PAGE_SRC.match(/function EksamidTab\(\{[\s\S]*?\n}\n/)
+  const match = SCHOOL_PAGE_SRC.match(/function EksamRow\(\{[\s\S]*?\nfunction EksamidTab\([\s\S]*?\n}\n/)
   expect(match).not.toBeNull()
   return match![0]
 }
