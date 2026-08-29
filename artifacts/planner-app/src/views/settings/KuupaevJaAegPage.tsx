@@ -326,7 +326,7 @@ export default function KuupaevJaAegPage({ onBack }: Props) {
           {/* Timezone dropdown */}
           <div className="mt-4">
             <label className="block text-xs font-medium text-[#64748B] mb-1.5">
-              Ajavöönd
+              {t('dt.tz.label', lang)}
             </label>
             <select
               disabled={settings.tzAuto}
