@@ -57,9 +57,8 @@ describe('backup.manual.note key still exists in both languages', () => {
 })
 
 describe('unrelated backup translations are unchanged', () => {
-  it('backup.history.habits keeps its original (separate, out-of-scope) wording', () => {
-    expect(TRANSLATIONS_SRC).toContain('"backup.history.habits": "Harjumused pole varundatud (ainult mälus)"')
-    expect(TRANSLATIONS_SRC).toContain('"backup.history.habits": "Habits are not backed up (memory only)"')
+  it('backup.history.habits key still exists (its own wording is covered by backupHistoryHabitsNoteFixed.test.ts)', () => {
+    expect(TRANSLATIONS_SRC).toMatch(/"backup\.history\.habits":/)
   })
 
   it('other backup.* keys (status/manual title-desc/history/restore) are untouched', () => {
