@@ -124,6 +124,7 @@ const TASK_TYPE_VALUES = [
   "project",
   "worksheet",
   "research",
+  "study_guide",
   "other",
 ] as const;
 
