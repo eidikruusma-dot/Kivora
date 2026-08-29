@@ -230,37 +230,49 @@ export default function WorkScheduleFormModal({ lang, onCancel, onSubmit, onSucc
                 {t('plans.workSchedule.addShift', lang)}
               </button>
             </div>
+            {/* Column header — only at widths wide enough for one row (matches the
+                shift row's own sm: grid breakpoint below); on narrow/mobile widths
+                the stacked row layout makes each field's purpose clear without it. */}
+            <div className="hidden sm:grid sm:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem_2.25rem] sm:gap-2 sm:px-0.5 sm:mb-1">
+              <span className="text-[11px] font-medium text-[#94A3B8]">{t('plans.workSchedule.shiftDateLabel', lang)}</span>
+              <span className="text-[11px] font-medium text-[#94A3B8]">{t('plans.workSchedule.shiftStartLabel', lang)}</span>
+              <span className="text-[11px] font-medium text-[#94A3B8]">{t('plans.workSchedule.shiftEndLabel', lang)}</span>
+              <span aria-hidden="true" />
+            </div>
             <div className="flex flex-col gap-2">
               {shifts.map((row) => {
                 const timesInvalid = row.startTime && row.endTime && !isValidShiftTimes(row.startTime, row.endTime)
                 return (
-                  <div key={row.localId} className="flex items-center gap-2">
+                  <div
+                    key={row.localId}
+                    className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem_2.25rem] sm:items-center"
+                  >
                     <input
                       type="date"
                       aria-label={t('plans.workSchedule.shiftDateLabel', lang)}
                       value={row.date}
                       onChange={(e) => updateShift(row.localId, { date: e.target.value })}
-                      className={`${inputClass} flex-1 min-w-0`}
+                      className={`${inputClass} col-span-2 min-w-0 sm:col-span-1`}
                     />
                     <input
                       type="time"
                       aria-label={t('plans.workSchedule.shiftStartLabel', lang)}
                       value={row.startTime}
                       onChange={(e) => updateShift(row.localId, { startTime: e.target.value })}
-                      className={`${inputClass} w-28 flex-shrink-0 ${timesInvalid ? 'border-[#E11D48]' : ''}`}
+                      className={`${inputClass} min-w-0 ${timesInvalid ? 'border-[#E11D48]' : ''}`}
                     />
                     <input
                       type="time"
                       aria-label={t('plans.workSchedule.shiftEndLabel', lang)}
                       value={row.endTime}
                       onChange={(e) => updateShift(row.localId, { endTime: e.target.value })}
-                      className={`${inputClass} w-28 flex-shrink-0 ${timesInvalid ? 'border-[#E11D48]' : ''}`}
+                      className={`${inputClass} min-w-0 ${timesInvalid ? 'border-[#E11D48]' : ''}`}
                     />
                     <button
                       onClick={() => removeShiftRow(row.localId)}
                       disabled={shifts.length <= 1}
                       aria-label={t('plans.workSchedule.removeShift', lang)}
-                      className="w-9 h-9 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#FEE2E2] hover:text-[#DC2626] transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+                      className="col-span-2 justify-self-end w-9 h-9 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#FEE2E2] hover:text-[#DC2626] transition-colors disabled:opacity-30 disabled:cursor-not-allowed sm:col-span-1 sm:justify-self-auto"
                     >
                       <Trash2 size={15} />
                     </button>
