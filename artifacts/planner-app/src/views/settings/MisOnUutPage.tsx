@@ -25,8 +25,8 @@ const RELEASES: ReleaseEntry[] = [
       en: 'Official Public Release',
     },
     description: {
-      et: 'Kivora on nüüd ametlikult saadaval. Haldage ülesandeid, märkmeid, harjumusi, eesmärke, kalendrit, rahandust ja palju muud ühes kohas.',
-      en: 'Kivora is now officially available. Manage your tasks, notes, habits, goals, calendar, finances and more in one place.',
+      et: 'Kivora on nüüd ametlikult saadaval. Haldage ülesandeid, märkmeid, harjumusi, eesmärke, kalendrit ja palju muud ühes kohas.',
+      en: 'Kivora is now officially available. Manage your tasks, notes, habits, goals, calendar and more in one place.',
     },
     items: [
       { et: 'Ülesannete haldus prioriteetide, tähtaegade ja alamülesannetega', en: 'Task management with priorities, due dates and subtasks' },
@@ -34,7 +34,6 @@ const RELEASES: ReleaseEntry[] = [
       { et: 'Rikkaliku tekstiga märkmete redaktor', en: 'Rich text notes editor' },
       { et: 'Harjumuste jälgimine', en: 'Habit tracking' },
       { et: 'Eesmärgid edusammude jälgimisega', en: 'Goals with progress tracking' },
-      { et: 'Isikliku rahanduse moodul (tulud, kulud ja eelarved)', en: 'Personal finance module (income, expenses and budgets)' },
       { et: 'AI-assistent', en: 'AI Assistant' },
       { et: 'Täielik seadete süsteem', en: 'Complete Settings system' },
       { et: 'Andmete eksport ja varundamine', en: 'Data export and backup' },
