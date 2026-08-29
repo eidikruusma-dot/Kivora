@@ -2,6 +2,8 @@ import type { AppLang } from '@/lib/languageStore'
 import { buildAIContext } from '@/lib/aiContextBuilder'
 import type { AIAction } from '@/lib/aiActions'
 import { authenticatedFetch } from '@/lib/authenticatedFetch'
+import { auth } from '@/lib/firebase'
+import { loadSettingsStrict } from '@/lib/settingsStore'
 
 export interface AIResponse {
   reply: string
@@ -126,23 +128,68 @@ export async function fetchAIReply(
   const _now = new Date()
   const localDate = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`
 
+  let context: string
+
+  if (contextOverride !== undefined) {
+    // Explicit caller-provided context remains authoritative.
+    // Example: plan generation deliberately supplies its own targeted context
+    // instead of the user's full stored Kivora data.
+    context = contextOverride
+  } else {
+    const uid = auth.currentUser?.uid
+
+    if (!uid) {
+      // No authenticated user means there is no safe personal context to add.
+      context = ''
+    } else {
+      try {
+        const privacy = await loadSettingsStrict(
+          uid,
+          'privacy',
+          {
+            analytics: true,
+            crashReports: true,
+            aiData: true,
+          },
+        )
+
+        // Privacy setting:
+        // OFF keeps the AI assistant usable, but prevents the user's stored
+        // Kivora module data from being included in the model context.
+        context = privacy.aiData ? buildAIContext(lang) : ''
+      } catch {
+        // Privacy-safe failure mode:
+        // if consent cannot be verified, do not send personal Kivora context.
+        context = ''
+      }
+    }
+  }
+
   const res = await authenticatedFetch('/api/ai/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       messages: windowConversationHistory(history),
-      context: contextOverride !== undefined ? contextOverride : buildAIContext(lang),
+      context,
       lang,
       localDate,
       mode,
     }),
   })
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `Request failed (${res.status}).`)
   }
+
   const data = await res.json()
-  if (!data.reply && (!data.actions || data.actions.length === 0))
+
+  if (!data.reply && (!data.actions || data.actions.length === 0)) {
     throw new Error('AI returned no reply.')
-  return { reply: data.reply || '', actions: data.actions || [] }
+  }
+
+  return {
+    reply: data.reply || '',
+    actions: data.actions || [],
+  }
 }
