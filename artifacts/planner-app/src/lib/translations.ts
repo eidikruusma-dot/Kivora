@@ -1254,6 +1254,7 @@ export type TranslationKey =
     | "sched.modal.editLesson"
     | "sched.modal.addLesson"
     | "sched.modal.addBlock"
+    | "sched.modal.lessonDetails"
     | "sched.field.subject"
     | "sched.field.subjectPh"
     | "sched.field.day"
@@ -3278,6 +3279,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "sched.modal.editLesson": "Muuda kirjet",
         "sched.modal.addLesson": "Lisa tund",
         "sched.modal.addBlock": "Lisa õppimisblokk",
+        "sched.modal.lessonDetails": "Kirje andmed",
         "sched.field.subject": "Aine või tegevus",
         "sched.field.subjectPh": "Vali aine või tegevus",
         "sched.field.day": "Nädalapäev",
@@ -5314,6 +5316,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "sched.modal.editLesson": "Edit entry",
         "sched.modal.addLesson": "Add lesson",
         "sched.modal.addBlock": "Add study block",
+        "sched.modal.lessonDetails": "Entry details",
         "sched.field.subject": "Subject or activity",
         "sched.field.subjectPh": "Select a subject or activity",
         "sched.field.day": "Day of week",

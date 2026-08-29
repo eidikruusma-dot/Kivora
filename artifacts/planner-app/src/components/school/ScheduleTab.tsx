@@ -107,6 +107,7 @@ export default function ScheduleTab({ mode, lessons, onModeChange, onAdd, onUpda
   const [modalOpen, setModalOpen] = useState(false)
   const [editingLesson, setEditingLesson] = useState<ScheduleLesson | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [selectedLesson, setSelectedLesson] = useState<ScheduleLesson | null>(null)
 
   const openAdd = () => {
     setEditingLesson(null)
@@ -216,7 +217,8 @@ export default function ScheduleTab({ mode, lessons, onModeChange, onAdd, onUpda
                 return (
                   <div
                     key={lesson.id}
-                    className="rounded-xl border border-[#ECECF2] p-3.5"
+                    onClick={() => setSelectedLesson(lesson)}
+                    className="rounded-xl border border-[#ECECF2] p-3.5 cursor-pointer"
                     style={{ background: cardBg }}
                   >
                     <div className="flex items-center gap-3">
@@ -260,7 +262,7 @@ export default function ScheduleTab({ mode, lessons, onModeChange, onAdd, onUpda
                       <div className="flex items-center gap-1 flex-shrink-0">
                         {onQuickAddAssignment && (
                           <button
-                            onClick={() => onQuickAddAssignment(lesson.subject)}
+                            onClick={(e) => { e.stopPropagation(); onQuickAddAssignment(lesson.subject) }}
                             title={lang === 'et' ? 'Lisa kodutöö' : 'Add assignment'}
                             className="w-7 h-7 rounded-lg flex items-center justify-center text-[#64748B] hover:bg-white/60 hover:text-[#6F5AE8] transition-colors"
                           >
@@ -268,13 +270,13 @@ export default function ScheduleTab({ mode, lessons, onModeChange, onAdd, onUpda
                           </button>
                         )}
                         <button
-                          onClick={() => openEdit(lesson)}
+                          onClick={(e) => { e.stopPropagation(); openEdit(lesson) }}
                           className="w-7 h-7 rounded-lg flex items-center justify-center text-[#64748B] hover:bg-white/60 hover:text-[#6F5AE8] transition-colors"
                         >
                           <Pencil size={13} strokeWidth={2} />
                         </button>
                         <button
-                          onClick={() => setConfirmDeleteId(lesson.id)}
+                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(lesson.id) }}
                           className="w-7 h-7 rounded-lg flex items-center justify-center text-[#64748B] hover:bg-white/60 hover:text-[#DC2626] transition-colors"
                         >
                           <Trash2 size={13} strokeWidth={2} />
@@ -283,7 +285,10 @@ export default function ScheduleTab({ mode, lessons, onModeChange, onAdd, onUpda
                     </div>
 
                     {isConfirming && (
-                      <div className="flex items-center justify-end gap-2 mt-2.5 pt-2.5 border-t border-black/5">
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center justify-end gap-2 mt-2.5 pt-2.5 border-t border-black/5"
+                      >
                         <span className="text-xs text-[#64748B] mr-auto">{t('sched.confirm.delete', lang)}</span>
                         <button
                           onClick={() => setConfirmDeleteId(null)}
@@ -316,6 +321,153 @@ export default function ScheduleTab({ mode, lessons, onModeChange, onAdd, onUpda
           onSave={handleSave}
         />
       )}
+
+      {selectedLesson && (
+        <LessonDetailModal
+          lesson={selectedLesson}
+          lang={lang}
+          onClose={() => setSelectedLesson(null)}
+          onEdit={() => {
+            setSelectedLesson(null)
+            openEdit(selectedLesson)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Lesson detail modal (read-only) ─────────────────────────────────────────
+
+function LessonDetailModal({
+  lesson,
+  lang,
+  onClose,
+  onEdit,
+}: {
+  lesson: ScheduleLesson
+  lang: AppLang
+  onClose: () => void
+  onEdit: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md bg-white rounded-2xl shadow-xl flex flex-col max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2] flex-shrink-0">
+          <h2 className="text-base font-semibold text-[#1A1F36]">
+            {t('sched.modal.lessonDetails', lang)}
+          </h2>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 flex flex-col gap-4 flex-1 overflow-y-auto">
+          <div>
+            <p className="text-xs font-medium text-[#64748B] mb-1">
+              {t('sched.field.subject', lang)}
+            </p>
+            <p className="text-sm text-[#1A1F36]">{lesson.subject}</p>
+          </div>
+
+          {lesson.day && (
+            <div>
+              <p className="text-xs font-medium text-[#64748B] mb-1">
+                {t('sched.field.day', lang)}
+              </p>
+              <p className="text-sm text-[#1A1F36]">{lesson.day}</p>
+            </div>
+          )}
+
+          {(lesson.startDate || lesson.date) && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-medium text-[#64748B] mb-1">
+                  {t('sched.field.startDate', lang)}
+                </p>
+                <p className="text-sm text-[#1A1F36]">{lesson.startDate ?? lesson.date}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-[#64748B] mb-1">
+                  {t('sched.field.endDate', lang)}
+                </p>
+                <p className="text-sm text-[#1A1F36]">{lesson.endDate ?? lesson.date}</p>
+              </div>
+            </div>
+          )}
+
+          {lesson.startTime && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-medium text-[#64748B] mb-1">
+                  {t('sched.field.start', lang)}
+                </p>
+                <p className="text-sm text-[#1A1F36]">{lesson.startTime}</p>
+              </div>
+              {lesson.endTime && (
+                <div>
+                  <p className="text-xs font-medium text-[#64748B] mb-1">
+                    {t('sched.field.end', lang)}
+                  </p>
+                  <p className="text-sm text-[#1A1F36]">{lesson.endTime}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {lesson.room && (
+            <div>
+              <p className="text-xs font-medium text-[#64748B] mb-1">
+                {t('sched.field.room', lang)}
+              </p>
+              <p className="text-sm text-[#1A1F36]">{lesson.room}</p>
+            </div>
+          )}
+
+          {lesson.teacher && (
+            <div>
+              <p className="text-xs font-medium text-[#64748B] mb-1">
+                {t('sched.field.teacher', lang)}
+              </p>
+              <p className="text-sm text-[#1A1F36]">{lesson.teacher}</p>
+            </div>
+          )}
+
+          {lesson.assessment && (
+            <div>
+              <p className="text-xs font-medium text-[#64748B] mb-1">
+                {t('sched.field.assessment', lang)}
+              </p>
+              <p className="text-sm text-[#1A1F36] whitespace-pre-wrap">{lesson.assessment}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2] flex-shrink-0">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+          >
+            {t('school.action.close', lang)}
+          </button>
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors"
+          >
+            <Pencil size={14} strokeWidth={2} />
+            {t('school.action.edit', lang)}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
