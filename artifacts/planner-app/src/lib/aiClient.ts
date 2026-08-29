@@ -1,4 +1,5 @@
 import type { AppLang } from '@/lib/languageStore'
+import { getLocalLangSettings } from '@/lib/languageStore'
 import { buildAIContext } from '@/lib/aiContextBuilder'
 import type { AIAction } from '@/lib/aiActions'
 import { authenticatedFetch } from '@/lib/authenticatedFetch'
@@ -128,6 +129,15 @@ export async function fetchAIReply(
   const _now = new Date()
   const localDate = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`
 
+  // Resolve the separate AI-language preference (Settings > Language),
+  // independent of the UI language `lang` already represents. 'same' keeps
+  // matching the caller's current app language exactly as before; 'et'/'en'
+  // force that language for the AI regardless of the UI. This is the only
+  // place this resolution happens — callers keep passing their app language
+  // unchanged, and UI text elsewhere is entirely unaffected.
+  const { aiLang } = getLocalLangSettings()
+  const effectiveLang: AppLang = aiLang === 'same' ? lang : aiLang
+
   let context: string
 
   if (contextOverride !== undefined) {
@@ -156,7 +166,7 @@ export async function fetchAIReply(
         // Privacy setting:
         // OFF keeps the AI assistant usable, but prevents the user's stored
         // Kivora module data from being included in the model context.
-        context = privacy.aiData ? buildAIContext(lang) : ''
+        context = privacy.aiData ? buildAIContext(effectiveLang) : ''
       } catch {
         // Privacy-safe failure mode:
         // if consent cannot be verified, do not send personal Kivora context.
@@ -171,7 +181,7 @@ export async function fetchAIReply(
     body: JSON.stringify({
       messages: windowConversationHistory(history),
       context,
-      lang,
+      lang: effectiveLang,
       localDate,
       mode,
     }),

@@ -358,8 +358,11 @@ describe('aiClient.ts: every chat request rebuilds context fresh, never from a c
     expect(FETCH_AI_REPLY_SRC).toMatch(/if \(contextOverride !== undefined\) \{[\s\S]*?context = contextOverride/)
   })
 
-  it('with no override, buildAIContext(lang) is called inline at request time, gated only by the privacy setting', () => {
-    expect(FETCH_AI_REPLY_SRC).toMatch(/context = privacy\.aiData \? buildAIContext\(lang\) : ''/)
+  it('with no override, buildAIContext is called inline at request time with the resolved AI language, gated only by the privacy setting', () => {
+    // effectiveLang resolves the separate AI-language preference (aiLang) —
+    // see aiLanguagePreference.test.ts — but is still computed fresh, per
+    // request, right alongside this call; nothing here is cached either.
+    expect(FETCH_AI_REPLY_SRC).toMatch(/context = privacy\.aiData \? buildAIContext\(effectiveLang\) : ''/)
   })
 
   it('nothing stores buildAIContext\'s result in a variable/ref outside the request body', () => {
