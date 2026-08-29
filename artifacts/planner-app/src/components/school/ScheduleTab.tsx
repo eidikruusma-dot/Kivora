@@ -26,6 +26,8 @@ export interface ScheduleLesson {
   teacher?: string
   dotColor: string
   cardBg: string
+  /** Free-text assessment guide/rules for this specific learning block (not the Subject) */
+  assessment?: string
 }
 
 export function getDays(lang: AppLang): string[] {
@@ -353,6 +355,9 @@ function LessonModal({
   const [endDate, setEndDate] = useState(lesson?.endDate ?? lesson?.date ?? '')
   const [room, setRoom] = useState(lesson?.room ?? '')
   const [teacher, setTeacher] = useState(lesson?.teacher ?? '')
+  // Hindamine / Assessment — belongs to this specific learning block, not
+  // the Subject (see SchoolPage.tsx's Subject.assessment, added separately).
+  const [assessment, setAssessment] = useState(lesson?.assessment ?? '')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -484,6 +489,7 @@ function LessonModal({
         endTime: isTraditional ? (endTime || undefined) : undefined,
         room: room || undefined,
         teacher: teacher || undefined,
+        assessment: assessment.trim() || undefined,
         dotColor,
         cardBg,
       })
@@ -705,6 +711,19 @@ function LessonModal({
                 className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {t('sched.field.assessment', lang)} {optional}
+            </label>
+            <textarea
+              value={assessment}
+              onChange={(e) => setAssessment(e.target.value)}
+              placeholder={t('sched.field.assessmentPh', lang)}
+              rows={5}
+              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] resize-y"
+            />
           </div>
         </div>
 

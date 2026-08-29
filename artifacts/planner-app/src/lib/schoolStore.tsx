@@ -269,6 +269,8 @@ export interface SchoolLesson {
   teacher?: string
   dotColor: string
   cardBg: string
+  /** Free-text assessment guide/rules for this specific learning block (not the Subject) */
+  assessment?: string
 }
 
 // ── Stored shapes (no ReactNode; daysLeft omitted) ───────────────────────────
@@ -336,6 +338,7 @@ interface StoredLesson {
   teacher?: string
   dotColor: string
   cardBg: string
+  assessment?: string
 }
 
 type StoredItem = StoredTask | StoredExam | StoredSubject | StoredLesson
