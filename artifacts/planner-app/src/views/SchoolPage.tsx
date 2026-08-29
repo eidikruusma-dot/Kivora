@@ -5094,7 +5094,7 @@ function TaskDetailModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-white rounded-2xl shadow-xl"
+        className="w-full max-w-md md:max-w-2xl bg-white rounded-2xl shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2]">
