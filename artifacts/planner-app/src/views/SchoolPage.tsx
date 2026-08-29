@@ -425,7 +425,7 @@ const MAX_HOURS = 4;
 // ── Study hours computation from scheduled lessons ─────────────────────────
 // Maps the ET weekday names stored in ScheduleLesson.day to the short day
 // labels used by the chart, then sums hours from startTime/endTime pairs.
-function computeStudyHoursFromLessons(
+export function computeStudyHoursFromLessons(
   lessons: ScheduleLesson[],
 ): { day: string; hours: number; label: string }[] {
   const DAY_MAP = [
@@ -453,6 +453,26 @@ function computeStudyHoursFromLessons(
     const h = Math.round(acc[d.short] * 10) / 10;
     return { day: d.short, hours: h, label: h > 0 ? `${h}h` : "0h" };
   });
+}
+
+// ── Planned/estimated study time (School change #14A) ──────────────────────
+// A learning block contributes either its real day+startTime+endTime
+// duration (via computeStudyHoursFromLessons above, unchanged) or — only
+// when it has no complete recurring time triple, e.g. a flexible/e-learning
+// block using startDate/endDate instead — its own plannedStudyMinutes
+// estimate. Never both for the same block, and this never feeds the
+// per-weekday bars (a date-ranged block has no single weekday to attach
+// to): it only adds to total workload figures.
+export function computePlannedStudyMinutes(lessons: ScheduleLesson[]): number {
+  let total = 0;
+  for (const l of lessons) {
+    const hasRealSchedule = !!(l.day && l.startTime && l.endTime);
+    if (hasRealSchedule) continue;
+    if (typeof l.plannedStudyMinutes === "number" && l.plannedStudyMinutes > 0) {
+      total += l.plannedStudyMinutes;
+    }
+  }
+  return total;
 }
 
 // ── Progress ring ──────────────────────────────────────────────────────────
@@ -570,6 +590,13 @@ export default function SchoolPage() {
   // Compute real study hours from scheduled lessons (startTime/endTime pairs)
   const liveStudyHours = useMemo(
     () => computeStudyHoursFromLessons(scheduleLessons),
+    [scheduleLessons],
+  );
+  // Planned/estimated minutes from blocks with no real day+startTime+endTime
+  // — School change #14A. Added only to total workload figures below, never
+  // to the per-weekday bars in liveStudyHours.
+  const plannedStudyMinutes = useMemo(
+    () => computePlannedStudyMinutes(scheduleLessons),
     [scheduleLessons],
   );
 
@@ -733,10 +760,11 @@ export default function SchoolPage() {
               iconBg="#EFF6FF"
               iconColor="#2563EB"
               value={(() => {
-                const total = liveStudyHours.reduce((s, d) => s + d.hours, 0);
-                if (total === 0) return '0h';
-                const h = Math.floor(total);
-                const m = Math.round((total % 1) * 60);
+                const realMinutes = Math.round(liveStudyHours.reduce((s, d) => s + d.hours, 0) * 60);
+                const totalMinutes = realMinutes + plannedStudyMinutes;
+                if (totalMinutes === 0) return '0h';
+                const h = Math.floor(totalMinutes / 60);
+                const m = totalMinutes % 60;
                 return m > 0 ? `${h}h ${m}m` : `${h}h`;
               })()}
               label={tr("school.stat.studyTime", lang)}
@@ -838,6 +866,7 @@ export default function SchoolPage() {
                 scheduleLessons={scheduleLessons}
                 scheduleMode={scheduleMode}
                 studyHours={liveStudyHours}
+                plannedStudyMinutes={plannedStudyMinutes}
                 onNavigate={setActiveTab}
               />
             )}
@@ -2262,6 +2291,7 @@ function UlevaadeTab({
   scheduleLessons,
   scheduleMode,
   studyHours,
+  plannedStudyMinutes,
   onNavigate,
 }: {
   tasks: Task[];
@@ -2270,6 +2300,7 @@ function UlevaadeTab({
   scheduleLessons: ScheduleLesson[];
   scheduleMode: ScheduleMode;
   studyHours: { day: string; hours: number; label: string }[];
+  plannedStudyMinutes: number;
   onNavigate: (tab: TabId) => void;
 }) {
   const lang = getLocalLanguage();
@@ -2327,8 +2358,13 @@ function UlevaadeTab({
   // 5. Õpitavad ained
   const activeSubjectsCount = subjects.length;
 
-  // 6. Õppimise statistika (real hours from scheduled lessons via prop)
-  const totalStudyHours = studyHours.reduce((sum, d) => sum + d.hours, 0);
+  // 6. Õppimise statistika (real hours from scheduled lessons via prop, plus
+  // planned/estimated minutes from blocks with no real day+startTime+endTime
+  // — School change #14A. Combined in minutes to avoid float drift, then
+  // converted back to hours for the existing display below.
+  const totalStudyMinutes =
+    Math.round(studyHours.reduce((sum, d) => sum + d.hours, 0) * 60) + plannedStudyMinutes;
+  const totalStudyHours = totalStudyMinutes / 60;
   const completedTestsCount = exams.filter(
     (e) => e.type === "kontrolltöö" && e.status === "tehtud",
   ).length;

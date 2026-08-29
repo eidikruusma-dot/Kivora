@@ -303,6 +303,10 @@ export interface SchoolLesson {
   cardBg: string
   /** Free-text assessment guide/rules for this specific learning block (not the Subject) */
   assessment?: string
+  /** Planned/estimated study workload in minutes — School change #14A. Not a
+   * timer: a user-entered estimate, only meaningful for totals when this
+   * block lacks a complete day+startTime+endTime (see computePlannedStudyMinutes). */
+  plannedStudyMinutes?: number
 }
 
 // ── Stored shapes (no ReactNode; daysLeft omitted) ───────────────────────────
@@ -372,6 +376,7 @@ interface StoredLesson {
   dotColor: string
   cardBg: string
   assessment?: string
+  plannedStudyMinutes?: number
 }
 
 type StoredItem = StoredTask | StoredExam | StoredSubject | StoredLesson

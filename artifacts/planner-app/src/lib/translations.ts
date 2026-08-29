@@ -1274,6 +1274,8 @@ export type TranslationKey =
     | "sched.field.teacherPh"
     | "sched.field.assessment"
     | "sched.field.assessmentPh"
+    | "sched.field.plannedStudyTime"
+    | "sched.field.plannedStudyTimePh"
     | "sched.field.optional"
     | "sched.field.error.subject"
     | "sched.field.error.startDate"
@@ -3299,6 +3301,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "sched.field.teacherPh": "nt. M. Tamm",
         "sched.field.assessment": "Hindamine",
         "sched.field.assessmentPh": "nt 07.09 – Kursust sissejuhatav test",
+        "sched.field.plannedStudyTime": "Planeeritud õppeaeg",
+        "sched.field.plannedStudyTimePh": "nt 6 (tundides)",
         "sched.field.optional": "valikuline",
         "sched.field.error.subject": "Sisesta aine või tegevuse nimi.",
         "sched.field.error.startDate": "Sisesta alguskuupäev.",
@@ -5341,6 +5345,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "sched.field.teacherPh": "e.g. M. Smith",
         "sched.field.assessment": "Assessment",
         "sched.field.assessmentPh": "e.g. Sep 7 – Introductory test",
+        "sched.field.plannedStudyTime": "Planned study time",
+        "sched.field.plannedStudyTimePh": "e.g. 6 (hours)",
         "sched.field.optional": "optional",
         "sched.field.error.subject": "Please enter a subject or activity name.",
         "sched.field.error.startDate": "Please enter a start date.",
