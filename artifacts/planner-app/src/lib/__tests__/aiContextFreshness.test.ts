@@ -53,7 +53,9 @@ const deleteDocMock = vi.fn(() => Promise.resolve())
 const writeBatchDeleteMock = vi.fn()
 const writeBatchCommitMock = vi.fn(() => Promise.resolve())
 const writeBatchMock = vi.fn(() => ({ delete: writeBatchDeleteMock, commit: writeBatchCommitMock }))
-const getDocMock = vi.fn(() => Promise.resolve({ exists: () => true }))
+// Also backs aiClient.ts's loadSettingsStrict() privacy-settings read —
+// empty data() means its defaults ({aiData: true, ...}) apply.
+const getDocMock = vi.fn(() => Promise.resolve({ exists: () => true, data: () => ({}) }))
 
 vi.mock('firebase/firestore', () => ({
   collection: vi.fn(() => ({})),
@@ -344,11 +346,23 @@ describe('11. no duplicate Firestore subscriptions are created by repeated fresh
 const AI_CLIENT_SRC = readFileSync(resolve(process.cwd(), 'src/lib/aiClient.ts'), 'utf8')
 
 describe('aiClient.ts: every chat request rebuilds context fresh, never from a cached/memoized value', () => {
-  it('fetchAIReply calls buildAIContext(lang) inline at request time when no override is given', () => {
-    expect(AI_CLIENT_SRC).toMatch(
-      /context: contextOverride !== undefined \? contextOverride : buildAIContext\(lang\),/,
-    )
-    // Nothing stores buildAIContext's result in a variable/ref outside the request body.
+  // fetchAIReply's body, since the privacy-gate change (loadSettingsStrict)
+  // replaced the old single-line ternary with an if/else assigning
+  // `context` — these assertions check the same intent (contextOverride
+  // stays authoritative; buildAIContext is only ever called inline,
+  // per-request, never cached) against the current structure.
+  const FETCH_AI_REPLY_SRC =
+    AI_CLIENT_SRC.match(/export async function fetchAIReply\([\s\S]*?\n}\n/)?.[0] ?? ''
+
+  it('an explicit contextOverride is used as-is, before the privacy-gated buildAIContext branch is ever reached', () => {
+    expect(FETCH_AI_REPLY_SRC).toMatch(/if \(contextOverride !== undefined\) \{[\s\S]*?context = contextOverride/)
+  })
+
+  it('with no override, buildAIContext(lang) is called inline at request time, gated only by the privacy setting', () => {
+    expect(FETCH_AI_REPLY_SRC).toMatch(/context = privacy\.aiData \? buildAIContext\(lang\) : ''/)
+  })
+
+  it('nothing stores buildAIContext\'s result in a variable/ref outside the request body', () => {
     expect(AI_CLIENT_SRC).not.toMatch(/const\s+\w+\s*=\s*buildAIContext\(/)
     expect(AI_CLIENT_SRC).not.toMatch(/useMemo\(.*buildAIContext/)
     expect(AI_CLIENT_SRC).not.toMatch(/useRef\(.*buildAIContext/)

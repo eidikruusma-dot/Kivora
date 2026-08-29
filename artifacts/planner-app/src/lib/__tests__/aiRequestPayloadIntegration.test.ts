@@ -52,7 +52,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Task } from '@/types'
 import type { Plan } from '@/lib/plansStore'
 
-type MockAuthUser = { getIdToken: () => Promise<string> } | null
+type MockAuthUser = { uid: string; getIdToken: () => Promise<string> } | null
 vi.mock('@/lib/firebase', () => ({
   db: {},
   auth: { currentUser: null as MockAuthUser },
@@ -75,10 +75,13 @@ const deleteDocMock = vi.fn(() => Promise.resolve())
 const writeBatchDeleteMock = vi.fn()
 const writeBatchCommitMock = vi.fn(() => Promise.resolve())
 const writeBatchMock = vi.fn(() => ({ delete: writeBatchDeleteMock, commit: writeBatchCommitMock }))
-// verifyDoc() reads back the doc that was just written — default to "found"
-// (matches a real write that actually landed); individual tests override
-// this to simulate a write that silently never persisted.
-const getDocMock = vi.fn(() => Promise.resolve({ exists: () => true }))
+// getDoc is shared by two unrelated callers: verifyDoc() (reads back the
+// doc that was just written — only ever reads .exists(); individual tests
+// override this to simulate a write that silently never persisted) and
+// aiClient.ts's loadSettingsStrict() privacy-settings read (reads .data()
+// too). Default "found" with empty data() matches both a real write that
+// landed AND a privacy doc that resolves to its {aiData: true, ...} defaults.
+const getDocMock = vi.fn(() => Promise.resolve({ exists: () => true, data: () => ({}) }))
 
 vi.mock('firebase/firestore', () => ({
   collection: vi.fn(() => ({})),
@@ -200,7 +203,7 @@ beforeEach(() => {
   writeBatchCommitMock.mockImplementation(() => Promise.resolve())
   writeBatchMock.mockClear()
   getDocMock.mockClear()
-  getDocMock.mockImplementation(() => Promise.resolve({ exists: () => true }))
+  getDocMock.mockImplementation(() => Promise.resolve({ exists: () => true, data: () => ({}) }))
 
   initTasksStore(UID)    // onSnapshot call index 0
   initNotesStore(UID)    // 1
@@ -223,6 +226,7 @@ beforeEach(() => {
   )
   vi.stubGlobal('fetch', fetchMock)
   ;(auth as unknown as { currentUser: MockAuthUser }).currentUser = {
+    uid: UID,
     getIdToken: () => Promise.resolve('synthetic-token'),
   }
 })

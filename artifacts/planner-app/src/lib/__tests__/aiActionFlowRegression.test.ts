@@ -63,9 +63,12 @@ const deleteDocMock = vi.fn(() => Promise.resolve())
 const writeBatchDeleteMock = vi.fn()
 const writeBatchCommitMock = vi.fn(() => Promise.resolve())
 const writeBatchMock = vi.fn(() => ({ delete: writeBatchDeleteMock, commit: writeBatchCommitMock }))
-// verifyDoc() reads back the doc that was just written — default "found",
-// matching a real write that actually landed.
-const getDocMock = vi.fn(() => Promise.resolve({ exists: () => true }))
+// getDoc is shared by two unrelated callers: verifyDoc() (post-write
+// verification — only ever reads .exists()) and aiClient.ts's
+// loadSettingsStrict() privacy-settings read (reads .data() too). Default
+// "found" with empty data() matches both a real write that landed AND a
+// privacy doc that resolves to its {aiData: true, ...} defaults.
+const getDocMock = vi.fn(() => Promise.resolve({ exists: () => true, data: () => ({}) }))
 
 vi.mock('firebase/firestore', () => ({
   collection: vi.fn(() => ({})),
@@ -150,7 +153,7 @@ beforeEach(() => {
   writeBatchCommitMock.mockClear()
   writeBatchMock.mockClear()
   getDocMock.mockClear()
-  getDocMock.mockImplementation(() => Promise.resolve({ exists: () => true }))
+  getDocMock.mockImplementation(() => Promise.resolve({ exists: () => true, data: () => ({}) }))
 
   initTasksStore(UID)    // onSnapshot call index 0
   initNotesStore(UID)    // 1
@@ -246,13 +249,17 @@ describe('1-6. the exact live-incident flow: create a task from an AI turn', () 
 
 describe('a failed create produces a visible error, never an empty response', () => {
   it('a rejected write (post-write verification fails) shows the real failure text, not a blank bubble', async () => {
-    getDocMock.mockImplementationOnce(() => Promise.resolve({ exists: () => false }))
     mockApiReply({
       reply: 'Lisasin selle ülesande!',
       actions: [{ type: 'create_task', data: { title: 'Kaduv ülesanne' } }],
     })
 
     const res = await fetchAIReply([{ role: 'user', content: 'Loo ülesanne Kaduv ülesanne' }], 'et')
+    // Queued AFTER fetchAIReply's own privacy-settings getDoc read (which
+    // must see the default "found" mock) so this "not found" override is
+    // consumed by executeActionsAsync's verifyDoc() call below instead —
+    // the actual thing this test means to simulate failing.
+    getDocMock.mockImplementationOnce(() => Promise.resolve({ exists: () => false }))
     const actionCtx = { uid: UID, getFile: () => null, getAllDocuments: vi.fn(() => []) as never }
     const results = await executeActionsAsync(res.actions, actionCtx)
     expect(results[0]!.success).toBe(false)

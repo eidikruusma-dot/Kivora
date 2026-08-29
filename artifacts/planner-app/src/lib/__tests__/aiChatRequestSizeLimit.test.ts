@@ -40,7 +40,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Task } from '@/types'
 
-type MockAuthUser = { getIdToken: () => Promise<string> } | null
+type MockAuthUser = { uid: string; getIdToken: () => Promise<string> } | null
 vi.mock('@/lib/firebase', () => ({
   db: {},
   auth: { currentUser: null as MockAuthUser },
@@ -59,7 +59,9 @@ const onSnapshotMock = vi.fn(
 vi.mock('firebase/firestore', () => ({
   collection: vi.fn(() => ({})),
   doc: vi.fn((_db: unknown, ...segments: string[]) => ({ path: segments.join('/') })),
-  getDoc: vi.fn(() => Promise.resolve({ exists: () => true })),
+  // Also backs aiClient.ts's loadSettingsStrict() privacy-settings read —
+  // empty data() means its defaults ({aiData: true, ...}) apply.
+  getDoc: vi.fn(() => Promise.resolve({ exists: () => true, data: () => ({}) })),
   setDoc: vi.fn(() => Promise.resolve()),
   updateDoc: vi.fn(() => Promise.resolve()),
   deleteDoc: vi.fn(() => Promise.resolve()),
@@ -140,6 +142,7 @@ beforeEach(() => {
   fetchMock.mockReset()
   vi.stubGlobal('fetch', fetchMock)
   ;(auth as unknown as { currentUser: MockAuthUser }).currentUser = {
+    uid: UID,
     getIdToken: () => Promise.resolve('synthetic-token'),
   }
 })

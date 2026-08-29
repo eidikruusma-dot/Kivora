@@ -37,7 +37,9 @@ const deleteDocMock = vi.fn(() => Promise.resolve())
 const writeBatchDeleteMock = vi.fn()
 const writeBatchCommitMock = vi.fn(() => Promise.resolve())
 const writeBatchMock = vi.fn(() => ({ delete: writeBatchDeleteMock, commit: writeBatchCommitMock }))
-const getDocMock = vi.fn(() => Promise.resolve({ exists: () => true }))
+// Also backs aiClient.ts's loadSettingsStrict() privacy-settings read —
+// empty data() means its defaults ({aiData: true, ...}) apply.
+const getDocMock = vi.fn(() => Promise.resolve({ exists: () => true, data: () => ({}) }))
 
 vi.mock('firebase/firestore', () => ({
   collection: vi.fn(() => ({})),
@@ -139,7 +141,7 @@ beforeEach(() => {
   writeBatchCommitMock.mockImplementation(() => Promise.resolve())
   writeBatchMock.mockClear()
   getDocMock.mockClear()
-  getDocMock.mockImplementation(() => Promise.resolve({ exists: () => true }))
+  getDocMock.mockImplementation(() => Promise.resolve({ exists: () => true, data: () => ({}) }))
 
   initTasksStore(UID)    // onSnapshot call index 0
   initNotesStore(UID)    // 1
