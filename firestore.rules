@@ -117,6 +117,11 @@ service cloud.firestore {
       allow read, create, update, delete: if isOwner(uid);
     }
 
+    // PUSH SUBSCRIPTIONS
+    match /users/{uid}/pushSubscriptions/{subId} {
+      allow read, create, update, delete: if isOwner(uid);
+    }
+
     // TASKS
     match /users/{uid}/tasks/{taskId} {
       allow read: if isOwner(uid);

@@ -622,8 +622,8 @@ export default function TeavitusedPage({ onBack }: Props) {
                   <p className="text-xs text-[#94A3B8] mt-0.5">
                     {pushStatus === 'active'
                       ? lang === 'et'
-                        ? 'Aktiivne — teavitused saadetakse sellele seadmele'
-                        : 'Active — alerts delivered to this device'
+                        ? 'Aktiivne — teavitused saadetakse sinu teistele seadmetele'
+                        : 'Active — alerts are delivered to your other devices'
                       : pushStatus === 'unsupported'
                         ? lang === 'et'
                           ? 'Sinu brauser ei toeta push-teavitusi'
