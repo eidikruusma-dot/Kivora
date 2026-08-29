@@ -1705,6 +1705,8 @@ export type TranslationKey =
     | "plans.template.workSchedule.title"
     | "plans.template.workSchedule.desc"
     | "plans.workSchedule.modalTitle"
+    | "plans.workSchedule.titleLabel"
+    | "plans.workSchedule.titleDefault"
     | "plans.workSchedule.workplaceLabel"
     | "plans.workSchedule.workplacePlaceholder"
     | "plans.workSchedule.shiftsHeading"
@@ -3737,6 +3739,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.template.workSchedule.title": "Töögraafik",
         "plans.template.workSchedule.desc": "Sisesta oma töövahetused ja näe neid graafiku ja kalendrina.",
         "plans.workSchedule.modalTitle": "Uus töögraafik",
+        "plans.workSchedule.titleLabel": "Pealkiri",
+        "plans.workSchedule.titleDefault": "Tööl",
         "plans.workSchedule.workplaceLabel": "Töökoht / märkus (valikuline)",
         "plans.workSchedule.workplacePlaceholder": "Nt Firma AS",
         "plans.workSchedule.shiftsHeading": "Töövahetused",
@@ -5761,6 +5765,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.template.workSchedule.title": "Work schedule",
         "plans.template.workSchedule.desc": "Enter your work shifts and see them as a schedule and on your calendar.",
         "plans.workSchedule.modalTitle": "New work schedule",
+        "plans.workSchedule.titleLabel": "Title",
+        "plans.workSchedule.titleDefault": "Work",
         "plans.workSchedule.workplaceLabel": "Workplace / note (optional)",
         "plans.workSchedule.workplacePlaceholder": "E.g. Acme Inc.",
         "plans.workSchedule.shiftsHeading": "Shifts",

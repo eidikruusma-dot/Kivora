@@ -279,6 +279,11 @@ export default function PlanDetailPage() {
               <Icon size={24} strokeWidth={1.8} />
             </div>
             <div className="min-w-0">
+              {plan.type === 'workSchedule' && (
+                <p className="text-[11px] font-semibold text-[#0D9488] uppercase tracking-wide mb-0.5">
+                  {t('plans.template.workSchedule.title', lang)}
+                </p>
+              )}
               <h1 className="text-xl font-bold text-[#1A1F36] truncate">{plan.title}</h1>
               {dateRange && <p className="text-sm text-[#94A3B8] mt-0.5">{dateRange}</p>}
             </div>

@@ -49,7 +49,11 @@ interface WorkScheduleFormModalProps {
  * exact same addPlan() every other template uses — no parallel storage.
  */
 export default function WorkScheduleFormModal({ lang, onCancel, onSubmit, onSuccess }: WorkScheduleFormModalProps) {
-  const [title, setTitle] = useState(t('plans.template.workSchedule.title', lang))
+  // Defaults to a short, user-facing title ("Tööl" / "Work") — deliberately
+  // NOT the template's own name ("Töögraafik" / "Work schedule", shown on
+  // the template card itself) or the workplace/note field, which stay
+  // separate concepts the user can freely override.
+  const [title, setTitle] = useState(t('plans.workSchedule.titleDefault', lang))
   const [color, setColor] = useState(PLAN_COLOR_SWATCHES[4].color) // #0D9488 — matches the template's own accent
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -141,10 +145,12 @@ export default function WorkScheduleFormModal({ lang, onCancel, onSubmit, onSucc
         </div>
 
         <div className="px-5 py-4 flex flex-col gap-4">
-          {/* Name */}
+          {/* Title — the user's own name for this schedule, separate from the
+              template type (always "Töögraafik" / "Work schedule") and from
+              the workplace/note field below. */}
           <div>
             <label htmlFor="work-schedule-name" className="block text-xs font-medium text-[#64748B] mb-1.5">
-              {t('plans.modal.nameLabel', lang)} <span className="text-[#E11D48]">*</span>
+              {t('plans.workSchedule.titleLabel', lang)} <span className="text-[#E11D48]">*</span>
             </label>
             <input
               id="work-schedule-name"
