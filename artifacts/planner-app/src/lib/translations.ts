@@ -1214,6 +1214,10 @@ export type TranslationKey =
     | "school.field.examSubjectLabel"
     | "school.field.examNotes"
     | "school.field.examMoodle"
+    | "school.field.webLinks"
+    | "school.field.linkName"
+    | "school.field.linkNamePh"
+    | "school.action.addLink"
     | "school.field.testNameLabel"
     | "school.field.testDateLabel"
     | "school.field.testSubjectLabel"
@@ -3501,6 +3505,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.field.examSubjectLabel": "Aine",
         "school.field.examNotes": "Märkmed",
         "school.field.examMoodle": "Veebilink",
+        "school.field.webLinks": "Veebilingid",
+        "school.field.linkName": "Nimi",
+        "school.field.linkNamePh": "nt Taskutark",
+        "school.action.addLink": "Lisa link",
         "school.field.testNameLabel": "Kontrolltöö nimi",
         "school.field.testDateLabel": "Kuupäev",
         "school.field.testSubjectLabel": "Aine",
@@ -5536,6 +5544,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.field.examSubjectLabel": "Subject",
         "school.field.examNotes": "Notes",
         "school.field.examMoodle": "Web link",
+        "school.field.webLinks": "Web links",
+        "school.field.linkName": "Name",
+        "school.field.linkNamePh": "e.g. Taskutark",
+        "school.action.addLink": "Add link",
         "school.field.testNameLabel": "Test name",
         "school.field.testDateLabel": "Date",
         "school.field.testSubjectLabel": "Subject",

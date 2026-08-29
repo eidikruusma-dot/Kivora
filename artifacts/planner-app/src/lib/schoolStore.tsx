@@ -204,6 +204,34 @@ interface TaskPart {
   done: boolean
 }
 
+/** One named web resource on a School task — School change #13 */
+interface TaskWebLink {
+  name: string
+  url: string
+}
+
+/**
+ * Combines a task's new multi-link `webLinks` with its legacy single
+ * `moodleUrl` for display/editing, without ever writing to or discarding
+ * `moodleUrl` (School change #13 is additive-only). The legacy URL is
+ * appended — with an empty name, since it was never named — only when it's
+ * a real link ("#" is the placeholder used by old seed/mock data) and its
+ * URL isn't already present among `webLinks`, so the same link is never
+ * shown twice. Rows with no URL are dropped (an empty row is never a real
+ * link either way).
+ */
+export function mergeTaskWebLinks(
+  webLinks: TaskWebLink[] | undefined,
+  moodleUrl: string | undefined,
+): TaskWebLink[] {
+  const links = (webLinks ?? []).filter((l) => l.url.trim() !== '')
+  const legacyUrl = moodleUrl?.trim()
+  if (legacyUrl && legacyUrl !== '#' && !links.some((l) => l.url.trim() === legacyUrl)) {
+    return [...links, { name: '', url: legacyUrl }]
+  }
+  return links
+}
+
 // Mirrors SchoolPage's Task interface
 interface SchoolTask {
   id: number
@@ -221,6 +249,10 @@ interface SchoolTask {
   prevProgress?: number
   parts?: TaskPart[]
   linkedTaskId?: string
+  /** Multiple named web resources — School change #13. Additive alongside
+   * the legacy moodleUrl (never migrated/discarded); see mergeTaskWebLinks
+   * for how the two are combined without duplication for display/editing. */
+  webLinks?: TaskWebLink[]
 }
 
 // Mirrors AllExamsModal's ExamItem interface
@@ -293,6 +325,7 @@ interface StoredTask {
   prevProgress?: number
   parts?: TaskPart[]
   linkedTaskId?: string
+  webLinks?: TaskWebLink[]
 }
 
 interface StoredExam {
@@ -386,6 +419,7 @@ function taskToStored(t: SchoolTask): StoredTask {
     ...(t.prevProgress !== undefined ? { prevProgress: t.prevProgress } : {}),
     ...(t.parts !== undefined ? { parts: t.parts } : {}),
     ...(t.linkedTaskId !== undefined ? { linkedTaskId: t.linkedTaskId } : {}),
+    ...(t.webLinks !== undefined ? { webLinks: t.webLinks } : {}),
   }
 }
 

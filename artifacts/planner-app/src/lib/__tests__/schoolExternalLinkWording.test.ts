@@ -65,13 +65,20 @@ describe('the internal moodleUrl field/schema is completely unchanged (terminolo
     expect(ALL_EXAMS_MODAL_SRC).toMatch(/moodleUrl\?: string/)
   })
 
-  it('every task/exam call site still reads the same two translation keys — none were swapped for a new key or hardcoded text', () => {
+  it('every remaining task/exam call site still reads the same two translation keys — none were swapped for a new key or hardcoded text', () => {
     const openMoodleUses = SCHOOL_PAGE_SRC.match(/tr\("school\.action\.openMoodle", lang\)/g) ?? []
     const examMoodleUses = SCHOOL_PAGE_SRC.match(/tr\("school\.field\.examMoodle", lang\)/g) ?? []
-    // Both the task views/forms and the exam/test views/forms reuse these same
-    // two keys — several call sites each, none renamed or replaced.
+    // Both the exam/test views/forms and (for School change #13's fallback
+    // name on an unnamed legacy link, see schoolTaskWebLinks.test.ts) the
+    // task detail view reuse these same two keys — several call sites each,
+    // none renamed or replaced. School change #13 intentionally removed the
+    // Task add/edit forms' own single-Veebilink-input usages of
+    // school.field.examMoodle (replaced by the new webLinks section's own
+    // school.field.webLinks label), which is why this key's count is lower
+    // than school.action.openMoodle's — that drop is expected, not a
+    // regression of this wording-only change.
     expect(openMoodleUses.length).toBeGreaterThanOrEqual(4)
-    expect(examMoodleUses.length).toBeGreaterThanOrEqual(4)
+    expect(examMoodleUses.length).toBeGreaterThanOrEqual(3)
   })
 
   it('no School CRUD/store function names changed as part of this wording-only edit', () => {

@@ -54,6 +54,7 @@ import {
   markSchoolTaskDone as storeMarkSchoolTaskDone,
   markSchoolTaskUndone as storeMarkSchoolTaskUndone,
   toggleSchoolTaskPart as storeToggleSchoolTaskPart,
+  mergeTaskWebLinks,
   addSchoolExam,
   updateSchoolExam as storeUpdateSchoolExam,
   deleteSchoolExam as storeDeleteSchoolExam,
@@ -112,6 +113,10 @@ interface Task {
   prevProgress?: number;
   parts?: TaskPart[];
   linkedTaskId?: string;
+  /** Multiple named web resources — School change #13. Additive alongside
+   * the legacy moodleUrl; see mergeTaskWebLinks (schoolStore.tsx) for how
+   * the two are combined for display/editing without duplication. */
+  webLinks?: { name: string; url: string }[];
 }
 
 type TaskStatus = "tegemata" | "pooleli" | "tehtud";
@@ -4923,6 +4928,71 @@ function EksamFormModal({
   );
 }
 
+// ── Task web links editor (used in add/edit modals) — School change #13 ────
+// Multiple named web resources, replacing the single legacy "Veebilink"
+// input. Rows are index-keyed (no persisted id on TaskWebLink itself, only
+// name/url) — fine for this small add/remove-oriented list.
+
+function TaskWebLinksEditor({
+  links,
+  onChange,
+}: {
+  links: { name: string; url: string }[];
+  onChange: (links: { name: string; url: string }[]) => void;
+}) {
+  const lang = getLocalLanguage();
+  const addLink = () => onChange([...links, { name: "", url: "" }]);
+  const removeLink = (idx: number) => onChange(links.filter((_, i) => i !== idx));
+  const updateLink = (idx: number, patch: Partial<{ name: string; url: string }>) =>
+    onChange(links.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+
+  return (
+    <div>
+      <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+        {tr("school.field.webLinks", lang)}{" "}
+        <span className="text-[#CBD5E1] font-normal">
+          {tr("school.field.optional", lang)}
+        </span>
+      </label>
+      <div className="flex flex-col gap-2">
+        {links.map((link, idx) => (
+          <div key={idx} className="flex items-center gap-2">
+            <input
+              type="text"
+              value={link.name}
+              onChange={(e) => updateLink(idx, { name: e.target.value })}
+              placeholder={tr("school.field.linkNamePh", lang)}
+              aria-label={tr("school.field.linkName", lang)}
+              className="w-28 flex-shrink-0 px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
+            />
+            <input
+              type="text"
+              value={link.url}
+              onChange={(e) => updateLink(idx, { url: e.target.value })}
+              placeholder="https://..."
+              aria-label="URL"
+              className="flex-1 px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
+            />
+            <button
+              onClick={() => removeLink(idx)}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#FEF2F2] hover:text-[#DC2626] transition-colors flex-shrink-0"
+            >
+              <Trash2 size={14} strokeWidth={2} />
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={addLink}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-[#6F5AE8] hover:bg-[#EDE9FB] transition-colors w-fit"
+        >
+          <Plus size={14} strokeWidth={2.5} />
+          {tr("school.action.addLink", lang)}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Task parts editor (used in add/edit modals) ────────────────────────────
 
 let _partIdCounter = 0;
@@ -5014,6 +5084,9 @@ function TaskDetailModal({
   const hasParts = task.parts && task.parts.length > 0;
   const partsDone = hasParts ? task.parts!.filter((p) => p.done).length : 0;
   const partsTotal = hasParts ? task.parts!.length : 0;
+  // Merges the new multi-link webLinks with the legacy single moodleUrl —
+  // School change #13 — without duplication or discarding either.
+  const webLinks = mergeTaskWebLinks(task.webLinks, task.moodleUrl);
 
   return (
     <div
@@ -5237,16 +5310,21 @@ function TaskDetailModal({
                 </div>
               )}
 
-              {task.moodleUrl && task.moodleUrl !== "#" && (
-                <a
-                  href={task.moodleUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-sm text-[#6F5AE8] hover:text-[#5B48D8] transition-colors"
-                >
-                  <ExternalLink size={14} strokeWidth={2} />
-                  {tr("school.action.openMoodle", lang)}
-                </a>
+              {webLinks.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  {webLinks.map((link, idx) => (
+                    <a
+                      key={idx}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-sm text-[#6F5AE8] hover:text-[#5B48D8] transition-colors"
+                    >
+                      <ExternalLink size={14} strokeWidth={2} />
+                      {link.name.trim() || tr("school.field.examMoodle", lang)}
+                    </a>
+                  ))}
+                </div>
               )}
 
               {task.linkedTaskId && (() => {
@@ -5306,7 +5384,10 @@ function TaskEditModal({
   );
   const [deadline, setDeadline] = useState(toISODate(task.deadline));
   const [progress, setProgress] = useState(task.progress);
-  const [moodleUrl, setMoodleUrl] = useState(task.moodleUrl);
+  // Pre-fills from both the new webLinks and the legacy moodleUrl, deduped
+  // — School change #13 (see handleSave below for how a real legacy link
+  // is consolidated into webLinks on save).
+  const [webLinks, setWebLinks] = useState(() => mergeTaskWebLinks(task.webLinks, task.moodleUrl));
   const [parts, setParts] = useState<TaskPart[]>(task.parts ?? []);
   const [addToTasks, setAddToTasks] = useState(!!task.linkedTaskId);
   const [error, setError] = useState("");
@@ -5369,6 +5450,19 @@ function TaskEditModal({
     }
 
     const matchedSubject = subjects.find((s) => s.name === subject.trim());
+    const cleanWebLinks = webLinks
+      .map((l) => ({ name: l.name.trim(), url: l.url.trim() }))
+      .filter((l) => l.url !== "");
+    // A real legacy link was merged into the editable list above (see
+    // mergeTaskWebLinks), so by the time the user saves, its content is
+    // either still represented in cleanWebLinks (kept/renamed) or
+    // deliberately gone (the user removed that row) — either way it is now
+    // fully superseded by webLinks, so it's safe (and needed, so a removed
+    // legacy link doesn't reappear on the next edit) to clear it here. This
+    // only ever happens as a result of the user explicitly saving this
+    // form — never automatically/silently.
+    const legacyUrl = task.moodleUrl?.trim();
+    const hadRealLegacyLink = !!legacyUrl && legacyUrl !== "#";
     onSave(task.id, {
       title: title.trim(),
       subject: subject.trim(),
@@ -5377,7 +5471,8 @@ function TaskEditModal({
       deadline: deadline.trim(),
       deadlineLabel: deadlineToLabel(deadline.trim(), lang),
       progress: finalProgress,
-      moodleUrl: moodleUrl.trim(),
+      webLinks: cleanWebLinks.length > 0 ? cleanWebLinks : undefined,
+      ...(hadRealLegacyLink ? { moodleUrl: "" } : {}),
       parts: cleanParts.length > 0 ? cleanParts : undefined,
       linkedTaskId: resolvedLinkedTaskId,
     });
@@ -5486,18 +5581,7 @@ function TaskEditModal({
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
-              {tr("school.field.examMoodle", lang)}
-            </label>
-            <input
-              type="text"
-              value={moodleUrl}
-              onChange={(e) => setMoodleUrl(e.target.value)}
-              placeholder="https://..."
-              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
-            />
-          </div>
+          <TaskWebLinksEditor links={webLinks} onChange={setWebLinks} />
 
           <label className="flex items-center gap-2.5 cursor-pointer select-none">
             <input
@@ -5551,7 +5635,7 @@ function TaskAddModal({
   const [type, setType] = useState<TaskTypeValue>("homework");
   const [deadline, setDeadline] = useState("");
   const [progress, setProgress] = useState(0);
-  const [moodleUrl, setMoodleUrl] = useState("");
+  const [webLinks, setWebLinks] = useState<{ name: string; url: string }[]>([]);
   const [parts, setParts] = useState<TaskPart[]>([]);
   const [addToTasks, setAddToTasks] = useState(false);
   const [error, setError] = useState("");
@@ -5595,6 +5679,9 @@ function TaskAddModal({
         // If write fails, do not persist a broken linkedTaskId on the school task
       }
     }
+    const cleanWebLinks = webLinks
+      .map((l) => ({ name: l.name.trim(), url: l.url.trim() }))
+      .filter((l) => l.url !== "");
     onSave({
       id: nextId,
       subject: subject.trim() || "Üldine",
@@ -5607,7 +5694,8 @@ function TaskAddModal({
       deadline: deadline.trim(),
       deadlineLabel: deadlineToLabel(deadline.trim(), lang),
       progress: finalProgress,
-      moodleUrl: moodleUrl.trim(),
+      moodleUrl: "",
+      webLinks: cleanWebLinks.length > 0 ? cleanWebLinks : undefined,
       parts: cleanParts.length > 0 ? cleanParts : undefined,
       linkedTaskId,
     });
@@ -5717,21 +5805,7 @@ function TaskAddModal({
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
-              {tr("school.field.examMoodle", lang)}{" "}
-              <span className="text-[#CBD5E1] font-normal">
-                {tr("school.field.optional", lang)}
-              </span>
-            </label>
-            <input
-              type="text"
-              value={moodleUrl}
-              onChange={(e) => setMoodleUrl(e.target.value)}
-              placeholder="https://..."
-              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
-            />
-          </div>
+          <TaskWebLinksEditor links={webLinks} onChange={setWebLinks} />
 
           <label className="flex items-center gap-2.5 cursor-pointer select-none">
             <input
