@@ -260,7 +260,7 @@ const SCHOOL_PAGE_SRC = readFileSync(resolve(process.cwd(), 'src/views/SchoolPag
 
 describe('SchoolPage.tsx wiring: updateTask/updateExam sync the Calendar event after every save', () => {
   it('imports syncSchoolCalendarEvent from the existing automaticLinking service — no parallel sync system', () => {
-    expect(SCHOOL_PAGE_SRC).toMatch(/import \{ runAutomaticLinking, syncSchoolCalendarEvent, type AutoLinkResult \} from "@\/lib\/automaticLinking"/)
+    expect(SCHOOL_PAGE_SRC).toMatch(/import \{ runAutomaticLinking, syncSchoolCalendarEvent, deleteSchoolCalendarEvent, type AutoLinkResult \} from "@\/lib\/automaticLinking"/)
   })
 
   it('updateTask awaits the school store write, then syncs using patch.deadline', () => {
@@ -283,9 +283,11 @@ describe('SchoolPage.tsx wiring: updateTask/updateExam sync the Calendar event a
     expect(SCHOOL_PAGE_SRC).toMatch(/const addExam\s+=\s*\(exam: Exam\)\s*=>\s*addSchoolExam\(exam\);/)
   })
 
-  it('deleteTask/deleteExam are untouched by this fix — orphan cleanup is explicitly a separate task', () => {
+  it('deleteTask/deleteExam still remove the school<->calendar EntityLinks (unaffected by this date-sync fix)', () => {
+    // Orphan Calendar-event cleanup on delete is covered separately in
+    // schoolCalendarEventDeleteCleanup.test.ts — this file only asserts the
+    // pre-existing link cleanup this fix must not disturb.
     expect(SCHOOL_PAGE_SRC).toMatch(/removeLinksForEntity\('school', encodeSchoolId\('task', id\)\)/)
     expect(SCHOOL_PAGE_SRC).toMatch(/removeLinksForEntity\('school', encodeSchoolId\('exam', id\)\)/)
-    expect(SCHOOL_PAGE_SRC).not.toMatch(/deleteCalendarEvent/)
   })
 })

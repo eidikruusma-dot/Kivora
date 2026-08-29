@@ -19,7 +19,7 @@
 
 import { computeSuggestions, type SourceSignals } from '@/lib/linkSuggestions'
 import { addLink, getLinksForEntity, hasCalendarLink } from '@/lib/entityLinksStore'
-import { addCalendarEvent, getAllEvents, updateCalendarEvent } from '@/lib/calendarStore'
+import { addCalendarEvent, getAllEvents, updateCalendarEvent, deleteCalendarEvent } from '@/lib/calendarStore'
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
 import { getAllTasks } from '@/lib/tasksStore'
 import { getAllNotes } from '@/lib/quickNotesStore'
@@ -297,6 +297,25 @@ export async function syncTaskCalendarEvent(task: Task): Promise<void> {
 // ── School item edit → linked calendar event sync ────────────────────────────
 
 /**
+ * Finds the `scheduled` EntityLink from a School item to a calendar event
+ * THIS SERVICE created for it (never one it's merely linked to — see the
+ * AUTO_CREATED_CALENDAR_EVENT_PREFIX check, the same "owned vs. merely
+ * linked" distinction syncTaskCalendarEvent relies on for Tasks). Shared by
+ * syncSchoolCalendarEvent and deleteSchoolCalendarEvent below so the exact
+ * "which event does this item own" rule is defined in exactly one place.
+ */
+function findOwnedSchoolCalendarLink(schoolId: string) {
+  return getLinksForEntity('school', schoolId).find(
+    (l) =>
+      l.relationType === 'scheduled' &&
+      l.fromType === 'school' &&
+      l.fromId === schoolId &&
+      l.toType === 'calendar' &&
+      l.toId.startsWith(AUTO_CREATED_CALENDAR_EVENT_PREFIX),
+  )
+}
+
+/**
  * Keeps a School task's or exam's auto-created calendar event (if any) on
  * the same date as the item after an edit — the School equivalent of
  * syncTaskCalendarEvent above, reusing the exact same "owned scheduled
@@ -323,14 +342,7 @@ export async function syncSchoolCalendarEvent(
   if (!date) return
   const schoolId = encodeSchoolId(kind, rawId)
 
-  const ownedLink = getLinksForEntity('school', schoolId).find(
-    (l) =>
-      l.relationType === 'scheduled' &&
-      l.fromType === 'school' &&
-      l.fromId === schoolId &&
-      l.toType === 'calendar' &&
-      l.toId.startsWith(AUTO_CREATED_CALENDAR_EVENT_PREFIX),
-  )
+  const ownedLink = findOwnedSchoolCalendarLink(schoolId)
   if (!ownedLink) return
 
   const existing = getAllEvents().find((e) => e.id === ownedLink.toId)
@@ -341,5 +353,38 @@ export async function syncSchoolCalendarEvent(
     await updateCalendarEvent({ ...existing, date })
   } catch {
     // Calendar write failed — don't surface as error to the school-save flow
+  }
+}
+
+// ── School item delete → owned calendar event cleanup ────────────────────────
+
+/**
+ * Deletes a School task's or exam's auto-created calendar event (if any) —
+ * call this BEFORE removeLinksForEntity('school', schoolId) so the owned
+ * `scheduled` link (and thus the event id) can still be resolved; the link
+ * row itself is cleaned up separately by removeLinksForEntity as before,
+ * this only removes the calendarEvents document it pointed to.
+ *
+ * Identifies the owned event exclusively through the `scheduled` EntityLink
+ * + `cal-auto-` prefix (the same rule syncSchoolCalendarEvent and Tasks'
+ * own deleteTask cascade use) — never by matching title/date, so a
+ * manually created event, or one the item is merely linked to (not one
+ * this service created for it), is never touched.
+ *
+ * No-op (deletion of the School item itself continues normally either way)
+ * if there is no owned calendar event to begin with.
+ */
+export async function deleteSchoolCalendarEvent(
+  kind: SchoolEntityKind,
+  rawId: string | number,
+): Promise<void> {
+  const schoolId = encodeSchoolId(kind, rawId)
+  const ownedLink = findOwnedSchoolCalendarLink(schoolId)
+  if (!ownedLink) return
+
+  try {
+    await deleteCalendarEvent(ownedLink.toId)
+  } catch {
+    // Calendar delete failed — don't block the rest of the school-item deletion
   }
 }

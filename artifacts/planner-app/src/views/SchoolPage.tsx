@@ -76,7 +76,7 @@ import { encodeSchoolId, decodeSchoolId } from "@/types/entityLinks";
 import { removeLinksForEntity } from "@/lib/entityLinksStore";
 import PostSaveLinkSuggestionsDialog from "@/components/links/PostSaveLinkSuggestionsDialog";
 import AutoLinkToast from "@/components/links/AutoLinkToast";
-import { runAutomaticLinking, syncSchoolCalendarEvent, type AutoLinkResult } from "@/lib/automaticLinking";
+import { runAutomaticLinking, syncSchoolCalendarEvent, deleteSchoolCalendarEvent, type AutoLinkResult } from "@/lib/automaticLinking";
 import { getLocalDateString, getLocalWeekdayIndex, formatDateWithWeekday, formatDateRange, msUntilNextLocalMidnight } from "@/lib/dateUtils";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -630,6 +630,10 @@ export default function SchoolPage() {
   const deleteTask  = (id: number) => {
     const task = tasks.find((t) => t.id === id);
     if (task?.linkedTaskId) { tasksStoreDeleteTask(task.linkedTaskId); }
+    // Resolve and delete the owned auto-created Calendar event (if any)
+    // BEFORE removing the links below — the scheduled link is what lets it
+    // be found. No-ops cleanly if there is no such event.
+    deleteSchoolCalendarEvent('task', id);
     removeLinksForEntity('school', encodeSchoolId('task', id));
     storeDeleteSchoolTask(id);
   };
@@ -662,7 +666,14 @@ export default function SchoolPage() {
     // it's already on that date (e.g. markDone/markUndone's {status} patch).
     await syncSchoolCalendarEvent('exam', id, patch.date);
   };
-  const deleteExam = (id: number) => { removeLinksForEntity('school', encodeSchoolId('exam', id)); storeDeleteSchoolExam(id); };
+  const deleteExam = (id: number) => {
+    // Same ordering as deleteTask above: resolve + delete the owned
+    // auto-created Calendar event before the links that make it findable
+    // are removed. No-ops cleanly if there is no such event.
+    deleteSchoolCalendarEvent('exam', id);
+    removeLinksForEntity('school', encodeSchoolId('exam', id));
+    storeDeleteSchoolExam(id);
+  };
   const addExam    = (exam: Exam) => addSchoolExam(exam);
 
   const addLesson    = (lesson: ScheduleLesson) => addSchoolLesson(lesson);
