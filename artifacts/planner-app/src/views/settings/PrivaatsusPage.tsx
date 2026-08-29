@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import {
   ArrowLeft,
-  BarChart2,
   Sparkles,
   CheckCircle2,
   Loader2,
@@ -61,7 +60,7 @@ function ToggleRow({
   onChange: (v: boolean) => void
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-4 border-b border-[#F0F0F0] last:border-0">
+    <div className="flex items-start justify-between gap-4 py-4">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-[#1A1F36]">{label}</p>
         <p className="text-xs text-[#94A3B8] mt-0.5">{description}</p>
@@ -86,14 +85,10 @@ function ToggleRow({
 // ── Settings shape ────────────────────────────────────────────────────────────
 
 interface PrivacySettings {
-  analytics: boolean
-  crashReports: boolean
   aiData: boolean
 }
 
 const DEFAULTS: PrivacySettings = {
-  analytics: true,
-  crashReports: true,
   aiData: true,
 }
 
@@ -112,7 +107,7 @@ export default function PrivaatsusPage({ onBack }: Props) {
 
   const [settings, setSettings] = useState<PrivacySettings>(DEFAULTS)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved]   = useState(false)
+  const [saved, setSaved] = useState(false)
 
   // Load from Firestore on mount
   useEffect(() => {
@@ -120,7 +115,10 @@ export default function PrivaatsusPage({ onBack }: Props) {
     loadSettings<PrivacySettings>(uid, 'privacy', DEFAULTS).then(setSettings)
   }, [uid])
 
-  const update = <K extends keyof PrivacySettings>(key: K, val: PrivacySettings[K]) => {
+  const update = <K extends keyof PrivacySettings>(
+    key: K,
+    val: PrivacySettings[K],
+  ) => {
     setSettings((prev) => ({ ...prev, [key]: val }))
     setSaved(false)
   }
@@ -128,10 +126,14 @@ export default function PrivaatsusPage({ onBack }: Props) {
   const handleSave = async () => {
     if (!uid) return
     setSaving(true)
-    await saveSettings(uid, 'privacy', settings)
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+
+    try {
+      await saveSettings(uid, 'privacy', settings)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -146,35 +148,15 @@ export default function PrivaatsusPage({ onBack }: Props) {
 
       <div className="max-w-3xl mx-auto space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-[#1A1F36]">{t('privacySettings.title', lang)}</h1>
-          <p className="text-sm text-[#94A3B8] mt-1">{t('privacySettings.subtitle', lang)}</p>
+          <h1 className="text-2xl font-bold text-[#1A1F36]">
+            {t('privacySettings.title', lang)}
+          </h1>
+          <p className="text-sm text-[#94A3B8] mt-1">
+            {t('privacySettings.subtitle', lang)}
+          </p>
         </div>
 
-        {/* ── 1. Data sharing ── */}
-        <SectionCard
-          icon={<BarChart2 size={20} strokeWidth={1.8} />}
-          iconBg="#DCFCE7"
-          iconColor="#16A34A"
-          title={t('privacySettings.data.title', lang)}
-          description={t('privacySettings.data.desc', lang)}
-        >
-          <div className="-my-1">
-            <ToggleRow
-              label={t('privacySettings.data.analytics', lang)}
-              description={t('privacySettings.data.analytics.desc', lang)}
-              checked={settings.analytics}
-              onChange={(v) => update('analytics', v)}
-            />
-            <ToggleRow
-              label={t('privacySettings.data.crash', lang)}
-              description={t('privacySettings.data.crash.desc', lang)}
-              checked={settings.crashReports}
-              onChange={(v) => update('crashReports', v)}
-            />
-          </div>
-        </SectionCard>
-
-        {/* ── 2. AI privacy ── */}
+        {/* ── AI privacy ── */}
         <SectionCard
           icon={<Sparkles size={20} strokeWidth={1.8} />}
           iconBg="#EDE9FB"
@@ -182,16 +164,18 @@ export default function PrivaatsusPage({ onBack }: Props) {
           title={t('privacySettings.ai.title', lang)}
           description={t('privacySettings.ai.desc', lang)}
         >
-          <div className="-my-1">
-            <ToggleRow
-              label={t('privacySettings.ai.toggle', lang)}
-              description={t('privacySettings.ai.toggle.desc', lang)}
-              checked={settings.aiData}
-              onChange={(v) => update('aiData', v)}
-            />
-          </div>
+          <ToggleRow
+            label={t('privacySettings.ai.toggle', lang)}
+            description={t('privacySettings.ai.toggle.desc', lang)}
+            checked={settings.aiData}
+            onChange={(v) => update('aiData', v)}
+          />
+
           <div className="privacy-info-panel flex items-start gap-2.5 mt-4 px-4 py-3 rounded-xl bg-[#F8F7FC] border border-[#E0DCFF]">
-            <Info size={14} className="text-[#6F5AE8] flex-shrink-0 mt-0.5" />
+            <Info
+              size={14}
+              className="text-[#6F5AE8] flex-shrink-0 mt-0.5"
+            />
             <p className="text-xs text-[#64748B] leading-relaxed">
               {t('privacySettings.ai.note', lang)}
             </p>
@@ -206,13 +190,16 @@ export default function PrivaatsusPage({ onBack }: Props) {
               {t('privacySettings.saved', lang)}
             </div>
           )}
+
           <button
             onClick={handleSave}
             disabled={saving || !uid}
             className="h-10 px-5 rounded-xl bg-[#6F5AE8] text-white text-sm font-medium flex items-center gap-2 hover:bg-[#5B4AD5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving && <Loader2 size={15} className="animate-spin" />}
-            {saving ? t('privacySettings.saving', lang) : t('privacySettings.save', lang)}
+            {saving
+              ? t('privacySettings.saving', lang)
+              : t('privacySettings.save', lang)}
           </button>
         </div>
       </div>
