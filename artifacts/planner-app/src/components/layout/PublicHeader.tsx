@@ -21,6 +21,15 @@ export default function PublicHeader() {
     { href: '#about',        label: t('pub.nav.about',       lang) },
   ]
 
+  // Anchors only exist on the landing page itself. On other public routes
+  // (e.g. /privacy, /terms, /contact — which also render this header),
+  // prefix with '/' so the link navigates to the landing page and lets the
+  // browser's native hash-scroll land on the target section there.
+  const onLanding = location.pathname === '/'
+  function navHref(anchor: string): string {
+    return onLanding ? anchor : `/${anchor}`
+  }
+
   function handleLogoClick() {
     if (location.pathname === '/') {
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -42,7 +51,7 @@ export default function PublicHeader() {
           {navLinks.map((link) => (
             <a
               key={link.href}
-              href={link.href}
+              href={navHref(link.href)}
               className="text-sm font-medium text-[#64748B] hover:text-[#1A1F36] transition-colors"
             >
               {link.label}
@@ -96,7 +105,7 @@ export default function PublicHeader() {
           {navLinks.map((link) => (
             <a
               key={link.href}
-              href={link.href}
+              href={navHref(link.href)}
               className="block text-sm font-medium text-[#64748B] hover:text-[#1A1F36] transition-colors"
               onClick={() => setMobileOpen(false)}
             >
