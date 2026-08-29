@@ -13,6 +13,7 @@ import type { Task } from '@/types'
 import { sanitizeForFirestore } from '@/lib/firestoreUtils'
 import { getLinksForEntity, linkDoc as entityLinkDoc } from '@/lib/entityLinksStore'
 import { eventDoc as calendarEventDoc } from '@/lib/calendarStore'
+import { syncSchoolTaskFromLinkedTask } from '@/lib/schoolStore'
 
 // ── Local pub/sub types ─────────────────────────────────────────────────────
 type TaskListener = (tasks: Task[]) => void
@@ -111,10 +112,42 @@ export async function toggleTask(id: string): Promise<void> {
   if (!_currentUid) return
   const task = _tasks.find((t) => t.id === id)
   if (!task) return
+  const nextCompleted = !task.completed
   await updateDoc(taskDoc(_currentUid, id), {
-    completed: !task.completed,
+    completed: nextCompleted,
     updatedAt: new Date().toISOString(),
   })
+  // Keep a School task's completion in sync when this Task is the one a
+  // School assignment's "add to Tasks" checkbox created/links to (School
+  // change #4) — no-op when no School task links to this one, or when it's
+  // already in sync. Every UI surface that calls this function (TasksPage,
+  // the Dashboard task widgets, FinancePage) gets this for free.
+  await syncSchoolTaskFromLinkedTask(id, nextCompleted)
+}
+
+/**
+ * Sets a task's completed state to an explicit value (rather than flipping
+ * it) and skips the write entirely when it's already there — this exact
+ * idempotence is what stops School<->Tasks completion sync from
+ * ping-ponging: propagating a change back to the side that already has it
+ * is always a no-op, so the chain terminates after one hop each way.
+ * No-ops safely if the task no longer exists (the School side that
+ * initiated this remains usable either way).
+ */
+export async function setTaskCompleted(id: string, completed: boolean): Promise<void> {
+  if (!_currentUid) return
+  const task = _tasks.find((t) => t.id === id)
+  if (!task) return
+  if (task.completed === completed) return
+  try {
+    await updateDoc(taskDoc(_currentUid, id), {
+      completed,
+      updatedAt: new Date().toISOString(),
+    })
+  } catch {
+    // Write failed — a counterpart-sync failure must never surface as an
+    // error on the School side that triggered it.
+  }
 }
 
 // The auto-linking service (automaticLinking.ts) stamps every calendar event

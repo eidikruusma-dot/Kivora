@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { sanitizeForFirestore } from '@/lib/firestoreUtils'
+import { setTaskCompleted } from '@/lib/tasksStore'
 
 // ── Icon reconstruction ──────────────────────────────────────────────────────
 // ReactNode icons cannot be stored in Firestore. They are rebuilt from the
@@ -511,6 +512,11 @@ export async function markSchoolTaskDone(id: number): Promise<void> {
     progress: 100,
     ...(parts !== undefined ? { parts } : {}),
   }))
+  // Mirror completion onto the linked Tasks-module task (if the user chose
+  // "add to Tasks" for this assignment) — no-op if there is none, or if the
+  // linked task no longer exists (this School task's own write above has
+  // already succeeded either way).
+  if (task.linkedTaskId) await setTaskCompleted(task.linkedTaskId, true)
 }
 
 export async function markSchoolTaskUndone(id: number): Promise<void> {
@@ -529,6 +535,32 @@ export async function markSchoolTaskUndone(id: number): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   delete (update as any).prevProgress
   await setDoc(schoolDoc(_currentUid, `task-${id}`), sanitizeForFirestore(update))
+  if (task.linkedTaskId) await setTaskCompleted(task.linkedTaskId, false)
+}
+
+/**
+ * Mirrors a linked Tasks-module task's completion back onto its School
+ * task — the reverse direction of markSchoolTaskDone/Undone's own sync
+ * call above. Reuses those exact same functions (never a second, divergent
+ * write path) so School's progress/prevProgress/parts semantics are
+ * derived identically regardless of which side the change started on.
+ *
+ * Guarded by comparing against the School task's CURRENT derived done
+ * state (progress >= 100 — the same mapping SchoolPage.tsx's own
+ * statusFromProgress uses) before writing anything: this is what stops
+ * School<->Tasks completion sync from ping-ponging, since propagating a
+ * change back to a side that's already there is always a no-op.
+ *
+ * No-op (fails safe) if no School task links to this Tasks-module task —
+ * e.g. it was never linked, or the School task was since deleted.
+ */
+export async function syncSchoolTaskFromLinkedTask(taskId: string, completed: boolean): Promise<void> {
+  const schoolTask = _tasks.find((t) => t.linkedTaskId === taskId)
+  if (!schoolTask) return
+  const currentlyDone = schoolTask.progress >= 100
+  if (currentlyDone === completed) return
+  if (completed) await markSchoolTaskDone(schoolTask.id)
+  else await markSchoolTaskUndone(schoolTask.id)
 }
 
 export async function toggleSchoolTaskPart(
