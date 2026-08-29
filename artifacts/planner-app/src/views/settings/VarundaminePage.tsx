@@ -30,6 +30,7 @@ import { initTasksStore } from '@/lib/tasksStore'
 import { initGoalsStore } from '@/lib/goalsStore'
 import { initCalendarStore } from '@/lib/calendarStore'
 import { initNotesStore } from '@/lib/quickNotesStore'
+import { initHabitsStore } from '@/lib/habitsStore'
 import { initSchoolStore } from '@/lib/schoolStore'
 import { initEntityLinksStore } from '@/lib/entityLinksStore'
 import { initAIConversationsStore } from '@/lib/aiConversationsStore'
@@ -364,6 +365,7 @@ export default function VarundaminePage({ onBack }: Props) {
       initGoalsStore(uid)
       initCalendarStore(uid)
       initNotesStore(uid)
+      initHabitsStore(uid)
       initSchoolStore(uid)
       initEntityLinksStore(uid)
       initAIConversationsStore(uid)

@@ -138,7 +138,7 @@ async function fetchData(uid: string, keys: DataKey[]): Promise<Map<DataKey, Row
         const snap = await getDocs(collection(db, 'users', uid, FS_COL[key]))
         return [key, snap.docs.map(d => d.data() as Row)]
       } catch {
-        // Collection may not exist (e.g. habits are in-memory); treat as empty.
+        // Collection may not exist yet for this user; treat as empty.
         return [key, []]
       }
     }),

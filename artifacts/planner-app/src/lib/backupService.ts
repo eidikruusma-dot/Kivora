@@ -9,8 +9,6 @@
  *
  * Each chunk stays under CHUNK_BYTE_LIMIT to respect Firestore's 1 MB document limit.
  * A backup holds up to 10 most-recent documents; older ones must be deleted manually.
- *
- * Habits are in-memory only and cannot be backed up.
  */
 
 import {
@@ -121,6 +119,7 @@ async function readAllUserData(uid: string): Promise<Record<string, object[]>> {
     tasks,
     calendarEvents,
     notes,
+    habits,
     goals,
     schoolItems,
     aiConversations,
@@ -132,6 +131,7 @@ async function readAllUserData(uid: string): Promise<Record<string, object[]>> {
     readCollectionItems(uid, 'tasks'),
     readCollectionItems(uid, 'calendarEvents'),
     readCollectionItems(uid, 'notes'),
+    readCollectionItems(uid, 'habits'),
     readCollectionItems(uid, 'goals'),
     readCollectionItems(uid, 'schoolItems'),
     readCollectionItems(uid, 'aiConversations'),
@@ -146,6 +146,7 @@ async function readAllUserData(uid: string): Promise<Record<string, object[]>> {
     tasks,
     calendarEvents,
     notes,
+    habits,
     goals,
     schoolItems,
     aiConversations,
@@ -202,7 +203,7 @@ export async function createBackup(uid: string): Promise<BackupMeta> {
     itemCounts,
     totalItems,
     collectionNames: Object.keys(data),
-    note: 'Habits are stored in memory only and are not included in this backup.',
+    note: 'Includes all backed-up Kivora data for this account.',
   }
 
   await setDoc(backupDoc(uid, backupId), sanitizeForFirestore(meta))
