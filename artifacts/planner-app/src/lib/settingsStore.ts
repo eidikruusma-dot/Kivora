@@ -34,6 +34,27 @@ export async function loadSettings<T extends object>(
 }
 
 /**
+ * Load a settings document without swallowing Firestore errors.
+ *
+ * This is used for privacy-sensitive decisions where silently falling back
+ * to permissive defaults would be unsafe. If Firestore cannot be read, the
+ * caller receives the error and can choose a privacy-safe fallback.
+ */
+export async function loadSettingsStrict<T extends object>(
+  uid: string,
+  docId: string,
+  defaults: T,
+): Promise<T> {
+  const snap = await getDoc(ref(uid, docId))
+
+  if (snap.exists()) {
+    return { ...defaults, ...(snap.data() as Partial<T>) }
+  }
+
+  return defaults
+}
+
+/**
  * Subscribe to a settings document with real-time updates via onSnapshot.
  * Calls onChange immediately with the current value, then on every change.
  * Returns an unsubscribe function — call it on unmount or uid change.
