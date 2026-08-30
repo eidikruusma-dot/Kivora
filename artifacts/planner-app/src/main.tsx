@@ -6,6 +6,9 @@ import { installPromptStore, type BeforeInstallPromptEvent } from './lib/install
 // Sets window.__KIVORA_BUILD__ as a side effect — temporary build/version
 // marker, see buildInfo.ts.
 import './lib/buildInfo';
+// Sets window.__KIVORA_FIND_ORPHANED_SUBJECTS__/__KIVORA_CLEANUP_ORPHANED_SUBJECTS__
+// as a side effect — temporary legacy-data repair, see legacySubjectCleanup.ts.
+import './lib/legacySubjectCleanup';
 
 // ── Capture beforeinstallprompt BEFORE React renders ──────────────────────────
 //

@@ -824,6 +824,81 @@ export function mergeStoredAndLessonSubjects(
   return [...seen.values()]
 }
 
+// ── Legacy orphan-subject repair ─────────────────────────────────────────────
+//
+// Before commit afc03f7, deleting a Study plan card (a lesson) never
+// checked whether it was that subject's last remaining lesson — it only
+// ever removed the lesson document, never the separate Subject document.
+// A subject deleted this way before afc03f7 can be left behind: absent
+// from every Study plan card (no lesson references it any more), yet
+// still a real, undeleted document, so useSchoolSubjects() correctly kept
+// (and keeps) offering it in "Lisa õppimisblokk". afc03f7 stops this from
+// happening to any *new* deletion; it does not retroactively clean up
+// subjects already orphaned this way before it shipped. The functions
+// below are a narrowly-scoped, idempotent repair for exactly that
+// pre-existing state — not a new ongoing system, and not wired to run
+// automatically anywhere.
+
+/**
+ * A subject is referenced if any lesson points at it — by subjectId when
+ * the lesson has one, or by name (case-insensitively, matching
+ * mergeStoredAndLessonSubjects' own normalization) as a fallback for
+ * legacy lessons that predate the subjectId field. Checking name too,
+ * even when a lesson also has a subjectId for some *other* subject, errs
+ * on the safe side: it only ever makes a subject look MORE referenced
+ * (never wrongly orphaned), never less.
+ */
+function isSubjectReferenced(subject: SchoolSubject, lessons: SchoolLesson[]): boolean {
+  const normalizedName = subject.name.toLowerCase().trim()
+  return lessons.some(
+    (l) => l.subjectId === subject.id || l.subject.toLowerCase().trim() === normalizedName,
+  )
+}
+
+/**
+ * Pure and exported so it's directly testable without a rendering harness,
+ * and so a caller can inspect exactly which subjects would be removed
+ * before actually deleting anything (see cleanupOrphanedLegacySubjects).
+ * A subject referenced by at least one lesson is never included, no
+ * matter how many other subjects are orphaned.
+ */
+export function findOrphanedSubjects(
+  subjects: SchoolSubject[],
+  lessons: SchoolLesson[],
+): SchoolSubject[] {
+  return subjects.filter((s) => !isSubjectReferenced(s, lessons))
+}
+
+/**
+ * One-time, idempotent repair for legacy orphan Subject documents (see
+ * above). Deletes exactly the subjects findOrphanedSubjects identifies at
+ * the moment it's called, via the existing, unmodified deleteSchoolSubject
+ * — never anything else. Running it again afterward (or whenever no
+ * orphans exist) finds nothing and deletes nothing.
+ *
+ * Not called from anywhere in the app — intentionally requires a deliberate,
+ * manual invocation (see main.tsx's window.__KIVORA_* exposure, mirroring
+ * buildInfo.ts's existing pattern for this codebase's other manually-
+ * triggered, temporary utilities). Returns the subjects it deleted, for
+ * confirmation/logging by the caller.
+ */
+export async function cleanupOrphanedLegacySubjects(): Promise<SchoolSubject[]> {
+  const orphaned = findOrphanedSubjects(_subjects, _lessons)
+  for (const subject of orphaned) {
+    await deleteSchoolSubject(subject.id)
+  }
+  return orphaned
+}
+
+/**
+ * Read-only preview of exactly what cleanupOrphanedLegacySubjects would
+ * delete right now, without deleting anything — for reporting/confirming
+ * before running the real cleanup (see legacySubjectCleanup.ts).
+ */
+export function previewOrphanedSubjects(): SchoolSubject[] {
+  return findOrphanedSubjects(_subjects, _lessons)
+}
+
 /**
  * Single source of truth for School subject selectors and the overview
  * count. See mergeStoredAndLessonSubjects for the merge semantics.
