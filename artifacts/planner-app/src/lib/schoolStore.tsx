@@ -870,17 +870,17 @@ export function findOrphanedSubjects(
 }
 
 /**
- * One-time, idempotent repair for legacy orphan Subject documents (see
- * above). Deletes exactly the subjects findOrphanedSubjects identifies at
- * the moment it's called, via the existing, unmodified deleteSchoolSubject
- * — never anything else. Running it again afterward (or whenever no
- * orphans exist) finds nothing and deletes nothing.
+ * Idempotent repair for legacy orphan Subject documents (see above).
+ * Deletes exactly the subjects findOrphanedSubjects identifies at the
+ * moment it's called, via the existing, unmodified deleteSchoolSubject —
+ * never anything else. Running it again afterward (or whenever no orphans
+ * exist) finds nothing and deletes nothing.
  *
- * Not called from anywhere in the app — intentionally requires a deliberate,
- * manual invocation (see main.tsx's window.__KIVORA_* exposure, mirroring
- * buildInfo.ts's existing pattern for this codebase's other manually-
- * triggered, temporary utilities). Returns the subjects it deleted, for
- * confirmation/logging by the caller.
+ * Kept as reusable admin tooling — not exposed as a window.__KIVORA_*
+ * console helper in main.tsx anymore (that one-time production repair
+ * already ran successfully; a follow-up preview confirmed zero remaining
+ * orphaned subjects). Not called from anywhere in normal app runtime.
+ * Returns the subjects it deleted, for confirmation/logging by the caller.
  */
 export async function cleanupOrphanedLegacySubjects(): Promise<SchoolSubject[]> {
   const orphaned = findOrphanedSubjects(_subjects, _lessons)
@@ -893,7 +893,7 @@ export async function cleanupOrphanedLegacySubjects(): Promise<SchoolSubject[]> 
 /**
  * Read-only preview of exactly what cleanupOrphanedLegacySubjects would
  * delete right now, without deleting anything — for reporting/confirming
- * before running the real cleanup (see legacySubjectCleanup.ts).
+ * before running the real cleanup.
  */
 export function previewOrphanedSubjects(): SchoolSubject[] {
   return findOrphanedSubjects(_subjects, _lessons)
