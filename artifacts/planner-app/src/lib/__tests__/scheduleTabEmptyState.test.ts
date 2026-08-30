@@ -120,7 +120,7 @@ describe('the existing header "Add learning block" button is unchanged and still
 describe('unrelated School behavior is untouched by this cleanup', () => {
   it('LessonModal and its subject-creation/classifier wiring are still present and unchanged in shape', () => {
     expect(SCHEDULE_TAB_SRC).toMatch(/function LessonModal\(/)
-    expect(SCHEDULE_TAB_SRC).toMatch(/import \{ useSchoolSubjectsFromLessons, addSchoolSubject, classifySubject \} from '@\/lib\/schoolStore'/)
+    expect(SCHEDULE_TAB_SRC).toMatch(/import \{ useSchoolSubjectsFromLessons, useSchoolSubjects, addSchoolSubject, classifySubject \} from '@\/lib\/schoolStore'/)
     expect(SCHEDULE_TAB_SRC).toMatch(/const handleCreateSubject = async \(\) => \{/)
   })
 

@@ -154,7 +154,7 @@ describe('both creation paths use the same shared classifySubject helper', () =>
   })
 
   it('ScheduleTab.tsx imports classifySubject from schoolStore', () => {
-    expect(SCHEDULE_TAB_SRC).toMatch(/import \{ useSchoolSubjectsFromLessons, addSchoolSubject, classifySubject \} from '@\/lib\/schoolStore'/)
+    expect(SCHEDULE_TAB_SRC).toMatch(/import \{ useSchoolSubjectsFromLessons, useSchoolSubjects, addSchoolSubject, classifySubject \} from '@\/lib\/schoolStore'/)
   })
 
   it('no second classifier or subject store was introduced (no other schoolStore-like module)', () => {

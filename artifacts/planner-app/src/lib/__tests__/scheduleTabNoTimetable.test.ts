@@ -146,6 +146,6 @@ describe('unrelated ScheduleTab behavior is untouched', () => {
 
   it('LessonModal and subject-creation/classifier wiring are untouched', () => {
     expect(SCHEDULE_TAB_SRC).toMatch(/function LessonModal\(/)
-    expect(SCHEDULE_TAB_SRC).toMatch(/import \{ useSchoolSubjectsFromLessons, addSchoolSubject, classifySubject \} from '@\/lib\/schoolStore'/)
+    expect(SCHEDULE_TAB_SRC).toMatch(/import \{ useSchoolSubjectsFromLessons, useSchoolSubjects, addSchoolSubject, classifySubject \} from '@\/lib\/schoolStore'/)
   })
 })

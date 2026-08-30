@@ -4,7 +4,7 @@ import { t } from '@/lib/translations'
 import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { useEffect } from 'react'
-import { useSchoolSubjectsFromLessons, addSchoolSubject, classifySubject } from '@/lib/schoolStore'
+import { useSchoolSubjectsFromLessons, useSchoolSubjects, addSchoolSubject, classifySubject } from '@/lib/schoolStore'
 import { formatDateRange } from '@/lib/dateUtils'
 
 export type ScheduleMode = 'traditional' | 'elearning' | 'none'
@@ -488,7 +488,16 @@ function LessonModal({
   onSave: (lesson: ScheduleLesson) => Promise<void>
 }) {
   const isTraditional = mode === 'traditional'
-  const subjects = useSchoolSubjectsFromLessons()
+  // Real, current subjects only (useSchoolSubjects) — NOT
+  // useSchoolSubjectsFromLessons, which also synthesizes a "ghost" entry
+  // for any historical lesson.subject string with no matching subject
+  // document, resurrecting deleted subjects as selectable choices here.
+  // A lesson that already references a deleted subject still displays and
+  // saves correctly below (initialSubjectId/subject/subjectId are seeded
+  // straight from the lesson's own stored fields, never cleared just
+  // because the subject is no longer in this list) — it just can't be
+  // freshly (re-)selected for this or any other block anymore.
+  const subjects = useSchoolSubjects()
 
   // Initialise subjectId: prefer stored subjectId, fall back to name-based lookup for legacy data
   const initialSubjectId =
