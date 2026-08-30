@@ -260,7 +260,7 @@ const SCHOOL_PAGE_SRC = readFileSync(resolve(process.cwd(), 'src/views/SchoolPag
 
 describe('SchoolPage.tsx wiring: updateTask/updateExam sync the Calendar event after every save', () => {
   it('imports syncSchoolCalendarEvent from the existing automaticLinking service — no parallel sync system', () => {
-    expect(SCHOOL_PAGE_SRC).toMatch(/import \{ runAutomaticLinking, syncSchoolCalendarEvent, deleteSchoolCalendarEvent, type AutoLinkResult \} from "@\/lib\/automaticLinking"/)
+    expect(SCHOOL_PAGE_SRC).toMatch(/import \{ runAutomaticLinking, syncSchoolCalendarEvent, syncSchoolCalendarEventCompletion, deleteSchoolCalendarEvent, type AutoLinkResult \} from "@\/lib\/automaticLinking"/)
   })
 
   it('updateTask awaits the school store write, then syncs using patch.deadline', () => {
@@ -275,12 +275,20 @@ describe('SchoolPage.tsx wiring: updateTask/updateExam sync the Calendar event a
     expect(fn).toMatch(/await syncSchoolCalendarEvent\('exam', id, patch\.date\)/)
   })
 
-  it('markTaskDone/markTaskUndone/togglePart/addTask/addExam are untouched — they still call the store directly, not the sync-wrapped updateTask/updateExam', () => {
-    expect(SCHOOL_PAGE_SRC).toMatch(/const markTaskDone\s+=\s*\(id: number\)\s*=>\s*storeMarkSchoolTaskDone\(id\);/)
-    expect(SCHOOL_PAGE_SRC).toMatch(/const markTaskUndone\s*=\s*\(id: number\)\s*=>\s*storeMarkSchoolTaskUndone\(id\);/)
+  it('togglePart/addTask/addExam are untouched — they still call the store directly, not the sync-wrapped updateTask/updateExam', () => {
     expect(SCHOOL_PAGE_SRC).toMatch(/const togglePart\s+=\s*\(taskId: number, partId: string\)\s*=>\s*storeToggleSchoolTaskPart\(taskId, partId\);/)
     expect(SCHOOL_PAGE_SRC).toMatch(/const addTask\s+=\s*\(task: Task\)\s*=>\s*addSchoolTask\(task\);/)
     expect(SCHOOL_PAGE_SRC).toMatch(/const addExam\s+=\s*\(exam: Exam\)\s*=>\s*addSchoolExam\(exam\);/)
+  })
+
+  it('markTaskDone/markTaskUndone still call the store directly, and additionally sync the derived Calendar event\'s visibility (completion → Calendar fix)', () => {
+    const doneFn = SCHOOL_PAGE_SRC.match(/const markTaskDone\s+=\s*\(id: number\)\s*=>\s*\{[\s\S]*?\n  \};/)?.[0] ?? ''
+    expect(doneFn).toMatch(/storeMarkSchoolTaskDone\(id\);/)
+    expect(doneFn).toMatch(/syncSchoolCalendarEventCompletion\('task', id, true\);/)
+
+    const undoneFn = SCHOOL_PAGE_SRC.match(/const markTaskUndone\s+=\s*\(id: number\)\s*=>\s*\{[\s\S]*?\n  \};/)?.[0] ?? ''
+    expect(undoneFn).toMatch(/storeMarkSchoolTaskUndone\(id\);/)
+    expect(undoneFn).toMatch(/syncSchoolCalendarEventCompletion\('task', id, false\);/)
   })
 
   it('deleteTask/deleteExam still remove the school<->calendar EntityLinks (unaffected by this date-sync fix)', () => {

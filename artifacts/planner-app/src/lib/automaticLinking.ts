@@ -356,6 +356,77 @@ export async function syncSchoolCalendarEvent(
   }
 }
 
+/**
+ * Hides or restores a School task's auto-created calendar event based on
+ * its completion state — a completed School deadline's derived Calendar
+ * entry must disappear immediately, and reappear if the item is marked
+ * incomplete again, while the School item's own record is never touched
+ * (only the derived calendar event is created/deleted here).
+ *
+ * Reuses the exact same "owned scheduled link" lookup as
+ * syncSchoolCalendarEvent/deleteSchoolCalendarEvent above — never a
+ * second completion-tracking mechanism. The caller (SchoolPage.tsx) is
+ * expected to pass the School task's own progress-derived done state
+ * (see schoolStore.tsx's markSchoolTaskDone/Undone) — this function does
+ * not read or store completion itself.
+ *
+ * completed: true  → deletes the owned event, if any. No-op if there is
+ *                     none, or it's already gone.
+ * completed: false → recreates it under the SAME event id (from the owned
+ *                     scheduled link), using the item's CURRENT title/date
+ *                     — so an edit made while the item was completed is
+ *                     reflected once it reappears. No-op if the event is
+ *                     already present (avoids a duplicate), or the item no
+ *                     longer has a valid date/title to recreate from.
+ *
+ * No-op entirely if the item never had an auto-created calendar event to
+ * begin with (e.g. no due date was ever set) — this never creates a link
+ * that didn't already exist, and never touches an event this service
+ * didn't create (a manually-created or merely-linked event is untouched).
+ */
+export async function syncSchoolCalendarEventCompletion(
+  kind: SchoolEntityKind,
+  rawId: string | number,
+  completed: boolean,
+): Promise<void> {
+  const schoolId = encodeSchoolId(kind, rawId)
+  const ownedLink = findOwnedSchoolCalendarLink(schoolId)
+  if (!ownedLink) return
+
+  if (completed) {
+    try {
+      await deleteCalendarEvent(ownedLink.toId)
+    } catch {
+      // Calendar write failed — don't surface as error to the school-save flow
+    }
+    return
+  }
+
+  // Un-completing: only recreate if it isn't already visible (idempotent —
+  // e.g. a second "mark incomplete" while it's already showing is a no-op).
+  if (getAllEvents().some((e) => e.id === ownedLink.toId)) return
+
+  const info = getEntityInfo('school', schoolId)
+  if (!info.date || !/^\d{4}-\d{2}-\d{2}$/.test(info.date) || !info.title) return
+
+  try {
+    await addCalendarEvent({
+      id: ownedLink.toId,
+      title: info.title,
+      date: info.date,
+      // School tasks carry no time field — always recreated as an all-day
+      // event, matching how runAutomaticLinking originally created it.
+      allDay: true,
+      startTime: '',
+      endTime: '',
+      color: '#6F5AE8',
+      calendarId: 'school',
+    })
+  } catch {
+    // Calendar write failed — don't surface as error to the school-save flow
+  }
+}
+
 // ── School item delete → owned calendar event cleanup ────────────────────────
 
 /**

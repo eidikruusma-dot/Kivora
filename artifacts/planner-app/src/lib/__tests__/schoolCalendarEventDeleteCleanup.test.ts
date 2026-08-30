@@ -240,7 +240,7 @@ const SCHOOL_PAGE_SRC = readFileSync(resolve(process.cwd(), 'src/views/SchoolPag
 describe('SchoolPage.tsx wiring: deleteTask/deleteExam clean up the owned Calendar event before removing links', () => {
   it('imports deleteSchoolCalendarEvent from the existing automaticLinking service — no parallel sync system', () => {
     expect(SCHOOL_PAGE_SRC).toMatch(
-      /import \{ runAutomaticLinking, syncSchoolCalendarEvent, deleteSchoolCalendarEvent, type AutoLinkResult \} from "@\/lib\/automaticLinking"/,
+      /import \{ runAutomaticLinking, syncSchoolCalendarEvent, syncSchoolCalendarEventCompletion, deleteSchoolCalendarEvent, type AutoLinkResult \} from "@\/lib\/automaticLinking"/,
     )
   })
 

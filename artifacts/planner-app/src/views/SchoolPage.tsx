@@ -79,7 +79,7 @@ import { encodeSchoolId, decodeSchoolId } from "@/types/entityLinks";
 import { removeLinksForEntity } from "@/lib/entityLinksStore";
 import PostSaveLinkSuggestionsDialog from "@/components/links/PostSaveLinkSuggestionsDialog";
 import AutoLinkToast from "@/components/links/AutoLinkToast";
-import { runAutomaticLinking, syncSchoolCalendarEvent, deleteSchoolCalendarEvent, type AutoLinkResult } from "@/lib/automaticLinking";
+import { runAutomaticLinking, syncSchoolCalendarEvent, syncSchoolCalendarEventCompletion, deleteSchoolCalendarEvent, type AutoLinkResult } from "@/lib/automaticLinking";
 import { getLocalDateString, getLocalWeekdayIndex, formatDateWithWeekday, formatDateRange, msUntilNextLocalMidnight } from "@/lib/dateUtils";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -615,8 +615,18 @@ export default function SchoolPage() {
     removeLinksForEntity('school', encodeSchoolId('task', id));
     storeDeleteSchoolTask(id);
   };
-  const markTaskDone   = (id: number) => storeMarkSchoolTaskDone(id);
-  const markTaskUndone = (id: number) => storeMarkSchoolTaskUndone(id);
+  const markTaskDone   = (id: number) => {
+    storeMarkSchoolTaskDone(id);
+    // Hide the deadline's derived Calendar entry — the School task record
+    // itself is untouched, only its owned auto-created calendar event (if
+    // any) is removed. No-ops cleanly if there is no such event.
+    syncSchoolCalendarEventCompletion('task', id, true);
+  };
+  const markTaskUndone = (id: number) => {
+    storeMarkSchoolTaskUndone(id);
+    // Reverse of the above — restores the derived Calendar entry.
+    syncSchoolCalendarEventCompletion('task', id, false);
+  };
   const togglePart  = (taskId: number, partId: string) => storeToggleSchoolTaskPart(taskId, partId);
   const addTask     = (task: Task) => addSchoolTask(task);
 
