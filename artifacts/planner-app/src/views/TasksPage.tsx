@@ -162,8 +162,15 @@ export default function TasksPage() {
           </button>
         </div>
 
-        {/* Filter tabs */}
-        <div className="flex items-center gap-1 p-1 bg-white rounded-xl border border-[#ECECF2] w-fit">
+        {/* Filter tabs.
+            Mobile-only: max-w-full + overflow-x-auto lets the strip
+            scroll horizontally within itself instead of pushing the
+            whole page wider — same defect and same fix already applied
+            to Habits/Goals (commit aeb44fd): at 320-360px this w-fit
+            strip was wider than the available content width. sm:
+            restores the original fit-content sizing (already fits
+            there, unchanged). */}
+        <div className="flex items-center gap-1 p-1 bg-white rounded-xl border border-[#ECECF2] max-w-full overflow-x-auto sm:w-fit">
           {([
             { key: 'all',       label: t('tasks.filter.all',    lang).replace('{n}', String(tasks.length))    },
             { key: 'active',    label: t('tasks.filter.active', lang).replace('{n}', String(activeCount))     },
@@ -172,7 +179,7 @@ export default function TasksPage() {
             <button
               key={key}
               onClick={() => setFilter(key)}
-              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                 filter === key ? 'bg-[#EDE9FB] text-[#6F5AE8]' : 'text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36]'
               }`}
             >
