@@ -60,8 +60,12 @@ export default function CalendarHeader({
 
   return (
     <div className="flex flex-wrap items-center gap-2 flex-shrink-0 border-b border-[#EBEBEB] px-4 py-2.5 lg:px-5 lg:py-0 lg:h-[58px]">
-      {/* Left group: navigation controls + date label */}
-      <div className="flex items-center gap-2 flex-shrink-0">
+      {/* Left group: navigation controls + date label.
+          min-w-0 (not flex-shrink-0) lets this group shrink within the
+          outer flex-wrap row so the date label's own min-w-0/truncate can
+          actually take effect on narrow phones — Today/Prev/Next stay
+          flex-shrink-0 so they never compress, only the label does. */}
+      <div className="flex items-center gap-2 min-w-0">
         <button
           onClick={onToday}
           className="rounded-md border border-[#D1D5DB] text-sm font-medium text-[#374151] bg-white hover:bg-[#F9FAFB] transition-colors flex-shrink-0 px-3"
@@ -83,7 +87,7 @@ export default function CalendarHeader({
         >
           <ChevronRight size={16} />
         </button>
-        <span className="text-[15px] font-semibold text-[#1A1F36] flex-shrink-0 min-w-[130px]">
+        <span className="text-[15px] font-semibold text-[#1A1F36] min-w-0 truncate">
           {dateLabel}
         </span>
       </div>
