@@ -1662,10 +1662,17 @@ export default function AIAssistantPage() {
                   <div
                     className={`relative max-w-[78%] min-w-0 ${m.role === "user" ? "order-2" : ""}`}
                   >
-                    {/* Action buttons — visible on hover (desktop) or when menu open */}
+                    {/* Action buttons — visible on hover (desktop) or when
+                        msgActionId === m.id (tapped open on touch, where
+                        there is no reliable hover). Tapping the bubble
+                        below sets msgActionId; only one message's actions
+                        are open at a time, and the window click-outside
+                        effect above (keyed on msgActionId) closes it. */}
                     {!m.pending && (
                       <div
-                        className={`absolute ${m.role === "user" ? "right-0 -top-7" : "left-0 -top-7"} flex items-center gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity`}
+                        className={`absolute ${m.role === "user" ? "right-0 -top-7" : "left-0 -top-7"} flex items-center gap-1 z-10 transition-opacity sm:group-hover:opacity-100 ${
+                          msgActionId === m.id ? "opacity-100" : "opacity-0"
+                        }`}
                       >
                         {m.role === "user" && (
                           <button
@@ -1714,7 +1721,11 @@ export default function AIAssistantPage() {
                       </div>
                     ) : (
                       <div
-                        className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed break-words min-w-0 ${
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMsgActionId(msgActionId === m.id ? null : m.id);
+                        }}
+                        className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed break-words min-w-0 cursor-pointer ${
                           m.role === "user"
                             ? "bg-[#6F5AE8] text-white rounded-br-md"
                             : "bg-[#F4F4F8] text-[#1A1F36] rounded-bl-md"
