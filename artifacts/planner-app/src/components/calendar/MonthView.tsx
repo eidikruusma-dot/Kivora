@@ -5,6 +5,7 @@ import { formatEventTime, getMonthMatrix,
   isToday,
   isSameMonth,
   WEEKDAYS_ET,
+  WEEKDAYS_EN,
   WEEKDAYS_ET_FULL,
   WEEKDAYS_EN_FULL,
 } from '@/lib/calendar/dateUtils'
@@ -53,7 +54,9 @@ export default function MonthView({
 
   return (
     <div className="flex flex-col">
-      {/* Weekday header */}
+      {/* Weekday header — short labels (existing WEEKDAYS_ET/EN) below sm:,
+          full names (existing WEEKDAYS_ET_FULL/EN_FULL) at sm: and up, so
+          the 7 columns never overlap on narrow phones. */}
       <div className="grid grid-cols-7 border-b border-[#EBEBEB] h-10">
         {(lang === 'en' ? WEEKDAYS_EN_FULL : WEEKDAYS_ET_FULL).map((wd, i) => (
           <div
@@ -62,7 +65,8 @@ export default function MonthView({
               i < 6 ? 'border-r border-[#F0F0F0]' : ''
             }`}
           >
-            {wd}
+            <span className="sm:hidden">{(lang === 'en' ? WEEKDAYS_EN : WEEKDAYS_ET)[i]}</span>
+            <span className="hidden sm:inline">{wd}</span>
           </div>
         ))}
       </div>
