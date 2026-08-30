@@ -283,23 +283,32 @@ export default function TasksPage() {
                         {p.label}
                       </span>
 
-                      <button
-                        onClick={() => openEdit(task)}
-                        aria-label={t('tasks.action.edit', lang)}
-                        className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:text-[#6F5AE8] hover:bg-[#EDE9FB] transition-colors ml-auto sm:ml-0 sm:opacity-0 sm:group-hover:opacity-100"
-                      >
-                        <Pencil size={14} />
-                      </button>
+                      {/* Edit+Delete grouped as one flex item so flex-wrap
+                          on the row above never splits them apart onto
+                          separate wrapped lines on narrow phones (e.g.
+                          320px) — they either both fit on the badges' line
+                          or both wrap together to the next one. Dissolves
+                          via sm:contents at sm: so desktop's flat row is
+                          unchanged. */}
+                      <div className="flex items-center gap-1 ml-auto sm:ml-0 sm:contents">
+                        <button
+                          onClick={() => openEdit(task)}
+                          aria-label={t('tasks.action.edit', lang)}
+                          className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:text-[#6F5AE8] hover:bg-[#EDE9FB] transition-colors sm:opacity-0 sm:group-hover:opacity-100"
+                        >
+                          <Pencil size={14} />
+                        </button>
 
-                      <button
-                        onClick={() => setDeleteId(task.id)}
-                        aria-label={t('tasks.action.delete', lang)}
-                        className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:text-red-500 hover:bg-red-50 transition-colors sm:opacity-0 sm:group-hover:opacity-100"
-                      >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                        </svg>
-                      </button>
+                        <button
+                          onClick={() => setDeleteId(task.id)}
+                          aria-label={t('tasks.action.delete', lang)}
+                          className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:text-red-500 hover:bg-red-50 transition-colors sm:opacity-0 sm:group-hover:opacity-100"
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )
