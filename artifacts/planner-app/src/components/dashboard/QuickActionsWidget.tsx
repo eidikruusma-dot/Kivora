@@ -29,22 +29,22 @@ export default function QuickActionsWidget() {
           <button
             key={labelKey}
             onClick={() => navigate(to)}
-            className="flex items-center gap-2.5 px-3.5 h-[52px] rounded-xl bg-[#F8F7F4] hover:bg-[#EDE9FB] transition-colors text-left"
+            className="flex items-center gap-2.5 px-3.5 py-2 min-h-[52px] sm:h-[52px] sm:py-0 rounded-xl bg-[#F8F7F4] hover:bg-[#EDE9FB] transition-colors text-left"
           >
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${iconBg}`}>
               <Icon size={16} className={iconColor} />
             </div>
-            <span className="text-sm font-medium text-[#1A1F36] truncate">{t(labelKey, lang)}</span>
+            <span className="text-sm font-medium text-[#1A1F36] leading-snug sm:truncate">{t(labelKey, lang)}</span>
           </button>
         ))}
         <button
           onClick={openModal}
-          className="flex items-center gap-2.5 px-3.5 h-[52px] rounded-xl bg-[#F8F7F4] hover:bg-[#EDE9FB] transition-colors text-left"
+          className="flex items-center gap-2.5 px-3.5 py-2 min-h-[52px] sm:h-[52px] sm:py-0 rounded-xl bg-[#F8F7F4] hover:bg-[#EDE9FB] transition-colors text-left"
         >
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[#DCFCE7]">
             <Timer size={16} className="text-[#16A34A]" />
           </div>
-          <span className="text-sm font-medium text-[#1A1F36] truncate">{t('dash.action.timer', lang)}</span>
+          <span className="text-sm font-medium text-[#1A1F36] leading-snug sm:truncate">{t('dash.action.timer', lang)}</span>
         </button>
       </div>
     </Card>
