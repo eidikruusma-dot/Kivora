@@ -609,12 +609,22 @@ export default function HabitsPage() {
                       <span className="hidden sm:inline">{wd.date}</span>
                     </span>
 
-                    {/* Circle indicator */}
+                    {/* Circle indicator.
+                        Below 360px, w-7 (28px) no longer fits its ~23px
+                        grid-cols-7 column and adjacent circles visibly
+                        overlap — confirmed with a real Chromium render of
+                        the compiled Tailwind output. w-5 (20px) is the
+                        smallest size that still clears every column down to
+                        320px with a safe gap; min-[360px]: restores the
+                        exact original w-7/h-7 the instant there's room
+                        (measured: zero/positive gap from 359px up), so
+                        360px, 390px, and sm:'s existing w-9/h-9 desktop size
+                        are all byte-for-byte unchanged. */}
                     {hasData && (isPast || isToday) ? (
-                      <div className="relative w-7 h-7 sm:w-9 sm:h-9">
+                      <div className="relative w-5 h-5 min-[360px]:w-7 min-[360px]:h-7 sm:w-9 sm:h-9">
                         {anyDone ? (
                           // Fully completed — solid purple circle with checkmark
-                          <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-[#6F5AE8] flex items-center justify-center">
+                          <div className="w-5 h-5 min-[360px]:w-7 min-[360px]:h-7 sm:w-9 sm:h-9 rounded-full bg-[#6F5AE8] flex items-center justify-center">
                             <svg
                               width="14"
                               height="14"
@@ -630,11 +640,11 @@ export default function HabitsPage() {
                           </div>
                         ) : (
                           // Nothing done yet — grey empty circle
-                          <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full border-2 border-[#E2E8F0]" />
+                          <div className="w-5 h-5 min-[360px]:w-7 min-[360px]:h-7 sm:w-9 sm:h-9 rounded-full border-2 border-[#E2E8F0]" />
                         )}
                       </div>
                     ) : (
-                      <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full border-2 border-dashed border-[#E2E8F0]" />
+                      <div className="w-5 h-5 min-[360px]:w-7 min-[360px]:h-7 sm:w-9 sm:h-9 rounded-full border-2 border-dashed border-[#E2E8F0]" />
                     )}
 
                     {/* Count — only shown for past/today when there is something to count */}
