@@ -1,11 +1,16 @@
 /**
- * Regression coverage for wiring checkAndConsumeAiQuota() into
- * POST /api/ai/chat via ai.ts's enforceAiChatQuota() gate.
+ * Regression coverage for checkAndConsumeAiQuota()'s shared
+ * enforceAiQuota() gate (lib/aiQuotaGate.ts) as wired into
+ * POST /api/ai/chat — the first route it shipped on. The same gate is
+ * also wired into aiUpload.ts's /ai/upload, /ai/bank-import, and
+ * /ai/upload-direct-test — see aiUploadQuotaEnforcement.test.ts for that
+ * route-specific wiring proof; this file focuses on the gate's own
+ * decision logic and doesn't duplicate it there.
  *
  * Two layers, matching this codebase's existing split (see
  * requireFirebaseAuth.ts/.test.ts for the same pattern):
  *
- *   1. enforceAiChatQuota() itself — a pure-enough function taking a fake
+ *   1. enforceAiQuota() itself — a pure-enough function taking a fake
  *      res and an injected checkQuota — proves the gate's decision logic
  *      exactly, including that it never even reads req (so it cannot
  *      consult a client-supplied owner/quota value even by accident), and
@@ -59,7 +64,7 @@ process.env["OPENAI_API_KEY"] ??= "sk-test-placeholder-not-a-real-key";
 
 import type { Response } from "express";
 import { checkAndConsumeAiQuota, type AiQuotaResult } from "../lib/aiQuota.js";
-const { enforceAiChatQuota } = await import("./ai.js");
+import { enforceAiQuota } from "../lib/aiQuotaGate.js";
 
 let passed = 0;
 let failed = 0;
@@ -111,12 +116,12 @@ function fixedResult(overrides: Partial<AiQuotaResult>): AiQuotaResult {
   };
 }
 
-// ── 1. enforceAiChatQuota — pure gate logic ─────────────────────────────
+// ── 1. enforceAiQuota — pure gate logic ─────────────────────────────
 
 await group("1. no authUser on res.locals -> 401, proceed: false, checkQuota never called", async () => {
   const res = fakeRes(undefined);
   let checkQuotaCalled = false;
-  const result = await enforceAiChatQuota(res, "chat", async () => {
+  const result = await enforceAiQuota(res, "chat", async () => {
     checkQuotaCalled = true;
     return fixedResult({});
   });
@@ -131,7 +136,7 @@ await group("1. no authUser on res.locals -> 401, proceed: false, checkQuota nev
 
 await group("2. authenticated user under quota -> proceed: true, no response written (caller continues to OpenAI)", async () => {
   const res = fakeRes({ uid: "u-under-limit", owner: false });
-  const result = await enforceAiChatQuota(res, "chat", async (params) => {
+  const result = await enforceAiQuota(res, "chat", async (params) => {
     assert(params.uid === "u-under-limit" && params.owner === false, "checkQuota called with the exact authUser uid/owner");
     return fixedResult({ allowed: true, reason: "under_limit", used: 5, remaining: 15 });
   });
@@ -142,7 +147,7 @@ await group("2. authenticated user under quota -> proceed: true, no response wri
 
 await group("3. exhausted user -> 429 QUOTA_EXCEEDED, proceed: false, before any OpenAI call", async () => {
   const res = fakeRes({ uid: "u-exhausted", owner: false });
-  const result = await enforceAiChatQuota(res, "chat", async () =>
+  const result = await enforceAiQuota(res, "chat", async () =>
     fixedResult({ allowed: false, reason: "limit_reached", used: 20, remaining: 0 }),
   );
   assert(result.proceed === false, "proceed is false — the route must return immediately, never calling OpenAI");
@@ -157,14 +162,14 @@ await group("4. owner bypasses quota — using the REAL checkAndConsumeAiQuota, 
   const res = fakeRes({ uid: "u-owner", owner: true });
   // No fake checkQuota here: the real function's owner branch never
   // touches Firestore, so this exercises production code end to end.
-  const result = await enforceAiChatQuota(res, "chat", checkAndConsumeAiQuota);
+  const result = await enforceAiQuota(res, "chat", checkAndConsumeAiQuota);
   assert(result.proceed === true, "proceed is true for an owner, via the real quota function");
   assert(res.statusCode === undefined, "no error response for an owner");
 });
 
 await group("5. quota backend failure fails closed — using the REAL checkAndConsumeAiQuota with a broken getDb", async () => {
   const res = fakeRes({ uid: "u-backend-down", owner: false });
-  const result = await enforceAiChatQuota(res, "chat", (params) =>
+  const result = await enforceAiQuota(res, "chat", (params) =>
     checkAndConsumeAiQuota({
       ...params,
       getDb: () => {
@@ -177,12 +182,12 @@ await group("5. quota backend failure fails closed — using the REAL checkAndCo
   assert((res.jsonBody as { code?: string })?.code === "QUOTA_EXCEEDED", "code is QUOTA_EXCEEDED even for a backend failure");
 });
 
-await group("6. no client-supplied field can influence the outcome — enforceAiChatQuota never reads req at all", async () => {
+await group("6. no client-supplied field can influence the outcome — enforceAiQuota never reads req at all", async () => {
   // Structural guarantee, not just behavioral: the function's own
   // signature (res, mode, checkQuota) has no req parameter, so there is
   // no request body/query/header this function could consult even if it
   // wanted to — verified here by confirming its declared arity.
-  assert(enforceAiChatQuota.length <= 3, "enforceAiChatQuota takes no req parameter");
+  assert(enforceAiQuota.length <= 3, "enforceAiQuota takes no req parameter");
 });
 
 // ── 2. Live boundary: unauthenticated direct calls still 401, before quota ──

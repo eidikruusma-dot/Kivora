@@ -11,6 +11,7 @@ import {
   type StructuralPdfBufferResult,
 } from "../lib/extractStructuralPdfBuffer";
 import type { RawTransactionRow } from "../lib/classifyTransactionRows";
+import { enforceAiQuota } from "../lib/aiQuotaGate.js";
 
 const router = Router();
 const openai = new OpenAI({ apiKey: process.env["OPENAI_API_KEY"] });
@@ -2228,6 +2229,13 @@ router.post("/ai/upload", upload.single("file"), async (req, res) => {
     return;
   }
 
+  // AI usage quota — one unit per authenticated HTTP request to this
+  // route, checked before any extraction/OpenAI work begins. See
+  // aiQuotaGate.ts's doc comment for the full trust/accounting/
+  // fail-closed contract.
+  const { proceed } = await enforceAiQuota(res, "ai/upload");
+  if (!proceed) return;
+
   const name = file.originalname.toLowerCase();
   const isPdf =
     file.mimetype === "application/pdf" || name.endsWith(".pdf");
@@ -2438,6 +2446,18 @@ router.post("/ai/bank-import", upload.single("file"), async (req, res) => {
     });
     return;
   }
+
+  // AI usage quota — exactly ONE unit per authenticated HTTP request to
+  // this route, checked before any extraction work begins. A single
+  // bank-import request can internally make several OpenAI calls (one per
+  // PDF page batch — see splitPdfIntoPageBatches/callModelForPdfBatch
+  // below); this still consumes exactly one unit for the whole request,
+  // never one per internal batch — see aiQuotaGate.ts's doc comment for
+  // why request-count (not per-call) is the deliberate V1 accounting
+  // model. See aiQuotaGate.ts's doc comment for the full trust/fail-closed
+  // contract.
+  const { proceed } = await enforceAiQuota(res, "ai/bank-import");
+  if (!proceed) return;
 
   try {
     // ── PDF path: structural extraction + AI fallback ──────────────────────
@@ -2798,6 +2818,12 @@ router.post(
       res.status(400).json({ error: "This endpoint only accepts PDF files." });
       return;
     }
+
+    // AI usage quota — one unit per authenticated HTTP request to this
+    // route, checked before the OpenAI Responses API call below. See
+    // aiQuotaGate.ts's doc comment for the full trust/fail-closed contract.
+    const { proceed } = await enforceAiQuota(res, "ai/upload-direct-test");
+    if (!proceed) return;
 
     try {
       const b64 = `data:application/pdf;base64,${file.buffer.toString("base64")}`;
