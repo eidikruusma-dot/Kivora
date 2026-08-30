@@ -88,8 +88,15 @@ export default function NotificationsPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-8">
-      {/* Page header */}
-      <div className="flex items-start justify-between gap-3 mb-6">
+      {/* Page header.
+          Mobile-only: stacks the title above the actions (flex-col, full
+          width) since the actions row (both buttons whitespace-nowrap,
+          never shrinking) doesn't fit beside the title at 320-390px —
+          confirmed via a real Chromium render of the compiled Tailwind
+          output, where "Kustuta kõik" was clipped off-screen at every
+          phone width tested, forcing page-level horizontal scroll. sm:
+          and up restores the exact original single row. */}
+      <div className="flex flex-col items-start gap-3 mb-6 sm:flex-row sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-[#EDE9FB] flex items-center justify-center flex-shrink-0">
             <Bell size={20} className="text-[#6F5AE8]" />
@@ -105,7 +112,7 @@ export default function NotificationsPage() {
         </div>
 
         {/* Header actions */}
-        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+        <div className="flex items-center gap-2 flex-wrap justify-start sm:flex-shrink-0 sm:justify-end">
           {unreadCount > 0 && !confirmDeleteAll && (
             <button
               onClick={() => storeMarkAllRead()}
@@ -126,9 +133,11 @@ export default function NotificationsPage() {
             </button>
           )}
 
-          {/* Inline confirmation */}
+          {/* Inline confirmation — flex-wrap so its three nowrap children
+              (question/confirm/cancel) can wrap onto a second line inside
+              the box on mobile too, instead of overflowing it. */}
           {confirmDeleteAll && (
-            <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
+            <div className="flex items-center gap-2 flex-wrap bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
               <span className="text-xs font-medium text-red-700 whitespace-nowrap">
                 {lang === 'et' ? 'Kustutada kõik?' : 'Delete all?'}
               </span>
