@@ -28,7 +28,7 @@ export default function TasksPage() {
   const tasks = useTasks()
   const tasksLoading = useTasksLoading()
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
-  const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all')
+  const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('active')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | undefined>(undefined)
   const [postSave, setPostSave] = useState<{ type: 'task'; id: string } | null>(null)
@@ -41,7 +41,7 @@ export default function TasksPage() {
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
 
   useEffect(() => {
-    setFilter('all')
+    setFilter('active')
     setModalOpen(false)
     setEditingTask(undefined)
     setDeleteId(null)
@@ -172,9 +172,9 @@ export default function TasksPage() {
             there, unchanged). */}
         <div className="flex items-center gap-1 p-1 bg-white rounded-xl border border-[#ECECF2] max-w-full overflow-x-auto sm:w-fit">
           {([
-            { key: 'all',       label: t('tasks.filter.all',    lang).replace('{n}', String(tasks.length))    },
             { key: 'active',    label: t('tasks.filter.active', lang).replace('{n}', String(activeCount))     },
             { key: 'completed', label: t('tasks.filter.done',   lang).replace('{n}', String(completedCount))  },
+            { key: 'all',       label: t('tasks.filter.all',    lang).replace('{n}', String(tasks.length))    },
           ] as const).map(({ key, label }) => (
             <button
               key={key}

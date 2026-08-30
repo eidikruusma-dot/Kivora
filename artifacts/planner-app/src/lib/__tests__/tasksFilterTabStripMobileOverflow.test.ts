@@ -1,6 +1,6 @@
 /**
- * TasksPage.tsx renders its 3-tab filter strip ("Kõik (n)" / "Aktiivsed (n)"
- * / "Tehtud (n)") in a `w-fit` container with no width cap and no
+ * TasksPage.tsx renders its 3-tab filter strip ("Aktiivsed (n)" /
+ * "Tehtud (n)" / "Kõik (n)") in a `w-fit` container with no width cap and no
  * horizontal scroll — the same defect already fixed on Habits/Goals
  * (commit aeb44fd). Confirmed with a real Chromium render of the compiled
  * Tailwind output: at 320-360px the strip is wider than the page's
@@ -20,7 +20,7 @@
  *     absent — with the strip now scrollable, this guarantees the three
  *     labels can never wrap onto a second line, only scroll).
  *
- * All three tabs (all/active/completed), their labelKeys/counts, order,
+ * All three tabs (active/completed/all), their labelKeys/counts, order,
  * active-state styling (`bg-[#EDE9FB] text-[#6F5AE8]` vs
  * `text-[#64748B] hover:...`), the onClick handler (setFilter), the
  * `filter` state, and the surrounding page (header, add-task button, task
@@ -76,10 +76,10 @@ describe('tabs remain whitespace-nowrap', () => {
 })
 
 describe('existing tab order and handlers remain unchanged', () => {
-  it('keeps all/active/completed keys in order, with their original label sources', () => {
-    const filterTabsBlock = SRC.match(/\{\(\[\s*\{ key: 'all',[\s\S]*?\] as const\)\.map/)?.[0] ?? ''
+  it('keeps active/completed/all keys in order, with their original label sources', () => {
+    const filterTabsBlock = SRC.match(/\{\(\[\s*\{ key: 'active',[\s\S]*?\] as const\)\.map/)?.[0] ?? ''
     const order = [...filterTabsBlock.matchAll(/key: '([a-z]+)',/g)].map((m) => m[1])
-    expect(order).toEqual(['all', 'active', 'completed'])
+    expect(order).toEqual(['active', 'completed', 'all'])
     expect(SRC).toMatch(/t\('tasks\.filter\.all',\s*lang\)\.replace\('\{n\}', String\(tasks\.length\)\)/)
     expect(SRC).toMatch(/t\('tasks\.filter\.active', lang\)\.replace\('\{n\}', String\(activeCount\)\)/)
     expect(SRC).toMatch(/t\('tasks\.filter\.done',\s*lang\)\.replace\('\{n\}', String\(completedCount\)\)/)
