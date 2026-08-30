@@ -1,9 +1,11 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import OpenAI from "openai";
 import { normalizeSingleValidPlanPreview } from "../lib/planDraftValidation.js";
 import { validateChatRequest } from "../lib/validateChatRequest.js";
 import { evaluateFinishReason } from "../lib/evaluateFinishReason.js";
 import { buildChatMessages } from "../lib/buildChatMessages.js";
+import { checkAndConsumeAiQuota, type AiQuotaResult } from "../lib/aiQuota.js";
+import type { AuthenticatedUser } from "../middleware/requireFirebaseAuth.js";
 
 const router = Router();
 
@@ -13,6 +15,58 @@ const openai = new OpenAI({
 
 function fmtDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * The auth-presence + quota check-and-consume gate for POST /api/ai/chat.
+ * Separated from the route handler (same split as
+ * requireFirebaseAuth.ts's verifyBearerToken vs the Express middleware
+ * itself) so it's directly unit-testable against a fake res/checkQuota,
+ * without needing a live Firebase/Firestore/OpenAI setup.
+ *
+ * uid/owner come ONLY from res.locals.authUser (set by requireFirebaseAuth
+ * from a verified Firebase ID token — see routes/index.ts's aiBoundary),
+ * never from req.body/req.query — this function doesn't even receive
+ * `req`, which makes it structurally impossible for it to consult a
+ * client-supplied owner/quota value.
+ *
+ * Returns { proceed: true } when the caller should continue to the OpenAI
+ * call. Otherwise a 401 or 429 has ALREADY been written to `res` — the
+ * caller's only remaining job is to return immediately without calling
+ * OpenAI. authUser being absent here would mean this handler somehow ran
+ * outside the requireFirebaseAuth boundary; failing closed with 401 rather
+ * than assuming matches requireFirebaseAuth's own philosophy.
+ *
+ * `checkQuota` defaults to the real checkAndConsumeAiQuota and is only
+ * ever overridden in tests — the route always calls this with 2 arguments.
+ */
+export async function enforceAiChatQuota(
+  res: Response,
+  mode: string,
+  checkQuota: (params: { uid: string; owner: boolean }) => Promise<AiQuotaResult> = checkAndConsumeAiQuota,
+): Promise<{ proceed: boolean }> {
+  const authUser = res.locals["authUser"] as AuthenticatedUser | undefined;
+  if (!authUser) {
+    res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+    return { proceed: false };
+  }
+
+  const quota = await checkQuota({ uid: authUser.uid, owner: authUser.owner });
+  if (!quota.allowed) {
+    // Safe diagnostic logging only: mode and the quota decision's reason —
+    // never uid, email, or any request content.
+    console.log(`[ai/chat] quota denied mode=${mode} reason=${quota.reason}`);
+    res.status(429).json({
+      error: "Daily AI request limit reached. Try again tomorrow.",
+      code: "QUOTA_EXCEEDED",
+      limit: quota.limit,
+      remaining: quota.remaining,
+      resetAt: quota.resetAt,
+    });
+    return { proceed: false };
+  }
+
+  return { proceed: true };
 }
 
 router.post("/ai/chat", async (req, res) => {
@@ -31,6 +85,12 @@ router.post("/ai/chat", async (req, res) => {
       return;
     }
     const { mode, messages } = validation;
+
+    // AI usage quota — must run before the OpenAI call below. See
+    // enforceAiChatQuota's doc comment for the full trust/fail-closed
+    // contract.
+    const { proceed } = await enforceAiChatQuota(res, mode);
+    if (!proceed) return;
 
     // Opt-in, sanitized diagnostic for boundary C ("did the server receive
     // what the browser sent"): logs only the context's section headers

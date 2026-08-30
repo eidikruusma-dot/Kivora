@@ -1,7 +1,8 @@
 /**
  * Unit tests for aiQuota.ts — the atomic AI usage quota check-and-consume
- * function (step 3 of the AI quota architecture). Not wired into any route
- * yet; these tests exercise checkAndConsumeAiQuota() directly.
+ * function, now wired into POST /api/ai/chat (see routes/ai.ts and
+ * aiChatQuotaEnforcement.test.ts for the route-level coverage). These
+ * tests exercise checkAndConsumeAiQuota() directly, independent of Express.
  *
  * No real Firestore project/emulator is used or required. `getDb` is
  * injected with a small hand-written in-memory fake (see makeFakeFirestore
@@ -33,7 +34,7 @@ import {
   checkAndConsumeAiQuota,
   dailyBucketKeyUtc,
   nextUtcMidnight,
-  TEMP_DEFAULT_AI_DAILY_REQUEST_LIMIT,
+  AI_DAILY_REQUEST_LIMIT_FREE,
 } from "./aiQuota.js";
 
 let passed = 0;
@@ -323,11 +324,8 @@ await group("9. concurrency: many requests racing for a handful of remaining slo
   );
 });
 
-await group("Sanity: the exported temporary default limit is a small positive number", () => {
-  assert(
-    Number.isInteger(TEMP_DEFAULT_AI_DAILY_REQUEST_LIMIT) && TEMP_DEFAULT_AI_DAILY_REQUEST_LIMIT > 0,
-    "TEMP_DEFAULT_AI_DAILY_REQUEST_LIMIT is a positive integer placeholder",
-  );
+await group("Sanity: the exported V1 Free-tier limit is the agreed 20 requests/day", () => {
+  assert(AI_DAILY_REQUEST_LIMIT_FREE === 20, "AI_DAILY_REQUEST_LIMIT_FREE is exactly 20");
 });
 
 console.log(`\n${"═".repeat(48)}`);

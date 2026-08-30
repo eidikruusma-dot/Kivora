@@ -1,10 +1,11 @@
 /**
  * aiQuota.ts — server-side AI usage quota check-and-consume.
  *
- * Step 3 of the AI quota architecture: one reusable, atomic function that
- * a future route (not yet wired — see routes/ai.ts, routes/aiUpload.ts)
- * will call BEFORE making any OpenAI request. Not called from anywhere in
- * production yet.
+ * One reusable, atomic function called BEFORE making any OpenAI request.
+ * Wired into POST /api/ai/chat (routes/ai.ts) as of this V1 rollout.
+ * routes/aiUpload.ts's routes (upload, bank-import, upload-direct-test,
+ * bank-import/revalidate) are deliberately NOT wired yet — a separate,
+ * later round.
  *
  * ── Trust boundary ───────────────────────────────────────────────────────
  * The only inputs this function trusts are `uid` and `owner` as already
@@ -68,12 +69,11 @@
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { getFirebaseAdminFirestore } from "./firebaseAdmin.js";
 
-// ── V1 limit — NOT a final product decision ─────────────────────────────
-// A placeholder so this module compiles and is testable before product
-// picks the real per-day request limit. Flag for product decision before
-// this quota check is ever wired into a route — do not ship this number
-// as-is.
-export const TEMP_DEFAULT_AI_DAILY_REQUEST_LIMIT = 20;
+// ── V1 Free-tier limit — final product decision ──────────────────────────
+// 20 AI requests per UTC calendar day for a normal (non-owner) user.
+// owner === true (see requireFirebaseAuth.ts's verified custom claim)
+// bypasses this entirely — see the owner-bypass branch below.
+export const AI_DAILY_REQUEST_LIMIT_FREE = 20;
 
 /** Top-level Firestore collection holding one doc per user per UTC day. */
 export const AI_USAGE_COLLECTION = "aiUsage";
@@ -106,7 +106,7 @@ export interface CheckAiQuotaParams {
   uid: string;
   /** Verified owner custom claim — from res.locals.authUser.owner, never client-supplied. */
   owner: boolean;
-  /** Overrides TEMP_DEFAULT_AI_DAILY_REQUEST_LIMIT — for tests, or a future per-plan limit. */
+  /** Overrides AI_DAILY_REQUEST_LIMIT_FREE — for tests, or a future per-plan limit. */
   limit?: number;
   /** Overrides the current time — for deterministic tests only. */
   now?: Date;
@@ -143,7 +143,7 @@ export async function checkAndConsumeAiQuota(
   const {
     uid,
     owner,
-    limit = TEMP_DEFAULT_AI_DAILY_REQUEST_LIMIT,
+    limit = AI_DAILY_REQUEST_LIMIT_FREE,
     now = new Date(),
     getDb = getFirebaseAdminFirestore,
   } = params;
