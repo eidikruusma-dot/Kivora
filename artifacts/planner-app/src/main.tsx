@@ -9,6 +9,10 @@ import './lib/buildInfo';
 // Sets window.__KIVORA_FIND_ORPHANED_SUBJECTS__/__KIVORA_CLEANUP_ORPHANED_SUBJECTS__
 // as a side effect — temporary legacy-data repair, see legacySubjectCleanup.ts.
 import './lib/legacySubjectCleanup';
+// Sets window.__KIVORA_CHECK_OWNER_CLAIM__ as a side effect — temporary
+// owner-custom-claim verification, see ownerClaimCheck.ts. Remove once the
+// owner grant has been confirmed via this check.
+import './lib/ownerClaimCheck';
 
 // ── Capture beforeinstallprompt BEFORE React renders ──────────────────────────
 //
