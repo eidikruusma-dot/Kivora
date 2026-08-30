@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { useIsDark, darkBg, darkText } from "@/lib/themeColors";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -460,6 +460,19 @@ export default function SchoolPage() {
 
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<TabId>("uesanded");
+
+  // Mobile tab strip (overflow-x-auto): keep the active tab fully visible
+  // whenever it changes, so a switch never leaves it clipped at either edge
+  // of the scroll container. inline: 'nearest' scrolls only as far as
+  // needed — a tab already fully visible doesn't move.
+  const tabButtonRefs = useRef<Partial<Record<TabId, HTMLButtonElement>>>({});
+  useEffect(() => {
+    tabButtonRefs.current[activeTab]?.scrollIntoView({
+      behavior: "smooth",
+      inline: "nearest",
+      block: "nearest",
+    });
+  }, [activeTab]);
   const tasks = useSchoolTasks();
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const selectedTask = tasks.find((t) => t.id === selectedTaskId) ?? null;
@@ -695,6 +708,7 @@ export default function SchoolPage() {
             {TABS.map((tab) => (
               <button
                 key={tab.id}
+                ref={(el) => { tabButtonRefs.current[tab.id] = el ?? undefined; }}
                 onClick={() => setActiveTab(tab.id)}
                 className={`relative whitespace-nowrap px-3 py-4 text-sm font-medium transition-colors mr-2 ${
                   activeTab === tab.id
