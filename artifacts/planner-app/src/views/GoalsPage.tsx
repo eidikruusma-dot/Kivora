@@ -1096,9 +1096,16 @@ export default function GoalsPage() {
                       <span className={`flex-1 text-sm ${step.done ? 'text-[#94A3B8] line-through' : 'text-[#1A1F36]'}`}>
                         {step.title}
                       </span>
+                      {/* Mobile: visible by default — there's no reliable
+                          hover on touch devices, so an unconditional
+                          opacity-0 left this step-delete control
+                          unreachable there. sm: restores the original
+                          hover-reveal desktop behavior, matching the same
+                          pattern already used correctly for TasksPage's
+                          row actions and NotesPage's action menu. */}
                       <button
                         onClick={() => deleteStep(detailGoal.id, step.id)}
-                        className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#FEE2E2] hover:text-[#E11D48] transition-all"
+                        className="sm:opacity-0 sm:group-hover:opacity-100 w-7 h-7 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#FEE2E2] hover:text-[#E11D48] transition-all"
                       >
                         <Trash size={13} />
                       </button>
