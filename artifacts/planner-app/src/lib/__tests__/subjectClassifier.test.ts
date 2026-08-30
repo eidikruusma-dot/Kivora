@@ -64,6 +64,8 @@ describe('classifySubject — documented category → palette color mapping', ()
     ['Geomeetria', 'mathematics', '#6F5AE8'],
     ['Eesti keel', 'estonian', '#DC2626'],
     ['Eesti kirjandus', 'estonian', '#DC2626'],
+    ['Kirjandus', 'estonian', '#DC2626'],
+    ['Literature', 'estonian', '#DC2626'],
     ['Inglise keel', 'english', '#2563EB'],
     ['English', 'english', '#2563EB'],
     ['Vene keel', 'other_languages', '#2563EB'],

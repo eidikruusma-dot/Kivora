@@ -95,7 +95,7 @@ const CATEGORY_COLOR_INDEX: Record<Exclude<SubjectCategory, 'other'>, number> = 
 // "it" but is an arts subject, not information technology).
 const CATEGORY_KEYWORDS: { category: Exclude<SubjectCategory, 'other'>; keywords: string[] }[] = [
   { category: 'mathematics',            keywords: ['matemaatika', 'math', 'algebra', 'geomeetria'] },
-  { category: 'estonian',               keywords: ['eesti keel', 'eesti kirjandus'] },
+  { category: 'estonian',               keywords: ['eesti keel', 'eesti kirjandus', 'kirjandus', 'literature'] },
   { category: 'english',                keywords: ['inglise keel', 'english'] },
   { category: 'other_languages',        keywords: ['vene keel', 'saksa keel', 'prantsuse keel', 'russian', 'german', 'french'] },
   { category: 'natural_sciences',       keywords: ['loodusõpetus', 'bioloogia', 'keemia', 'füüsika', 'geography', 'geograafia'] },
