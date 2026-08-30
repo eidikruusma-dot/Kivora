@@ -383,7 +383,14 @@ export default function NotesPage() {
                           setMenuOpenId(menuOpenId === note.id ? null : note.id)
                           setMoveMenuId(null)
                         }}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors opacity-0 group-hover:opacity-100"
+                        // Mobile: visible by default — there's no reliable
+                        // hover on touch devices, so an unconditional
+                        // opacity-0 left this menu (Delete/Move/Edit/Open)
+                        // unreachable there. sm: restores the original
+                        // hover-reveal desktop behavior, matching the same
+                        // pattern already used correctly for TasksPage's
+                        // row actions.
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors sm:opacity-0 sm:group-hover:opacity-100"
                       >
                         <MoreHorizontal size={15} />
                       </button>
