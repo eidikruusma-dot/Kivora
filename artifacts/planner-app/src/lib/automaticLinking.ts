@@ -60,6 +60,22 @@ const DEFAULT_AUTO_EVENT_COLOR = '#6F5AE8'
  * deleted subject), and finally to the same generic default every other
  * auto-created calendar event already uses.
  */
+/**
+ * Resolves a School subject the same way SchoolPage.tsx itself already
+ * does when assigning a task/exam to a subject (its `matchedSubject`
+ * lookups, e.g. `subjects.find((s) => s.name === subject.trim())`): by
+ * subjectId first, falling back to an exact trimmed-name match for legacy
+ * items that predate the subjectId field — never a new matching rule
+ * invented for Calendar.
+ */
+function findSchoolSubject(subjectId: string | undefined, subjectName: string) {
+  const subjects = getAllSchoolSubjects()
+  return (
+    (subjectId ? subjects.find((s) => s.id === subjectId) : undefined) ??
+    subjects.find((s) => s.name === subjectName.trim())
+  )
+}
+
 function resolveSchoolItemColor(schoolId: string): string {
   const decoded = decodeSchoolId(schoolId)
   if (!decoded) return DEFAULT_AUTO_EVENT_COLOR
@@ -67,14 +83,14 @@ function resolveSchoolItemColor(schoolId: string): string {
   if (decoded.kind === 'task') {
     const task = getAllSchoolTasks().find((x) => String(x.id) === decoded.rawId)
     if (!task) return DEFAULT_AUTO_EVENT_COLOR
-    const subject = task.subjectId ? getAllSchoolSubjects().find((s) => s.id === task.subjectId) : undefined
+    const subject = findSchoolSubject(task.subjectId, task.subject)
     return subject?.color ?? task.subjectColor ?? DEFAULT_AUTO_EVENT_COLOR
   }
 
   if (decoded.kind === 'exam') {
     const exam = getAllSchoolExams().find((x) => String(x.id) === decoded.rawId)
     if (!exam) return DEFAULT_AUTO_EVENT_COLOR
-    const subject = exam.subjectId ? getAllSchoolSubjects().find((s) => s.id === exam.subjectId) : undefined
+    const subject = findSchoolSubject(exam.subjectId, exam.subject)
     return subject?.color ?? exam.iconColor ?? DEFAULT_AUTO_EVENT_COLOR
   }
 
@@ -358,22 +374,28 @@ function findOwnedSchoolCalendarLink(schoolId: string) {
 
 /**
  * Keeps a School task's or exam's auto-created calendar event (if any) on
- * the same date as the item after an edit — the School equivalent of
- * syncTaskCalendarEvent above, reusing the exact same "owned scheduled
- * link" lookup and updateCalendarEvent() write, so the update lands on the
- * SAME event id and never creates a second event.
+ * the same date — and the same subject color — as the item after an edit.
+ * The date part is the School equivalent of syncTaskCalendarEvent above,
+ * reusing the exact same "owned scheduled link" lookup and
+ * updateCalendarEvent() write, so the update lands on the SAME event id
+ * and never creates a second event. The color part reuses
+ * resolveSchoolItemColor (the same resolution runAutomaticLinking and
+ * syncSchoolCalendarEventCompletion already use) so a subject recolor is
+ * picked up the next time this — already existing — sync path runs, e.g.
+ * on the item's next date-carrying save, without a dedicated "resync all
+ * events for this subject" mechanism.
  *
  * No-op if:
  *   - the item has no date, or
  *   - it has no calendar event this service created for it (an item with
  *     no existing auto-created event never gains one here — only
  *     runAutomaticLinking creates new events), or
- *   - the event is already on that date (avoids a pointless write).
+ *   - the event is already on that date AND already has the item's
+ *     current color (avoids a pointless write).
  *
- * Scoped to date only — the event's own title/time/allDay are left exactly
- * as they were (created once, by runAutomaticLinking, on the item's first
- * save); this fix addresses the stale-date defect only, not any other
- * field drifting out of sync.
+ * Scoped to date and color only — the event's own title/time/allDay are
+ * left exactly as they were (created once, by runAutomaticLinking, on the
+ * item's first save).
  */
 export async function syncSchoolCalendarEvent(
   kind: SchoolEntityKind,
@@ -388,10 +410,12 @@ export async function syncSchoolCalendarEvent(
 
   const existing = getAllEvents().find((e) => e.id === ownedLink.toId)
   if (!existing) return
-  if (existing.date === date) return
+
+  const color = resolveSchoolItemColor(schoolId)
+  if (existing.date === date && existing.color === color) return
 
   try {
-    await updateCalendarEvent({ ...existing, date })
+    await updateCalendarEvent({ ...existing, date, color })
   } catch {
     // Calendar write failed — don't surface as error to the school-save flow
   }
