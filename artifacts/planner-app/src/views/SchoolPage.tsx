@@ -47,6 +47,7 @@ import {
   useSchoolTasks,
   useSchoolExams,
   useSchoolSubjectsFromLessons,
+  useSchoolSubjects,
   useSchoolLessons,
   addSchoolTask,
   updateSchoolTask as storeUpdateSchoolTask,
@@ -487,6 +488,11 @@ export default function SchoolPage() {
   const [selectedEksam, setSelectedEksam] = useState<Exam | null>(null);
   const [editingEksam, setEditingEksam] = useState<Exam | null>(null);
   const subjects = useSchoolSubjectsFromLessons();
+  // Real, current subject documents only — used to detect when deleting a
+  // learning block orphans its subject (see deleteLesson below). Kept
+  // separate from `subjects` above (the lesson-merged view every card in
+  // this file already renders from) so that view is completely unaffected.
+  const realSubjects = useSchoolSubjects();
   const [addingSubject, setAddingSubject] = useState(false);
   const [postSave, setPostSave] = useState<{ type: 'school'; id: string } | null>(null);
   const [autoLink, setAutoLink] = useState<AutoLinkResult | null>(null);
@@ -650,7 +656,38 @@ export default function SchoolPage() {
 
   const addLesson    = (lesson: ScheduleLesson) => addSchoolLesson(lesson);
   const updateLesson = (id: string, patch: Partial<ScheduleLesson>) => storeUpdateSchoolLesson(id, patch);
-  const deleteLesson = (id: string) => storeDeleteSchoolLesson(id);
+  // Deleting a learning block (the Study plan / Õppimisplaan card's own
+  // delete button, ScheduleTab.tsx) only ever removed that one lesson
+  // document — it never touched the separate Subject document the lesson
+  // references. If that lesson was the subject's only remaining one, the
+  // subject kept existing and kept being offered in "Lisa õppimisblokk"
+  // (useSchoolSubjects, real subjects only) even though it had vanished
+  // from every visible Study plan card — confirmed as the actual
+  // production discrepancy: deleting a card here is a different action
+  // from deleteSchoolSubject (the Ained tab's own delete, untouched below).
+  //
+  // Fix: after removing the lesson, if no OTHER lesson (any subject,
+  // anywhere) still references the same subject, also delete that now-
+  // orphaned real Subject document — so it stops being offered for future
+  // blocks, matching what deleting it from the Study plan is expected to
+  // mean. Every other lesson — for this subject or any other — is never
+  // touched, so historical learning blocks are always preserved; this
+  // never cascades beyond the one now-orphaned subject document, and never
+  // fires at all while any other lesson still references the subject.
+  const deleteLesson = async (id: string) => {
+    const lesson = scheduleLessons.find((l) => l.id === id);
+    await storeDeleteSchoolLesson(id);
+    if (!lesson) return;
+    const stillReferenced = scheduleLessons.some((l) =>
+      l.id !== id &&
+      (lesson.subjectId ? l.subjectId === lesson.subjectId : l.subject === lesson.subject),
+    );
+    if (stillReferenced) return;
+    const orphanedSubject = lesson.subjectId
+      ? realSubjects.find((s) => s.id === lesson.subjectId)
+      : realSubjects.find((s) => s.name === lesson.subject);
+    if (orphanedSubject) await storeDeleteSchoolSubject(orphanedSubject.id);
+  };
 
   const addSubject = (subject: Subject) => addSchoolSubject(subject);
   const updateSubject = (id: string, patch: Partial<Omit<Subject, "icon">>) =>
