@@ -19,10 +19,22 @@
  *                        item's current title/date (entry reappears).
  *
  * The School item's own Firestore record is never written by this function
- * — only the derived calendarEvents document is created/deleted. Exams use
- * a separate `status` field and are never wired to this function (only
- * SchoolPage.tsx's markTaskDone/markTaskUndone call it) — out of scope by
- * construction, not by a guard in this file.
+ * — only the derived calendarEvents document is created/deleted. Exams
+ * (kontrolltööd/eksamid) use a separate `status` field (`'ootel' | 'tehtud'`)
+ * but are wired to this same function from SchoolPage.tsx's `updateExam`
+ * whenever a patch touches `status` — see the "component wiring" section
+ * below for that structural proof; the behavioral coverage above only
+ * exercises 'task' directly since the underlying function is identical for
+ * both kinds (SchoolEntityKind), just addressed by a different EntityLink.
+ *
+ * Also covers a second, related fix: a recreated (or freshly auto-created)
+ * School calendar event's color used to always be the same hardcoded
+ * default (#6F5AE8) regardless of subject — it now reuses the exact color
+ * already assigned by School's own subject/color system
+ * (resolveSchoolItemColor in automaticLinking.ts), preferring a live
+ * subjectId -> getAllSchoolSubjects() lookup and falling back to the item's
+ * own last-stored subjectColor/iconColor only for legacy/unresolved
+ * subjects — never a second, Calendar-specific color mapping.
  *
  * Uses the same fake-Firestore harness as schoolCalendarEventSync.test.ts.
  *
@@ -32,6 +44,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { EntityLink } from '@/types/entityLinks'
 import { encodeSchoolId } from '@/types/entityLinks'
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
@@ -66,14 +80,24 @@ vi.mock('@/lib/firestoreUtils', () => ({
   sanitizeForFirestore: (x: unknown) => x,
 }))
 
-// getEntityInfo('school', ...) (automaticLinking.ts) reads the School item's
-// CURRENT title/date straight from schoolStore — mocked here so each test
-// controls exactly what "current" means, independent of Firestore.
-type FakeSchoolTask = { id: number; title: string; deadline?: string }
+// getEntityInfo('school', ...) and resolveSchoolItemColor (automaticLinking.ts)
+// read the School item's CURRENT title/date/subject straight from
+// schoolStore — mocked here so each test controls exactly what "current"
+// means, independent of Firestore.
+type FakeSchoolTask = {
+  id: number
+  title: string
+  deadline?: string
+  subjectId?: string
+  subjectColor?: string
+}
+type FakeSchoolSubject = { id: string; color: string }
 let schoolTasks: FakeSchoolTask[] = []
+let schoolSubjects: FakeSchoolSubject[] = []
 vi.mock('@/lib/schoolStore', () => ({
   getAllSchoolTasks: () => schoolTasks,
   getAllSchoolExams: () => [],
+  getAllSchoolSubjects: () => schoolSubjects,
 }))
 
 import { initEntityLinksStore } from '@/lib/entityLinksStore'
@@ -143,6 +167,7 @@ beforeEach(() => {
   deleteDocMock.mockClear()
   writeBatchMock.mockClear()
   schoolTasks = [{ id: 1, title: 'Matemaatika kodutöö', deadline: '2026-08-30' }]
+  schoolSubjects = []
 
   initEntityLinksStore(UID) // onSnapshot call index 0
   initCalendarStore(UID)    // onSnapshot call index 1
@@ -313,5 +338,93 @@ describe('5. unrelated Calendar/School entries are unaffected', () => {
     await syncSchoolCalendarEventCompletion('task', 1, true)
 
     expect(getAllEvents().some((e) => e.id === 'cal-manual-999')).toBe(true)
+  })
+})
+
+// ── 6. The recreated Calendar entry uses the item's actual subject color ──
+
+describe('6. a recreated School Calendar entry uses the SAME color as the School subject system — never a second color mapping', () => {
+  it('resolves the color via subjectId against the current School subjects list, not a hardcoded default', async () => {
+    schoolTasks = [{ id: 1, title: 'Ajalugu kodutöö', deadline: '2026-08-30', subjectId: 'subj-ajalugu', subjectColor: '#000000' }]
+    schoolSubjects = [{ id: 'subj-ajalugu', color: '#B45309' }]
+    seedLinks([makeLink()])
+    seedCalendarEvents([makeEvent()])
+
+    await syncSchoolCalendarEventCompletion('task', 1, true)
+    seedCalendarEvents([])
+    await syncSchoolCalendarEventCompletion('task', 1, false)
+
+    const writes = calendarEventWrites()
+    expect(writes).toHaveLength(1)
+    expect(writes[0].data.color).toBe('#B45309')
+  })
+
+  it('two differently-colored subjects (e.g. Ajalugu vs. Kirjandus) recreate with two different colors', async () => {
+    schoolSubjects = [
+      { id: 'subj-ajalugu', color: '#B45309' },
+      { id: 'subj-kirjandus', color: '#0EA5E9' },
+    ]
+    schoolTasks = [
+      { id: 1, title: 'Ajalugu kodutöö', deadline: '2026-08-30', subjectId: 'subj-ajalugu' },
+      { id: 2, title: 'Kirjandus essee', deadline: '2026-09-01', subjectId: 'subj-kirjandus' },
+    ]
+    seedLinks([
+      makeLink({ fromId: encodeSchoolId('task', 1), toId: 'cal-auto-1000-abcd' }),
+      makeLink({ fromId: encodeSchoolId('task', 2), toId: 'cal-auto-2000-wxyz' }),
+    ])
+    seedCalendarEvents([
+      makeEvent({ id: 'cal-auto-1000-abcd' }),
+      makeEvent({ id: 'cal-auto-2000-wxyz', title: 'Kirjandus essee' }),
+    ])
+
+    await syncSchoolCalendarEventCompletion('task', 1, true)
+    await syncSchoolCalendarEventCompletion('task', 2, true)
+    seedCalendarEvents([])
+    await syncSchoolCalendarEventCompletion('task', 1, false)
+    await syncSchoolCalendarEventCompletion('task', 2, false)
+
+    const writes = calendarEventWrites()
+    const ajalugu = writes.find((w) => w.data.id === 'cal-auto-1000-abcd')
+    const kirjandus = writes.find((w) => w.data.id === 'cal-auto-2000-wxyz')
+    expect(ajalugu?.data.color).toBe('#B45309')
+    expect(kirjandus?.data.color).toBe('#0EA5E9')
+    expect(ajalugu?.data.color).not.toBe(kirjandus?.data.color)
+  })
+
+  it('falls back to the task\'s own stored subjectColor when subjectId does not resolve (legacy/deleted subject)', async () => {
+    schoolTasks = [{ id: 1, title: 'Vanem ülesanne', deadline: '2026-08-30', subjectId: 'deleted-subject', subjectColor: '#123456' }]
+    schoolSubjects = [] // the subject this task pointed at no longer exists
+    seedLinks([makeLink()])
+    seedCalendarEvents([makeEvent()])
+
+    await syncSchoolCalendarEventCompletion('task', 1, true)
+    seedCalendarEvents([])
+    await syncSchoolCalendarEventCompletion('task', 1, false)
+
+    expect(calendarEventWrites()[0]?.data.color).toBe('#123456')
+  })
+
+  it('falls back to the generic default color when neither subjectId nor a stored subjectColor is available', async () => {
+    schoolTasks = [{ id: 1, title: 'Ilma aineta ülesanne', deadline: '2026-08-30' }]
+    seedLinks([makeLink()])
+    seedCalendarEvents([makeEvent()])
+
+    await syncSchoolCalendarEventCompletion('task', 1, true)
+    seedCalendarEvents([])
+    await syncSchoolCalendarEventCompletion('task', 1, false)
+
+    expect(calendarEventWrites()[0]?.data.color).toBe('#6F5AE8')
+  })
+})
+
+// ── 7. Component wiring: SchoolPage.tsx also drives exam completion ───────
+
+describe('7. SchoolPage.tsx wiring: updateExam syncs Calendar completion whenever a patch touches `status`', () => {
+  const SCHOOL_PAGE_SRC = readFileSync(resolve(process.cwd(), 'src/views/SchoolPage.tsx'), 'utf8')
+
+  it('updateExam calls syncSchoolCalendarEventCompletion with the patch\'s new status, only when status is present', () => {
+    const fn = SCHOOL_PAGE_SRC.match(/const updateExam\s*=\s*async[\s\S]*?\n  \};/)?.[0] ?? ''
+    expect(fn).toMatch(/if \(patch\.status !== undefined\)/)
+    expect(fn).toMatch(/syncSchoolCalendarEventCompletion\('exam', id, patch\.status === "tehtud"\)/)
   })
 })

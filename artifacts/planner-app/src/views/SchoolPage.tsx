@@ -653,6 +653,12 @@ export default function SchoolPage() {
     // doesn't touch the date, when there's no auto-created event, or when
     // it's already on that date (e.g. markDone/markUndone's {status} patch).
     await syncSchoolCalendarEvent('exam', id, patch.date);
+    // Hide/restore the derived Calendar entry when this patch touches the
+    // exam's completion status — reuses the exact same status field School
+    // already uses (exam.status === "tehtud"), no second completion flag.
+    if (patch.status !== undefined) {
+      await syncSchoolCalendarEventCompletion('exam', id, patch.status === "tehtud");
+    }
   };
   const deleteExam = (id: number) => {
     // Same ordering as deleteTask above: resolve + delete the owned

@@ -26,7 +26,7 @@ import { getAllNotes } from '@/lib/quickNotesStore'
 import { getAllGoals } from '@/lib/goalsStore'
 import { getAllHabits } from '@/lib/habitsStore'
 import { getAllChats } from '@/lib/aiConversationsStore'
-import { getAllSchoolTasks, getAllSchoolExams } from '@/lib/schoolStore'
+import { getAllSchoolTasks, getAllSchoolExams, getAllSchoolSubjects } from '@/lib/schoolStore'
 import { decodeSchoolId, encodeSchoolId, type SchoolEntityKind } from '@/types/entityLinks'
 import type { EntityType } from '@/types/entityLinks'
 import type { AppLang } from '@/lib/languageStore'
@@ -39,6 +39,47 @@ import type { Task } from '@/types'
 // by this task" from a merely-linked pre-existing event). Exported so those
 // call sites reuse this one definition instead of redeclaring the literal.
 export const AUTO_CREATED_CALENDAR_EVENT_PREFIX = 'cal-auto-'
+
+// The color every auto-created calendar event has always defaulted to
+// (Tasks, Notes, Goals, Habits, AI chats, and — until now — School items
+// alike). Kept as the fallback for School items whose subject color can't
+// be resolved (see resolveSchoolItemColor below) — never a new color.
+const DEFAULT_AUTO_EVENT_COLOR = '#6F5AE8'
+
+/**
+ * Resolves the Calendar color for a School-derived event to the SAME color
+ * School itself already shows for that item — never a second,
+ * Calendar-specific color mapping.
+ *
+ * Prefers a live lookup of the item's subjectId against the current
+ * School subjects list (getAllSchoolSubjects) — the source of truth for a
+ * subject's color — so a subject's color change is reflected even for
+ * items created before the change. Falls back to the item's own
+ * last-stored subjectColor/iconColor snapshot when subjectId is missing or
+ * no longer resolves to an existing subject (legacy items, or a since-
+ * deleted subject), and finally to the same generic default every other
+ * auto-created calendar event already uses.
+ */
+function resolveSchoolItemColor(schoolId: string): string {
+  const decoded = decodeSchoolId(schoolId)
+  if (!decoded) return DEFAULT_AUTO_EVENT_COLOR
+
+  if (decoded.kind === 'task') {
+    const task = getAllSchoolTasks().find((x) => String(x.id) === decoded.rawId)
+    if (!task) return DEFAULT_AUTO_EVENT_COLOR
+    const subject = task.subjectId ? getAllSchoolSubjects().find((s) => s.id === task.subjectId) : undefined
+    return subject?.color ?? task.subjectColor ?? DEFAULT_AUTO_EVENT_COLOR
+  }
+
+  if (decoded.kind === 'exam') {
+    const exam = getAllSchoolExams().find((x) => String(x.id) === decoded.rawId)
+    if (!exam) return DEFAULT_AUTO_EVENT_COLOR
+    const subject = exam.subjectId ? getAllSchoolSubjects().find((s) => s.id === exam.subjectId) : undefined
+    return subject?.color ?? exam.iconColor ?? DEFAULT_AUTO_EVENT_COLOR
+  }
+
+  return DEFAULT_AUTO_EVENT_COLOR
+}
 
 /**
  * Adds one hour to an "HH:MM" time string, clamped to 23:59 same day so a
@@ -215,7 +256,7 @@ export async function runAutomaticLinking(
           allDay: !hasTime,
           startTime: hasTime ? info.time! : '',
           endTime: hasTime ? addOneHourClamped(info.time!) : '',
-          color: '#6F5AE8',
+          color: info.isSchool ? resolveSchoolItemColor(id) : DEFAULT_AUTO_EVENT_COLOR,
           calendarId: info.isSchool ? 'school' : 'mine',
         })
         calendarEventId = eventId
@@ -419,7 +460,7 @@ export async function syncSchoolCalendarEventCompletion(
       allDay: true,
       startTime: '',
       endTime: '',
-      color: '#6F5AE8',
+      color: resolveSchoolItemColor(schoolId),
       calendarId: 'school',
     })
   } catch {
