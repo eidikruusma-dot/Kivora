@@ -593,7 +593,11 @@ export default function HabitsPage() {
                       {wd.short}
                     </span>
                     <span className="text-[10px] text-[#94A3B8]">
-                      {wd.date}
+                      {/* Mobile: just the day number so the 7 columns never
+                          crowd each other; sm: and up keep the fuller
+                          "24. august" label from getCurrentWeekDays(). */}
+                      <span className="sm:hidden">{date.getDate()}</span>
+                      <span className="hidden sm:inline">{wd.date}</span>
                     </span>
 
                     {/* Circle indicator */}
