@@ -402,8 +402,17 @@ export default function GoalsPage() {
           </button>
         </div>
 
-        {/* Filter tabs */}
-        <div className="flex items-center gap-1 p-1 bg-white rounded-xl border border-[#ECECF2] w-fit">
+        {/* Filter tabs.
+            Mobile-only: max-w-full + overflow-x-auto lets the strip
+            scroll horizontally within itself instead of pushing the
+            whole page wider — confirmed via a real Chromium render of
+            the compiled Tailwind output, where at 320px this w-fit strip
+            was wider than the available content width and its last tab
+            ("Lõpetatud (n)") was clipped off-screen. sm: restores the
+            original fit-content sizing (already fits there, unchanged).
+            Same overflow-x-auto pattern already used correctly for the
+            Plans/School tab strips. */}
+        <div className="flex items-center gap-1 p-1 bg-white rounded-xl border border-[#ECECF2] max-w-full overflow-x-auto sm:w-fit">
           {([
             { key: 'all',       label: t('goals.filter.all',    lang).replace('{n}', String(goals.length))    },
             { key: 'active',    label: t('goals.filter.active', lang).replace('{active}', String(activeCount)) },
@@ -413,7 +422,7 @@ export default function GoalsPage() {
             <button
               key={key}
               onClick={() => setFilter(key)}
-              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                 filter === key
                   ? 'bg-[#EDE9FB] text-[#6F5AE8]'
                   : 'text-[#64748B] hover:bg-[#F8F7F4] hover:text-[#1A1F36]'
