@@ -2,6 +2,7 @@
   "name": "Kivora",
   "short_name": "Kivora",
   "description": "Your personal planner — tasks, calendar, habits, notes and goals in one place.",
+  "id": "/app",
   "start_url": "./app",
   "scope": "./",
   "display": "standalone",

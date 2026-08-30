@@ -1888,7 +1888,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "pub.install.other.body": "Ava Kivora Chrome\u2019is (Windows, Mac v\u00F5i Android) v\u00F5i Safari\u2019s (iPhone/iPad), seejärel vali brauseri menüüst \u201ELisa avakuvale\u201D v\u00F5i \u201EInstalli rakendus\u201D.",
         "pub.install.other.close": "Sulge",
         "pub.install.notready.title": "Paigaldamine ettevalmistamisel",
-        "pub.install.notready.body": "Brauser valmistab paigaldamist ette. Proovi m\u00F5ne sekundi p\u00E4rast uuesti v\u00F5i kasuta Chrome\u2019i men\u00FC\u00FCd: \u2630 \u2192 \u201EInstalli rakendus\u201D / \u201ELisa avakuvale\u201D.",
+        "pub.install.notready.body": "Brauser valmistab paigaldamist ette. Proovi m\u00F5ne sekundi p\u00E4rast uuesti v\u00F5i vali Chrome\u2019i men\u00FC\u00FCst (\u2630) \u201EPaigalda rakendus\u201D \u2014 nii paigaldub Kivora p\u00E4ris rakendusena, mitte veebilehe otseteena.",
         "pub.install.notready.retry": "Proovi uuesti",
         "pub.install.notready.close": "Sulge",
         // public footer
@@ -3885,7 +3885,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "pub.install.other.body": "Open Kivora in Chrome (Windows, Mac or Android) or Safari (iPhone/iPad), then tap the browser menu and choose \u201CAdd to Home Screen\u201D or \u201CInstall app\u201D.",
         "pub.install.other.close": "Close",
         "pub.install.notready.title": "Installation being prepared",
-        "pub.install.notready.body": "Your browser is preparing the installation. Try again in a few seconds, or use the Chrome menu: \u2630 \u2192 \u201CInstall app\u201D / \u201CAdd to Home Screen\u201D.",
+        "pub.install.notready.body": "Your browser is preparing the installation. Try again in a few seconds, or choose \u201CInstall app\u201D from the Chrome menu (\u2630) \u2014 that installs Kivora as a real app, not just a website shortcut.",
         "pub.install.notready.retry": "Try again",
         "pub.install.notready.close": "Close",
         // public footer
