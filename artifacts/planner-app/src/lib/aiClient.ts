@@ -14,6 +14,22 @@ export interface AIResponse {
 export type ChatRequestMode = 'chat' | 'plan_creation'
 
 /**
+ * Reads the server-supplied error `code` (e.g. "QUOTA_EXCEEDED") off an
+ * error thrown by fetchAIReply, or off a plain `{ code }` object built the
+ * same way at the /api/ai/upload and /api/ai/bank-import call sites
+ * (AIAssistantPage.tsx, FinancePage.tsx) — the one shared place callers
+ * check "which specific server error is this" without parsing/matching the
+ * raw, always-English `error` message text. Returns undefined for any
+ * error that doesn't carry a string `code` (including AuthRequiredError,
+ * network failures, and every pre-existing error path) — those are
+ * unaffected and keep falling through to their existing handling.
+ */
+export function getAiErrorCode(err: unknown): string | undefined {
+  const code = (err as { code?: unknown } | null)?.code
+  return typeof code === 'string' ? code : undefined
+}
+
+/**
  * Builds the exact request messages for a plan-generation call: the raw,
  * already-trimmed user description, sent verbatim as the sole message
  * content — no prefix/wrapper sentence. This guarantees the length actually
@@ -189,7 +205,13 @@ export async function fetchAIReply(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body.error || `Request failed (${res.status}).`)
+    // `code` (e.g. "QUOTA_EXCEEDED") is carried alongside the human-readable
+    // `error` message so callers (see getAiErrorCode below) can map specific
+    // codes to a friendly, translated message without parsing/matching the
+    // raw English server text.
+    throw Object.assign(new Error(body.error || `Request failed (${res.status}).`), {
+      code: typeof body.code === 'string' ? body.code : undefined,
+    })
   }
 
   const data = await res.json()

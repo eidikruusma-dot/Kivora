@@ -14,7 +14,7 @@ import {
   type AIAction,
   type PendingFileRef,
 } from "@/lib/aiActions";
-import { fetchAIReply } from "@/lib/aiClient";
+import { fetchAIReply, getAiErrorCode } from "@/lib/aiClient";
 import { authenticatedFetch } from "@/lib/authenticatedFetch";
 import { getAllDocuments } from "@/lib/documentsStore";
 import { auth } from "@/lib/firebase";
@@ -112,8 +112,16 @@ function nowTime(lang: string) {
  * of 500000 characters." AuthRequiredError's internal "AUTH_REQUIRED"
  * sentinel and a bare empty message are not informative to a user, so
  * those fall back to the plain apology.
+ *
+ * QUOTA_EXCEEDED (the daily Free-tier AI limit — see aiQuota.ts on the
+ * server) is checked first and shown as its own clear, translated message
+ * instead of the generic apology-plus-raw-reason below — a raw "Daily AI
+ * request limit reached..." (always English, straight from the server)
+ * would otherwise leak through the same path as any other server error.
  */
 export function describeAIError(err: unknown, lang: AppLang): string {
+  if (getAiErrorCode(err) === "QUOTA_EXCEEDED") return t("ai.chat.quotaExceeded", lang);
+
   const base = t("ai.chat.error", lang);
   const reason = err instanceof Error ? err.message.trim() : "";
   if (!reason || reason === "AUTH_REQUIRED") return base;
@@ -667,7 +675,9 @@ export default function AIAssistantPage() {
         let errMsg =
           (body as { error?: string }).error ?? `Upload failed (${res.status})`;
         // Map server-returned code to localized message
-        if (errMsg === "PDF_NO_TEXT") {
+        if ((body as { code?: string }).code === "QUOTA_EXCEEDED") {
+          errMsg = t("ai.chat.quotaExceeded", lang);
+        } else if (errMsg === "PDF_NO_TEXT") {
           errMsg =
             lang === "et"
               ? "PDF ei sisalda loetavat teksti. Proovi tekstipõhist PDF-i."

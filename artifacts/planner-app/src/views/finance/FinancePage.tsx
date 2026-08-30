@@ -2335,7 +2335,12 @@ function BankImportModal({
         body: formData,
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        const body = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+        // Map server-returned code to a localized message — the raw
+        // `error` text is always English regardless of UI language.
+        if (body.code === "QUOTA_EXCEEDED") {
+          throw new Error(t("ai.chat.quotaExceeded", lang));
+        }
         throw new Error(
           body.error ??
             (et ? "Faili töötlemine ebaõnnestus." : "Failed to process file."),

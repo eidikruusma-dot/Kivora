@@ -1152,6 +1152,7 @@ export type TranslationKey =
     | "goals.rec.tip3"
     // ── AIAssistantPage ───────────────────────────────────────────────────────
     | "ai.chat.error"
+    | "ai.chat.quotaExceeded"
     | "ai.chat.placeholder"
     // ── SchoolPage extra ──────────────────────────────────────────────────────
     | "school.empty.subjectsTitle"
@@ -3387,6 +3388,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         // ai extra
         "ai.chat.error":
             "Vabandust, vastuse laadimine ebaõnnestus. Proovi hiljem uuesti.",
+        "ai.chat.quotaExceeded":
+            "Tänane AI kasutuslimiit on täis. Proovi uuesti homme.",
         "ai.chat.placeholder": "Kirjuta oma küsimus...",
         // school extra
         "school.empty.subjectsTitle": "Ained puuduvad",
@@ -5380,6 +5383,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         // ai extra
         "ai.chat.error":
             "Sorry, failed to load the response. Please try again later.",
+        "ai.chat.quotaExceeded":
+            "You've reached today's AI usage limit. Try again tomorrow.",
         "ai.chat.placeholder": "Type your question...",
         // school extra
         "school.empty.subjectsTitle": "No subjects",
