@@ -13,12 +13,22 @@
  *     response never reveals whether the token itself was bad or the
  *     server is misconfigured.
  *   - Valid token → next() is called exactly once; res.locals.authUser is
- *     set to { uid, email } — never the raw token, never the full decoded
- *     claim set.
+ *     set to { uid, email, owner } — never the raw token, never the full
+ *     decoded claim set.
  *
  * verifyIdToken(token, true) is used — the `true` checkRevoked argument
  * means a revoked token or a disabled user account is rejected too, not
  * just an expired or malformed one.
+ *
+ * `owner` is sourced EXCLUSIVELY from the `owner` custom claim baked into
+ * the verified, signed ID token (decoded.owner === true) — the same
+ * verifyIdToken() call above, nothing else. Custom claims can only be set
+ * server-side via the Firebase Admin SDK (e.g. auth.setCustomUserClaims);
+ * no request header, query param, or JSON body field is ever consulted for
+ * this value, so a caller cannot influence it by changing what they send.
+ * Absent or anything other than the literal boolean `true` defaults to
+ * `false` — this is quota-plumbing only; no route yet reads or enforces
+ * anything based on it.
  *
  * Never logs the Authorization header, the token, or any decoded claim.
  */
@@ -30,6 +40,12 @@ import { getFirebaseAdminAuth } from "../lib/firebaseAdmin.js";
 export interface AuthenticatedUser {
   uid: string;
   email?: string;
+  /**
+   * True only when the verified ID token's `owner` custom claim is the
+   * literal boolean `true`. Trusted because it comes from a signed token
+   * verified by verifyIdToken() — never from client-controlled input.
+   */
+  owner: boolean;
 }
 
 const BEARER_PREFIX = "Bearer ";
@@ -54,7 +70,13 @@ export async function verifyBearerToken(
 ): Promise<{ ok: true; user: AuthenticatedUser } | { ok: false }> {
   try {
     const decoded = await auth.verifyIdToken(token, true);
-    return { ok: true, user: { uid: decoded.uid, email: decoded.email } };
+    // decoded.owner is a custom claim (firebase-admin types DecodedIdToken's
+    // claims as [key: string]: any) — only ever set server-side via the
+    // Admin SDK, verified here by the signature check above, never supplied
+    // by the caller. Anything but the literal boolean true is untrusted/
+    // absent and defaults to false.
+    const owner = decoded.owner === true;
+    return { ok: true, user: { uid: decoded.uid, email: decoded.email, owner } };
   } catch {
     return { ok: false };
   }

@@ -75,7 +75,7 @@ function makeNextSpy() {
   return { next, count: () => calls };
 }
 
-function fakeAuthResolving(decoded: { uid: string; email?: string }): Pick<Auth, "verifyIdToken"> {
+function fakeAuthResolving(decoded: { uid: string; email?: string; owner?: unknown }): Pick<Auth, "verifyIdToken"> {
   return {
     verifyIdToken: (async () => decoded) as unknown as Auth["verifyIdToken"],
   };
@@ -114,6 +114,7 @@ await group("3. verifyBearerToken: valid token resolves to ok:true with the deco
   if (result.ok) {
     assert(result.user.uid === "synthetic-uid-1", "uid carried through");
     assert(result.user.email === "synthetic@example.com", "email carried through");
+    assert(result.user.owner === false, "owner defaults to false when the claim is absent");
   }
 });
 
@@ -141,6 +142,43 @@ await group("5. verifyBearerToken: calls verifyIdToken with the token and checkR
   await verifyBearerToken(auth, "synthetic-token-xyz");
   assert(capturedArgs[0] === "synthetic-token-xyz", "called with the exact token");
   assert(capturedArgs[1] === true, "called with checkRevoked = true (so revoked tokens/disabled users are checked)");
+});
+
+// ── owner custom claim — sourced only from the verified decoded token ───────
+
+await group("5b. verifyBearerToken: owner claim resolution", async () => {
+  const trueClaim = await verifyBearerToken(
+    fakeAuthResolving({ uid: "u-owner", owner: true }),
+    "t",
+  );
+  assert(trueClaim.ok === true && trueClaim.user.owner === true, "owner: true claim → user.owner === true");
+
+  const falseClaim = await verifyBearerToken(
+    fakeAuthResolving({ uid: "u-not-owner", owner: false }),
+    "t",
+  );
+  assert(falseClaim.ok === true && falseClaim.user.owner === false, "owner: false claim → user.owner === false");
+
+  const missingClaim = await verifyBearerToken(
+    fakeAuthResolving({ uid: "u-no-claim" }),
+    "t",
+  );
+  assert(missingClaim.ok === true && missingClaim.user.owner === false, "missing owner claim → user.owner === false");
+
+  // Custom claims are not restricted to booleans by Firestore/Firebase — a
+  // stray truthy non-boolean value (a string, a number) must never be
+  // treated as "owner" via loose truthiness. Only the literal boolean true
+  // counts.
+  for (const nonBooleanTruthy of ["true", 1, "yes", {}]) {
+    const result = await verifyBearerToken(
+      fakeAuthResolving({ uid: "u-weird-claim", owner: nonBooleanTruthy }),
+      "t",
+    );
+    assert(
+      result.ok === true && result.user.owner === false,
+      `owner: ${JSON.stringify(nonBooleanTruthy)} (truthy, not literal true) → user.owner === false`,
+    );
+  }
 });
 
 // ── requireFirebaseAuth (the Express middleware itself) ─────────────────────
@@ -210,6 +248,44 @@ await group("11. requireFirebaseAuth: valid token → next() called exactly once
   assert(res.jsonBody === undefined, "no error body was ever sent");
   assert((res.locals["authUser"] as { uid?: string })?.uid === "synthetic-uid-42", "res.locals.authUser.uid set correctly");
   assert((res.locals["authUser"] as { email?: string })?.email === "user@example.com", "res.locals.authUser.email set correctly");
+  assert((res.locals["authUser"] as { owner?: boolean })?.owner === false, "res.locals.authUser.owner defaults to false with no claim");
+});
+
+await group("11b. requireFirebaseAuth: owner claim on the verified token flows through to res.locals.authUser.owner", async () => {
+  const req = fakeReq("Bearer synthetic-owner-token");
+  const res = fakeRes();
+  const spy = makeNextSpy();
+  const getAuthFn = () => fakeAuthResolving({ uid: "synthetic-owner-uid", owner: true });
+  await requireFirebaseAuth(req, res, spy.next, getAuthFn);
+  assert(spy.count() === 1, "next() called exactly once");
+  assert((res.locals["authUser"] as { owner?: boolean })?.owner === true, "res.locals.authUser.owner === true when the verified token carries owner: true");
+});
+
+// ── No client-request field can influence res.locals.authUser.owner ────────
+// requireFirebaseAuth reads req.headers.authorization for the bearer token
+// and nothing else off the request — owner is derived exclusively from
+// what the (faked, in this test) verifyIdToken call returns. This proves a
+// req.body/req.query/extra-header claim of ownership is never even looked
+// at, regardless of what verifyIdToken actually decodes.
+await group("11c. no client-supplied request field can set or influence owner", async () => {
+  const req = {
+    headers: { authorization: "Bearer synthetic-valid-token" },
+    // Every plausible spoofing attempt a caller might try — none of these
+    // are ever read by requireFirebaseAuth/verifyBearerToken.
+    body: { owner: true, role: "owner", isOwner: true, admin: true },
+    query: { owner: "true" },
+  } as unknown as Request;
+  const res = fakeRes();
+  const spy = makeNextSpy();
+  // The verified token itself carries no owner claim — if requireFirebaseAuth
+  // read anything from req.body/req.query instead, this would wrongly
+  // resolve to owner: true.
+  const getAuthFn = () => fakeAuthResolving({ uid: "synthetic-uid-spoof-attempt" });
+  await requireFirebaseAuth(req, res, spy.next, getAuthFn);
+  assert(
+    (res.locals["authUser"] as { owner?: boolean })?.owner === false,
+    "req.body/req.query claiming ownership has zero effect — owner stays false",
+  );
 });
 
 await group("12. requireFirebaseAuth: verifyIdToken is called with the exact token and checkRevoked=true", async () => {
