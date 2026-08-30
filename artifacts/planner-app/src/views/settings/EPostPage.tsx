@@ -138,7 +138,7 @@ export default function EPostPage({ onBack }: Props) {
           title={t('emailSettings.primary.title', lang)}
           description={t('emailSettings.primary.desc', lang)}
         >
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div>
               <p className="text-sm font-semibold text-[#1A1F36]">{user?.email}</p>
               <p className="text-xs text-[#94A3B8] mt-0.5">
