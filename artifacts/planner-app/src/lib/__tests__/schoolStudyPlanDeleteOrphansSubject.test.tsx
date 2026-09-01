@@ -128,11 +128,36 @@ function openScheduleTab() {
   fireEvent.click(screen.getByText('Tunniplaan'))
 }
 
+/**
+ * Every Study plan (Tunniplaan tab) lesson card renders the subject name
+ * too, but so does the always-visible "Today's timetable" sidebar widget
+ * (TodaySchedule, SchoolPage.tsx) — it's rendered on every tab, not just
+ * Tunniplaan, and independently shows any lesson whose date range covers
+ * the current real date. A plain document-wide `getByText`/`getAllByText`
+ * for a subject name can therefore also match that sidebar's own read-only
+ * card whenever a fixture's lesson dates happen to include "today" (as
+ * they legitimately can, this file's fixtures start on 2026-09-01) — that
+ * is correct, unrelated UI, not a Study plan card, and not a regression.
+ *
+ * A genuine Study plan card is always a clickable `.rounded-xl` element
+ * (it carries `cursor-pointer`, the same class its own trash-icon click
+ * handler depends on); TodaySchedule's cards never do. Filtering on that
+ * distinction — rather than counting/matching raw text anywhere in the
+ * document — is what actually targets "the Study plan cards for this
+ * subject", robustly, regardless of what date the suite runs on.
+ */
+function studyPlanCardMatches(subjectName: string): HTMLElement[] {
+  return screen
+    .getAllByText(subjectName)
+    .map((el) => el.closest('.rounded-xl.cursor-pointer'))
+    .filter((el): el is HTMLElement => el !== null)
+}
+
 /** When multiple cards share a subject name (two lessons for the same
  * subject), returns the first — deleting it is enough to exercise the
  * "still referenced elsewhere" branch. */
 function studyPlanCardFor(subjectName: string): HTMLElement {
-  return screen.getAllByText(subjectName)[0].closest('.rounded-xl') as HTMLElement
+  return studyPlanCardMatches(subjectName)[0]
 }
 
 /** Clicks a Study plan card's own trash icon, then confirms the inline
@@ -198,7 +223,10 @@ describe('deleting the only Study plan card for a subject also removes it from f
     openScheduleTab()
 
     // Confirmed present before deletion, exactly like the real device.
-    expect(screen.getByText('Kirjandus')).toBeDefined()
+    // (A plain getByText('Kirjandus') would also match the always-visible
+    // "Today's timetable" sidebar card whenever a lesson's date range
+    // happens to cover the current real date — see studyPlanCardMatches.)
+    expect(studyPlanCardMatches('Kirjandus').length).toBeGreaterThan(0)
     let select = openSubjectSelector()
     expect(optionTexts(select)).toContain('Kirjandus')
     closeSubjectModal()
@@ -256,7 +284,12 @@ describe('a subject with another remaining Study plan card is never removed', ()
     renderSchoolPage()
     openScheduleTab()
 
-    const matCards = screen.getAllByText('Matemaatika')
+    // Two Study plan cards specifically — not a count of every element in
+    // the document that happens to say "Matemaatika" (see
+    // studyPlanCardMatches: the always-visible "Today's timetable"
+    // sidebar can independently show one of the same two lessons whenever
+    // its date range covers the current real date).
+    const matCards = studyPlanCardMatches('Matemaatika')
     expect(matCards.length).toBe(2)
 
     deleteStudyPlanCard('Matemaatika') // deletes the first match's card
