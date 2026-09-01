@@ -1338,6 +1338,7 @@ export type TranslationKey =
     | "school.taskType.worksheet"
     | "school.taskType.research"
     | "school.taskType.study_guide"
+    | "school.taskType.textbook"
     | "school.taskType.other"
     | "school.field.taskSubject"
     | "school.field.taskTopic"
@@ -3157,6 +3158,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.taskType.worksheet": "Tööleht",
         "school.taskType.research": "Uurimistöö",
         "school.taskType.study_guide": "Õpijuhis",
+        "school.taskType.textbook": "Õpik",
         "school.taskType.other": "Muu",
         "school.field.taskSubject": "Õppeaine",
         "school.field.taskTopic": "Teema",
@@ -5154,6 +5156,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "school.taskType.worksheet": "Worksheet",
         "school.taskType.research": "Research",
         "school.taskType.study_guide": "Study guide",
+        "school.taskType.textbook": "Textbook",
         "school.taskType.other": "Other",
         "school.field.taskSubject": "Subject",
         "school.field.taskTopic": "Topic",
