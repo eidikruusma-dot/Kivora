@@ -5,6 +5,7 @@ import { addNote, deleteNote, getAllNotes } from '@/lib/quickNotesStore'
 import { addHabit, deleteHabit, getAllHabits } from '@/lib/habitsStore'
 import { addGoal, deleteGoal, getAllGoals } from '@/lib/goalsStore'
 import { addCalendarEvent, deleteCalendarEvent, getAllEvents } from '@/lib/calendarStore'
+import { getAllPlans, deletePlan } from '@/lib/plansStore'
 import { addTransaction, getAllTransactions } from '@/lib/moneyStore'
 import { MONEY_MODULE_ENABLED } from '@/lib/featureFlags'
 import type { Transaction, TransactionCategory } from '@/types/money'
@@ -28,7 +29,7 @@ import { sanitizePlanDraft, normalizeSingleValidPlanPreview, type PlanDraft } fr
 
 export interface AIAction {
   type: 'create_task' | 'create_note' | 'create_habit' | 'create_goal' | 'create_calendar_event'
-    | 'delete_task' | 'delete_note' | 'delete_habit' | 'delete_goal' | 'delete_calendar_event'
+    | 'delete_task' | 'delete_note' | 'delete_habit' | 'delete_goal' | 'delete_calendar_event' | 'delete_plan'
     | 'save_document' | 'move_document' | 'rename_document' | 'batch_save_documents'
     | 'create_money_income' | 'create_money_expense' | 'batch_create_money_transactions'
     | 'preview_bank_import' | 'preview_plan_creation'
@@ -300,7 +301,7 @@ function destLabel(module: DocumentModule, folder?: string, subjectName?: string
 //     new target overwrites (invalidates) whatever was pending before, so
 //     a stale confirmation can never be redirected at a different entity.
 type DestructiveActionType =
-  | 'delete_task' | 'delete_note' | 'delete_habit' | 'delete_goal' | 'delete_calendar_event'
+  | 'delete_task' | 'delete_note' | 'delete_habit' | 'delete_goal' | 'delete_calendar_event' | 'delete_plan'
 
 interface PendingDestructiveAction {
   type: DestructiveActionType
@@ -661,6 +662,23 @@ export async function executeAction(rawAction: AIAction, ctx?: ActionContext): P
           confirmQuestion: (title) => `Kas soovid kindlasti kustutada sündmuse "${title}"? Seda toimingut ei saa tagasi võtta.`,
           execute: (id) => deleteCalendarEvent(id),
           successMessage: (title) => `Sündmus "${title}" kustutatud.`,
+        })
+      }
+
+      case 'delete_plan': {
+        return await executeDestructiveAction(action, {
+          type: 'delete_plan',
+          find: (id, title) => {
+            const plans = getAllPlans()
+            return id ? plans.find((p) => p.id === id) : plans.find((p) => p.title.toLowerCase() === title)
+          },
+          getId: (p) => p.id,
+          getTitle: (p) => p.title,
+          missingIdentifierMessage: 'Plaani pealkiri või ID puudub.',
+          notFoundMessage: 'Sellise pealkirjaga plaani ei leitud.',
+          confirmQuestion: (title) => `Kas soovid kindlasti kustutada plaani "${title}"? Seda toimingut ei saa tagasi võtta.`,
+          execute: (id) => deletePlan(id),
+          successMessage: (title) => `Plaan "${title}" kustutatud.`,
         })
       }
 

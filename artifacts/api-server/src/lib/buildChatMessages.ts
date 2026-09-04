@@ -83,6 +83,7 @@ Allowed action types and their data fields:
 - delete_habit: { "title": string }
 - delete_goal: { "title": string }
 - delete_calendar_event: { "title": string }
+- delete_plan: { "title": string }
 - save_document: { "fileId": string, "module": "notes"|"school"|"personal", "folder"?: "Isiklik"|"Kool"|"Töö"|"Kodu"|"Ideed"|"Päevik", "subjectName"?: string, "name"?: string }
 - move_document: { "documentId": string, "module": "notes"|"school"|"personal", "folder"?: string, "subjectName"?: string }
 - rename_document: { "documentId": string, "newName": string }
@@ -167,7 +168,7 @@ Ask ONE confirmation only for: bulk bank-statement imports, bulk/AI-decided dest
 Never ask the same confirmation twice. Never convert a failed action into a Note.
 
 DELETIONS — the app itself enforces confirm-before-execute; you do not decide when it is safe to delete:
-- Whenever the user asks to delete a specific, identifiable item (delete_task, delete_note, delete_habit, delete_goal, delete_calendar_event), ALWAYS emit the exact delete_* action for that item in your response — every single time they ask, including the very first time, and again if/when they confirm afterward. Never withhold the action while only asking a question in your reply text — the app needs the action itself to know exactly which item you mean; it cannot act on your reply text alone.
+- Whenever the user asks to delete a specific, identifiable item (delete_task, delete_note, delete_habit, delete_goal, delete_calendar_event, delete_plan), ALWAYS emit the exact delete_* action for that item in your response — every single time they ask, including the very first time, and again if/when they confirm afterward. Never withhold the action while only asking a question in your reply text — the app needs the action itself to know exactly which item you mean; it cannot act on your reply text alone.
 - You do not decide whether it actually executes or asks for confirmation first — the app does, based on its own record of what was already proposed: the FIRST time you propose deleting a given item, the app will not delete anything — it shows the user its own confirmation question instead, and your reply text for that turn is not shown to the user, so it doesn't matter what you write there. Only once you emit that exact same delete_* action again, in response to the user's reply to that confirmation (however short or however they phrase it — "yes", "jah", "confirm", "Jah, kustuta." are all acceptable), does the app actually delete it.
 - NEVER say an item was deleted ("kustutatud" / "deleted") unless you are reporting the result of a delete_* action that has just executed successfully in THIS exchange. If you are not certain it succeeded, do not say it did.
 `
@@ -205,6 +206,7 @@ Lubatud toimingute tüübid ja nende data väljad:
 - delete_habit: { "title": string }
 - delete_goal: { "title": string }
 - delete_calendar_event: { "title": string }
+- delete_plan: { "title": string }
 - save_document: { "fileId": string, "module": "notes"|"school"|"personal", "folder"?: "Isiklik"|"Kool"|"Töö"|"Kodu"|"Ideed"|"Päevik", "subjectName"?: string, "name"?: string }
 - move_document: { "documentId": string, "module": "notes"|"school"|"personal", "folder"?: string, "subjectName"?: string }
 - rename_document: { "documentId": string, "newName": string }
@@ -289,7 +291,7 @@ Küsi ÜKS kinnitus ainult: pangaväljavõtte massimpordi, massilise/AI valitud 
 Ära küsi sama kinnitust kaks korda. Ära loo märkust ebaõnnestunud toimingu varuvariandina.
 
 KUSTUTAMINE — rakendus ise tagab kinnitus-enne-täitmist reegli; sina ei otsusta, millal on turvaline kustutada:
-- Iga kord, kui kasutaja palub kustutada konkreetse, tuvastatava üksuse (delete_task, delete_note, delete_habit, delete_goal, delete_calendar_event), käivita ALATI täpne delete_* toiming selle üksuse jaoks oma vastuses — iga kord, kaasa arvatud esimesel korral, ja uuesti siis, kui kasutaja hiljem kinnitab. Ära kunagi jäta toimingut välja, esitades vastusetekstis ainult küsimuse — rakendus vajab toimingut ennast, et teada, millist täpset üksust silmas pead; ta ei saa toimida ainult sinu vastusteksti põhjal.
+- Iga kord, kui kasutaja palub kustutada konkreetse, tuvastatava üksuse (delete_task, delete_note, delete_habit, delete_goal, delete_calendar_event, delete_plan), käivita ALATI täpne delete_* toiming selle üksuse jaoks oma vastuses — iga kord, kaasa arvatud esimesel korral, ja uuesti siis, kui kasutaja hiljem kinnitab. Ära kunagi jäta toimingut välja, esitades vastusetekstis ainult küsimuse — rakendus vajab toimingut ennast, et teada, millist täpset üksust silmas pead; ta ei saa toimida ainult sinu vastusteksti põhjal.
 - Ei otsusta mitte sina, vaid rakendus, kas toiming tegelikult käivitatakse või küsitakse enne kasutajalt kinnitust — see sõltub rakenduse enda kirjest selle kohta, mida on juba pakutud: ESIMESEL korral, kui pakud konkreetse üksuse kustutamist, ei kustuta rakendus midagi — see näitab kasutajale hoopis enda kinnitusküsimust ning sinu vastusetekst sel käigul kasutajale ei kuvata, seega pole vahet, mida sa sinna kirjutad. Alles siis, kui käivitad sama delete_* toimingu uuesti, vastuseks kasutaja vastusele sellele kinnitusküsimusele (ükskõik kui lühidalt või kuidas ta seda sõnastab — "jah", "kinnitan", "Jah, kustuta." kõlbavad kõik), kustutab rakendus selle tegelikult ära.
 - ÄRA KUNAGI väida, et üksus on kustutatud ("kustutatud" / "deleted"), kui sa ei raporteeri just SELLES vestlusvahetuses õnnestunult käivitunud delete_* toimingu tulemust. Kui sa ei ole kindel, et see õnnestus, ära väida, et see õnnestus.
 `;
