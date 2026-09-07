@@ -87,15 +87,24 @@ export async function getActivePushSubscription(): Promise<PushSubscription | nu
  * @returns 'active' on success, 'denied' if permission was denied, 'error' on any other failure
  */
 export async function enablePush(uid: string): Promise<'active' | 'denied' | 'error'> {
-  if (!isPushSupported()) return 'error'
+  // TEMPORARY DIAGNOSTIC — remove after use. Purely additive (console.log +
+  // one alert at the end); no existing branch/return value is changed.
+  const _trace: string[] = []
+  const _step = (s: string) => { _trace.push(s); console.log('[PUSH_DEBUG]', s) }
+  const _finish = (outcome: string) => alert('[PUSH_DEBUG] ' + outcome + ' :: ' + _trace.join(' | '))
+
+  if (!isPushSupported()) { _step('isPushSupported=false'); _finish('error (unsupported)'); return 'error' }
+  _step(`isPushSupported=true, Notification.permission(before ask)=${Notification.permission}`)
 
   // 1. Request notification permission
   const permission = await Notification.requestPermission()
-  if (permission !== 'granted') return 'denied'
+  _step(`requestPermission() -> ${permission}`)
+  if (permission !== 'granted') { _finish('denied'); return 'denied' }
 
   // 2. Register service worker
   const reg = await registerServiceWorker()
-  if (!reg) return 'error'
+  _step(`registerServiceWorker() -> ${reg ? `ok scope=${reg.scope} active=${reg.active?.state ?? 'none'}` : 'null'}`)
+  if (!reg) { _finish('error (no SW registration)'); return 'error' }
 
   try {
     // 3. Fetch VAPID public key and subscribe.
@@ -104,11 +113,14 @@ export async function enablePush(uid: string): Promise<'active' | 'denied' | 'er
     // so a failed persistence below only cleans up a subscription THIS call
     // actually created, never one that already existed.
     const vapidKey = await fetchVapidKey()
+    _step(`fetchVapidKey() -> length=${vapidKey.length}`)
     const existingSub = await reg.pushManager.getSubscription()
+    _step(`existing subscription before subscribe() = ${existingSub ? 'yes' : 'no'}`)
     const sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(vapidKey),
     })
+    _step('pushManager.subscribe() succeeded')
     const createdNewSubscription = !existingSub
 
     // 4. Persist subscription in Firestore under the user's path
@@ -125,18 +137,23 @@ export async function enablePush(uid: string): Promise<'active' | 'denied' | 'er
         createdAt: Date.now(),
         userAgent: navigator.userAgent.slice(0, 150),
       })
+      _step('Firestore setDoc succeeded')
     } catch (persistErr) {
       // Don't leave an orphaned browser subscription behind that would
       // later make the UI incorrectly appear active on reload.
+      _step(`Firestore setDoc FAILED name=${(persistErr as { code?: string; name?: string })?.code ?? (persistErr as Error)?.name} message=${(persistErr as Error)?.message}`)
       if (createdNewSubscription) {
         await sub.unsubscribe().catch(() => {})
       }
       throw persistErr
     }
 
+    _finish('active')
     return 'active'
   } catch (err) {
+    _step(`ERROR name=${(err as Error)?.name} message=${(err as Error)?.message}`)
     console.warn('[Kivora] Push subscription error:', err)
+    _finish('error (caught)')
     return 'error'
   }
 }
