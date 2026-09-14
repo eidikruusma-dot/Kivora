@@ -105,19 +105,10 @@ export async function enablePush(uid: string): Promise<'active' | 'denied' | 'er
     // actually created, never one that already existed.
     const vapidKey = await fetchVapidKey()
     const existingSub = await reg.pushManager.getSubscription()
-    let sub: PushSubscription
-    try {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
-      })
-    } catch (subscribeErr) {
-      // TEMPORARY DIAGNOSTIC — remove after use
-      alert('[PUSH_DEBUG] pushManager.subscribe() FAILED :: ' + (subscribeErr as Error)?.name + ' :: ' + (subscribeErr as Error)?.message)
-      throw subscribeErr
-    }
-    // TEMPORARY DIAGNOSTIC — remove after use
-    alert('[PUSH_DEBUG] pushManager.subscribe() succeeded')
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey),
+    })
     const createdNewSubscription = !existingSub
 
     // 4. Persist subscription in Firestore under the user's path
@@ -135,8 +126,6 @@ export async function enablePush(uid: string): Promise<'active' | 'denied' | 'er
         userAgent: navigator.userAgent.slice(0, 150),
       })
     } catch (persistErr) {
-      // TEMPORARY DIAGNOSTIC — remove after use
-      alert('[PUSH_DEBUG] Firestore setDoc FAILED :: code=' + (persistErr as { code?: string })?.code + ' :: message=' + (persistErr as Error)?.message)
       // Don't leave an orphaned browser subscription behind that would
       // later make the UI incorrectly appear active on reload.
       if (createdNewSubscription) {
