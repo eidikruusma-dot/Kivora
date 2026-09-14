@@ -27,6 +27,15 @@
  * prove the whole edit -> Calendar chain end to end — not just the two
  * halves in isolation.
  *
+ * Follow-up fix (add/edit template consistency): adding a NEW shift used to
+ * fall back to the generic label+note form — addPlanItem() had no way to
+ * accept date/startTime/endTime at all, unlike updatePlanItem() above. Since
+ * PlanDetailPage.tsx's edit form already branches on
+ * `plan.type === 'workSchedule'`, the add form now reuses that exact same
+ * branch (not a new one) and addPlanItem() gained the same optional
+ * date/startTime/endTime fields updatePlanItem() already had — see section 7
+ * and the updated component-wiring section below.
+ *
  * Compile and run standalone:
  *   cd artifacts/planner-app
  *   npx vitest run src/lib/__tests__/plansWorkScheduleItemEdit.test.ts
@@ -106,7 +115,7 @@ vi.mock('@/lib/firestoreUtils', () => ({
   sanitizeForFirestore: (x: unknown) => x,
 }))
 
-import { initPlansStore, updatePlanItem, isValidShiftTimes, type Plan, type PlanItem } from '@/lib/plansStore'
+import { initPlansStore, addPlanItem, updatePlanItem, isValidShiftTimes, type Plan, type PlanItem } from '@/lib/plansStore'
 import { getDerivedCalendarEvents, planItemCalendarEventId } from '@/lib/planGoalCalendarEvents'
 
 function seedFakeDoc(uid: string, plan: Plan) {
@@ -336,21 +345,87 @@ describe('6. ordinary Plan item editing is unchanged — no date/startTime/endTi
   })
 })
 
-// ── Component wiring: the edit form branches by plan type, nothing else changed ──
+// ── 7. Adding a new Work Schedule shift persists date/startTime/endTime too ──
+
+describe('7. adding a NEW Work Schedule shift item persists date/startTime/endTime, exactly like editing one', () => {
+  it('addPlanItem writes date/startTime/endTime when given the optional 4th argument', async () => {
+    seedFakeDoc('user-a', makeWorkSchedulePlan({ items: [] }))
+
+    await addPlanItem('ws-plan-1', '09:00–17:00', undefined, {
+      date: '2026-09-08',
+      startTime: '09:00',
+      endTime: '17:00',
+    })
+
+    const item = readFakeDoc('user-a', 'ws-plan-1')!.items[0]
+    expect(item.label).toBe('09:00–17:00')
+    expect(item.date).toBe('2026-09-08')
+    expect(item.startTime).toBe('09:00')
+    expect(item.endTime).toBe('17:00')
+  })
+
+  it('the newly-added shift is immediately picked up by getDerivedCalendarEvents, same as an edited one', async () => {
+    seedFakeDoc('user-a', makeWorkSchedulePlan({ items: [] }))
+
+    await addPlanItem('ws-plan-1', '09:00–17:00', undefined, {
+      date: '2026-09-08',
+      startTime: '09:00',
+      endTime: '17:00',
+    })
+    const plan = readFakeDoc('user-a', 'ws-plan-1')!
+
+    const events = getDerivedCalendarEvents([plan], [])
+    expect(events).toHaveLength(1)
+    expect(events[0].id).toBe(planItemCalendarEventId('ws-plan-1', plan.items[0].id))
+    expect(events[0].date).toBe('2026-09-08')
+    expect(events[0].startTime).toBe('09:00')
+    expect(events[0].endTime).toBe('17:00')
+  })
+
+  it('adding to a plain (non-Work-Schedule) plan is unaffected — no date/startTime/endTime is ever set', async () => {
+    const plainPlan: Plan = {
+      id: 'blank-plan-3',
+      type: 'blank',
+      title: 'Plaan',
+      color: '#6F5AE8',
+      items: [],
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    seedFakeDoc('user-a', plainPlan)
+
+    await addPlanItem('blank-plan-3', 'New task', 'a note')
+
+    const item = readFakeDoc('user-a', 'blank-plan-3')!.items[0]
+    expect(item.label).toBe('New task')
+    expect(item.note).toBe('a note')
+    expect(item.date).toBeUndefined()
+    expect(item.startTime).toBeUndefined()
+    expect(item.endTime).toBeUndefined()
+  })
+})
+
+// ── Component wiring: add and edit now share the same plan.type branch ────
 
 const PLAN_DETAIL_PAGE_SRC = readFileSync(resolve(process.cwd(), 'src/views/PlanDetailPage.tsx'), 'utf8')
 
-describe('PlanDetailPage wiring: date/time editing is scoped to Work Schedule items only', () => {
-  it('branches the edit form on plan.type, and passes date/startTime/endTime to updatePlanItem only in that branch', () => {
+describe('PlanDetailPage wiring: both add and edit branch on plan.type for Work Schedule shifts', () => {
+  it('the edit form still branches on plan.type, and passes date/startTime/endTime to updatePlanItem only in that branch', () => {
     expect(PLAN_DETAIL_PAGE_SRC).toMatch(/const isWorkScheduleItem = plan\.type === 'workSchedule'/)
     expect(PLAN_DETAIL_PAGE_SRC).toMatch(/date: editDate,\s*\n\s*startTime: editStartTime,\s*\n\s*endTime: editEndTime,/)
   })
 
-  it('the non-Work-Schedule branch still calls updatePlanItem with only label/note, exactly as before', () => {
+  it('the non-Work-Schedule edit branch still calls updatePlanItem with only label/note, exactly as before', () => {
     expect(PLAN_DETAIL_PAGE_SRC).toMatch(/await updatePlanItem\(plan\.id, id, \{ label: editLabel, note: editNote \}\)/)
   })
 
-  it('the add-item flow (addPlanItem) is untouched by this change — no date/time fields were added there', () => {
+  it('the add form now ALSO branches on the same plan.type condition, reusing the edit form\'s own pattern', () => {
+    const handleAddItemSrc = PLAN_DETAIL_PAGE_SRC.match(/async function handleAddItem\(\) \{[\s\S]*?\n  \}/)?.[0] ?? ''
+    expect(handleAddItemSrc).toMatch(/const isWorkScheduleItem = plan\.type === 'workSchedule'/)
+    expect(handleAddItemSrc).toMatch(/date: newItemDate,\s*\n\s*startTime: newItemStartTime,\s*\n\s*endTime: newItemEndTime,/)
+  })
+
+  it('the non-Work-Schedule add branch still calls addPlanItem with only label/note, exactly as before', () => {
     expect(PLAN_DETAIL_PAGE_SRC).toMatch(/await addPlanItem\(plan\.id, newItemLabel, newItemNote\)/)
   })
 })

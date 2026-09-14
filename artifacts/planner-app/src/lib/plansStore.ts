@@ -418,7 +418,19 @@ export async function mutatePlanItems(
   })
 }
 
-export async function addPlanItem(planId: string, label: string, note?: string): Promise<void> {
+/**
+ * `date`/`startTime`/`endTime` are only ever meaningful for a Work Schedule
+ * shift item (see buildWorkScheduleItems) — every other template's items
+ * simply never pass them, so omitting them here leaves new items exactly
+ * as before. Mirrors the same optional fields updatePlanItem already
+ * accepts, for the same reason.
+ */
+export async function addPlanItem(
+  planId: string,
+  label: string,
+  note?: string,
+  dateTimeFields?: { date?: string; startTime?: string; endTime?: string },
+): Promise<void> {
   if (!isValidItemLabel(label)) throw new Error('INVALID_ITEM_LABEL')
   const trimmedNote = note?.trim()
   const newItem: PlanItem = {
@@ -426,6 +438,9 @@ export async function addPlanItem(planId: string, label: string, note?: string):
     label: label.trim(),
     done: false,
     ...(trimmedNote ? { note: trimmedNote } : {}),
+    ...(dateTimeFields?.date ? { date: dateTimeFields.date } : {}),
+    ...(dateTimeFields?.startTime ? { startTime: dateTimeFields.startTime } : {}),
+    ...(dateTimeFields?.endTime ? { endTime: dateTimeFields.endTime } : {}),
   }
   await mutatePlanItems(planId, (items) => [...items, newItem])
 }

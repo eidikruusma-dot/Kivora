@@ -55,6 +55,9 @@ export default function PlanDetailPage() {
   const [addingItem, setAddingItem] = useState(false)
   const [newItemLabel, setNewItemLabel] = useState('')
   const [newItemNote, setNewItemNote] = useState('')
+  const [newItemDate, setNewItemDate] = useState('')
+  const [newItemStartTime, setNewItemStartTime] = useState('')
+  const [newItemEndTime, setNewItemEndTime] = useState('')
   const [addItemSaving, setAddItemSaving] = useState(false)
   const [addItemError, setAddItemError] = useState('')
 
@@ -172,6 +175,9 @@ export default function PlanDetailPage() {
     setAddingItem(true)
     setNewItemLabel('')
     setNewItemNote('')
+    setNewItemDate('')
+    setNewItemStartTime('')
+    setNewItemEndTime('')
     setAddItemError('')
   }
 
@@ -180,21 +186,49 @@ export default function PlanDetailPage() {
     setAddingItem(false)
     setNewItemLabel('')
     setNewItemNote('')
+    setNewItemDate('')
+    setNewItemStartTime('')
+    setNewItemEndTime('')
     setAddItemError('')
   }
 
+  /**
+   * Mirrors saveEditItem's Work Schedule branch: a new shift is added with
+   * dedicated date/start/end fields instead of a free-text label — the
+   * label is regenerated from the times, matching how editing already
+   * works. Every other template keeps adding exactly as before (label + note).
+   */
   async function handleAddItem() {
     if (!plan || addItemSaving) return
-    if (!isValidItemLabel(newItemLabel)) {
+
+    const isWorkScheduleItem = plan.type === 'workSchedule'
+    if (isWorkScheduleItem) {
+      if (!newItemDate || !isValidShiftTimes(newItemStartTime, newItemEndTime)) {
+        setAddItemError(t('plans.workSchedule.errorShiftFields', lang))
+        return
+      }
+    } else if (!isValidItemLabel(newItemLabel)) {
       setAddItemError(t('plans.detail.errorItemLabel', lang))
       return
     }
+
     setAddItemSaving(true)
     setAddItemError('')
     try {
-      await addPlanItem(plan.id, newItemLabel, newItemNote)
+      if (isWorkScheduleItem) {
+        await addPlanItem(plan.id, `${newItemStartTime}–${newItemEndTime}`, newItemNote, {
+          date: newItemDate,
+          startTime: newItemStartTime,
+          endTime: newItemEndTime,
+        })
+      } else {
+        await addPlanItem(plan.id, newItemLabel, newItemNote)
+      }
       setNewItemLabel('')
       setNewItemNote('')
+      setNewItemDate('')
+      setNewItemStartTime('')
+      setNewItemEndTime('')
       setAddingItem(false)
     } catch {
       setAddItemError(t('plans.detail.errorSaveItem', lang))
@@ -257,6 +291,10 @@ export default function PlanDetailPage() {
   const Icon = getTemplateIcon(plan.type)
   const { done, total, percent } = computePlanProgress(plan)
   const dateRange = formatDateRange(plan, lang)
+  const isWorkScheduleItem = plan.type === 'workSchedule'
+  const canAddItem = isWorkScheduleItem
+    ? Boolean(newItemDate) && isValidShiftTimes(newItemStartTime, newItemEndTime)
+    : isValidItemLabel(newItemLabel)
 
   return (
     <div className="p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto w-full flex flex-col gap-5">
@@ -474,14 +512,53 @@ export default function PlanDetailPage() {
 
           {addingItem && (
             <div className="px-5 py-3.5 flex flex-col gap-2 bg-[#FAFAF8]">
-              <input
-                autoFocus
-                value={newItemLabel}
-                onChange={(e) => { setNewItemLabel(e.target.value); setAddItemError('') }}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleAddItem() }}
-                placeholder={t('plans.detail.itemLabelPlaceholder', lang)}
-                className={inputClass}
-              />
+              {isWorkScheduleItem ? (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem] sm:items-end">
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
+                      {t('plans.workSchedule.shiftDateLabel', lang)}
+                    </label>
+                    <input
+                      autoFocus
+                      type="date"
+                      value={newItemDate}
+                      onChange={(e) => { setNewItemDate(e.target.value); setAddItemError('') }}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
+                      {t('plans.workSchedule.shiftStartLabel', lang)}
+                    </label>
+                    <input
+                      type="time"
+                      value={newItemStartTime}
+                      onChange={(e) => { setNewItemStartTime(e.target.value); setAddItemError('') }}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
+                      {t('plans.workSchedule.shiftEndLabel', lang)}
+                    </label>
+                    <input
+                      type="time"
+                      value={newItemEndTime}
+                      onChange={(e) => { setNewItemEndTime(e.target.value); setAddItemError('') }}
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <input
+                  autoFocus
+                  value={newItemLabel}
+                  onChange={(e) => { setNewItemLabel(e.target.value); setAddItemError('') }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleAddItem() }}
+                  placeholder={t('plans.detail.itemLabelPlaceholder', lang)}
+                  className={inputClass}
+                />
+              )}
               <input
                 value={newItemNote}
                 onChange={(e) => setNewItemNote(e.target.value)}
@@ -499,7 +576,7 @@ export default function PlanDetailPage() {
                 </button>
                 <button
                   onClick={handleAddItem}
-                  disabled={addItemSaving || !isValidItemLabel(newItemLabel)}
+                  disabled={addItemSaving || !canAddItem}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#6F5AE8] hover:bg-[#5B48D8] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {addItemSaving && <Loader2 size={13} className="animate-spin" />}
