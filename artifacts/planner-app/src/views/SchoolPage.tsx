@@ -857,7 +857,10 @@ export default function SchoolPage() {
 
       {/* ── Right sidebar ─────────────────────────────────────────────── */}
       <aside className="w-full md:w-80 flex-shrink-0 flex flex-col gap-4">
-        <UpcomingExams exams={exams} onShowAll={() => setShowAllExams(true)} />
+        <UpcomingExams
+          exams={exams.filter((e) => e.status !== "tehtud")}
+          onShowAll={() => setShowAllExams(true)}
+        />
         <MaterialsLinks />
         <AIStudyHelper
           subjects={subjects}

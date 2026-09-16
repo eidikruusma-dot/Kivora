@@ -123,7 +123,7 @@ describe('SchoolPage.tsx: overview stat cards no longer include a study-time car
 
 describe('SchoolPage.tsx: sidebar no longer renders the weekly study-time chart', () => {
   it('UpcomingExams is immediately followed by MaterialsLinks, with nothing study-time-related between them', () => {
-    const upcomingIdx = SCHOOL_PAGE_SRC.indexOf('<UpcomingExams exams={exams}')
+    const upcomingIdx = SCHOOL_PAGE_SRC.indexOf('<UpcomingExams')
     const materialsIdx = SCHOOL_PAGE_SRC.indexOf('<MaterialsLinks />')
     expect(upcomingIdx).toBeGreaterThan(-1)
     expect(materialsIdx).toBeGreaterThan(upcomingIdx)
