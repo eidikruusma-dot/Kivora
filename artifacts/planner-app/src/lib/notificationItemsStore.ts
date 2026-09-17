@@ -16,6 +16,7 @@ import { db } from '@/lib/firebase'
 import { getLocalNotificationSettings } from '@/lib/notificationsStore'
 import type { NotificationModules } from '@/lib/notificationsStore'
 import { notifyOtherDevices } from '@/lib/pushNotifications'
+import { shouldDispatch } from '@/lib/notificationRules'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -101,44 +102,6 @@ export function initNotificationItemsStore(uid: string | null): void {
   )
 }
 
-// ── Quiet-hours check ─────────────────────────────────────────────────────────
-
-function isInQuietHours(): boolean {
-  const settings = getLocalNotificationSettings()
-  if (!settings.quietHoursEnabled) return false
-
-  const now = new Date()
-  const [startH, startM] = settings.quietStart.split(':').map(Number)
-  const [endH, endM] = settings.quietEnd.split(':').map(Number)
-  const nowMinutes = now.getHours() * 60 + now.getMinutes()
-  const startMinutes = startH * 60 + startM
-  const endMinutes = endH * 60 + endM
-
-  if (startMinutes <= endMinutes) {
-    return nowMinutes >= startMinutes && nowMinutes < endMinutes
-  } else {
-    // Overnight window e.g. 22:00–08:00
-    return nowMinutes >= startMinutes || nowMinutes < endMinutes
-  }
-}
-
-// ── Deduplication helper ──────────────────────────────────────────────────────
-
-function todayDateStr(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function hasDuplicateToday(type: string): boolean {
-  const today = todayDateStr()
-  return _items.some((it) => {
-    if (it.type !== type) return false
-    const d = new Date(it.createdAt)
-    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    return ds === today
-  })
-}
-
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export function dispatch(item: Omit<NotifItem, 'id' | 'createdAt'>): boolean {
@@ -146,20 +109,9 @@ export function dispatch(item: Omit<NotifItem, 'id' | 'createdAt'>): boolean {
 
   const settings = getLocalNotificationSettings()
 
-  // Check in-app channel
-  if (!settings.inApp) return false
-
-  // Check quiet hours
-  if (isInQuietHours()) return false
-
-  // Check module toggle (only for known module toggles, not 'system')
-  if (item.module !== 'system' && item.module in settings.modules) {
-    const mod = item.module as keyof NotificationModules
-    if (!settings.modules[mod]) return false
+  if (!shouldDispatch(settings, _items, { type: item.type, module: item.module })) {
+    return false
   }
-
-  // Deduplication by type+day
-  if (hasDuplicateToday(item.type)) return false
 
   const newItem: NotifItem = {
     ...item,
