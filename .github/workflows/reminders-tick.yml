@@ -1,0 +1,66 @@
+name: Reminders tick
+
+# Runs the existing @workspace/api-server "reminders-tick" script on a
+# schedule so timed Calendar reminders can be pushed even while every
+# Kivora client (and the free-tier Render web service) is asleep or
+# closed. See artifacts/api-server/src/reminders/remindersTick.ts and
+# src/scripts/remindersTick.ts — nothing here changes that script; this
+# workflow only invokes it.
+#
+# workflow_dispatch lets this be triggered on demand (Actions tab -> this
+# workflow -> "Run workflow") for manual testing, using the exact same
+# secrets/schedule path as the real cron trigger.
+
+"on":
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+
+# Only one tick (scheduled or manually dispatched) runs at a time. A run
+# that starts while another is still in flight is queued, not cancelled
+# and not skipped — the tick's own deterministic per-event dedup already
+# makes back-to-back runs safe, so queueing (rather than overlapping) is
+# the only thing this needs to prevent.
+concurrency:
+  group: reminders-tick
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies (repo root, for the pnpm workspace)
+        run: pnpm install --frozen-lockfile
+
+      - name: Run reminders-tick
+        working-directory: artifacts/api-server
+        run: pnpm run reminders-tick
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          # 10-minute look-back window on a 5-minute schedule: absorbs
+          # GitHub's own documented scheduling jitter/delay without any
+          # risk of a duplicate send (dedup is enforced against Firestore
+          # state, not against timing) — see REMINDERS_TICK_WINDOW_MS in
+          # scripts/remindersTick.ts.
+          REMINDERS_TICK_WINDOW_MS: '600000'

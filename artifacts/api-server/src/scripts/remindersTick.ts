@@ -32,6 +32,39 @@ import { isProcessTimeZoneUtc } from '../lib/timeZoneWallClock.js'
 /** How often this script is expected to be invoked (must match the Render Cron Job schedule). */
 const DEFAULT_TICK_INTERVAL_MS = 5 * 60 * 1000
 
+/**
+ * Prints the tick's result. Split out from main() (pure w.r.t. its
+ * inputs — takes the already-computed summary, does no Firestore/push
+ * work itself) purely so the logging gate below is directly testable
+ * without wiring up real Admin Firestore/web-push.
+ *
+ * The aggregate "per-user errors: N" line is always printed — a count,
+ * no identifying data. The per-account breakdown (Firebase uid + raw
+ * error text) is gated behind REMINDERS_TICK_VERBOSE_ERRORS=true,
+ * default OFF: this script is intended to run from a public GitHub
+ * Actions workflow, whose logs are publicly visible on a public repo.
+ */
+export function logTickSummary(summary: RemindersTickSummary, env: NodeJS.ProcessEnv): void {
+  console.log(
+    `Reminders tick complete.\n` +
+      `  users scanned:            ${summary.usersScanned}\n` +
+      `  events considered:        ${summary.eventsConsidered}\n` +
+      `  reminders sent:           ${summary.remindersSent}\n` +
+      `  suppressed (inApp off):   ${summary.remindersSuppressed.inAppDisabled}\n` +
+      `  suppressed (module off):  ${summary.remindersSuppressed.moduleDisabled}\n` +
+      `  suppressed (quiet hours): ${summary.remindersSuppressed.quietHours}\n` +
+      `  suppressed (duplicate):   ${summary.remindersSuppressed.duplicate}\n` +
+      `  subscriptions cleaned up: ${summary.subscriptionsCleanedUp}\n` +
+      `  per-user errors:          ${summary.errors.length}`,
+  )
+
+  if (env['REMINDERS_TICK_VERBOSE_ERRORS'] === 'true') {
+    for (const e of summary.errors) {
+      console.error(`  - ${e.uid}: ${e.error}`)
+    }
+  }
+}
+
 export async function main(_argv: string[], env: NodeJS.ProcessEnv): Promise<number> {
   if (!isProcessTimeZoneUtc()) {
     console.error(
@@ -59,22 +92,7 @@ export async function main(_argv: string[], env: NodeJS.ProcessEnv): Promise<num
     return 1
   }
 
-  console.log(
-    `Reminders tick complete.\n` +
-      `  users scanned:            ${summary.usersScanned}\n` +
-      `  events considered:        ${summary.eventsConsidered}\n` +
-      `  reminders sent:           ${summary.remindersSent}\n` +
-      `  suppressed (inApp off):   ${summary.remindersSuppressed.inAppDisabled}\n` +
-      `  suppressed (module off):  ${summary.remindersSuppressed.moduleDisabled}\n` +
-      `  suppressed (quiet hours): ${summary.remindersSuppressed.quietHours}\n` +
-      `  suppressed (duplicate):   ${summary.remindersSuppressed.duplicate}\n` +
-      `  subscriptions cleaned up: ${summary.subscriptionsCleanedUp}\n` +
-      `  per-user errors:          ${summary.errors.length}`,
-  )
-
-  for (const e of summary.errors) {
-    console.error(`  - ${e.uid}: ${e.error}`)
-  }
+  logTickSummary(summary, env)
 
   return 0
 }
