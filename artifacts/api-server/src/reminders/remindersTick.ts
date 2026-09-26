@@ -118,6 +118,12 @@ export interface RemindersTickSummary {
     moduleDisabled: number
     quietHours: number
     duplicate: number
+    /** extractCalendarReminderCandidate returned null (all-day, no startTime, or reminder resolved to 'none'). */
+    noCandidate: number
+    /** The candidate's trigger instant is still in the future relative to this tick. */
+    notYetDue: number
+    /** The candidate's trigger instant is more than windowMs in the past — this tick's window missed it. */
+    windowMissed: number
   }
   subscriptionsCleanedUp: number
   errors: Array<{ uid: string; error: string }>
@@ -156,7 +162,15 @@ export async function runRemindersTick(deps: RemindersTickDeps): Promise<Reminde
     usersScanned: 0,
     eventsConsidered: 0,
     remindersSent: 0,
-    remindersSuppressed: { inAppDisabled: 0, moduleDisabled: 0, quietHours: 0, duplicate: 0 },
+    remindersSuppressed: {
+      inAppDisabled: 0,
+      moduleDisabled: 0,
+      quietHours: 0,
+      duplicate: 0,
+      noCandidate: 0,
+      notYetDue: 0,
+      windowMissed: 0,
+    },
     subscriptionsCleanedUp: 0,
     errors: [],
   }
@@ -194,11 +208,21 @@ export async function runRemindersTick(deps: RemindersTickDeps): Promise<Reminde
         summary.eventsConsidered++
 
         const candidate = extractCalendarReminderCandidate(event, settings.defaultReminder, timezone)
-        if (!candidate) continue
+        if (!candidate) {
+          summary.remindersSuppressed.noCandidate++
+          continue
+        }
 
         const dueMs = candidate.triggerInstant.getTime()
         const nowMs = now.getTime()
-        if (dueMs > nowMs || dueMs <= nowMs - windowMs) continue // not due this tick
+        if (dueMs > nowMs) {
+          summary.remindersSuppressed.notYetDue++
+          continue
+        }
+        if (dueMs <= nowMs - windowMs) {
+          summary.remindersSuppressed.windowMissed++
+          continue
+        }
 
         const localNow = instantToZonedClockDate(now, timezone)
         if (isInQuietHours(settings, localNow)) {

@@ -54,6 +54,9 @@ export function logTickSummary(summary: RemindersTickSummary, env: NodeJS.Proces
       `  suppressed (module off):  ${summary.remindersSuppressed.moduleDisabled}\n` +
       `  suppressed (quiet hours): ${summary.remindersSuppressed.quietHours}\n` +
       `  suppressed (duplicate):   ${summary.remindersSuppressed.duplicate}\n` +
+      `  suppressed (no candidate):${summary.remindersSuppressed.noCandidate}\n` +
+      `  suppressed (not yet due): ${summary.remindersSuppressed.notYetDue}\n` +
+      `  suppressed (window missed):${summary.remindersSuppressed.windowMissed}\n` +
       `  subscriptions cleaned up: ${summary.subscriptionsCleanedUp}\n` +
       `  per-user errors:          ${summary.errors.length}`,
   )

@@ -149,6 +149,7 @@ await group("all-day events are excluded", async () => {
 
   assert(summary.remindersSent === 0, "no reminder sent for an all-day event");
   assert(calls.length === 0, "push never called");
+  assert(summary.remindersSuppressed.noCandidate === 1, "counted as noCandidate (diagnostic counter)");
 });
 
 await group("the Calendar module toggle suppresses the whole user", async () => {
@@ -285,6 +286,10 @@ await group("Tier 2 — a per-event override changes which reminder actually fir
     atGlobalDefault.remindersSent === 0,
     "does NOT fire at the global default's time — the override fully replaces it, it doesn't add a second reminder",
   );
+  assert(
+    atGlobalDefault.remindersSuppressed.notYetDue === 1,
+    "the override's own (later) trigger time is still in the future relative to this tick — counted as notYetDue, not noCandidate",
+  );
 });
 
 await group("Tier 2 — reminder: 'none' suppresses the event entirely, even with a global default set", async () => {
@@ -299,6 +304,7 @@ await group("Tier 2 — reminder: 'none' suppresses the event entirely, even wit
 
   assert(summary.remindersSent === 0, "no reminder is sent for a 'none' event");
   assert(calls.length === 0, "push is never called for a 'none' event");
+  assert(summary.remindersSuppressed.noCandidate === 1, "counted as noCandidate (diagnostic counter)");
 });
 
 await group("stale (410) subscriptions are cleaned up after a send", async () => {
@@ -329,10 +335,15 @@ await group("a candidate outside the tick window is not due", async () => {
   const tooEarly = new Date(EVENT_INSTANT_UTC.getTime() - 15 * 60_000 - WINDOW_MS - 60_000);
   const notYetDue = await runRemindersTick({ firestore, sendWebPush, now: tooEarly, windowMs: WINDOW_MS });
   assert(notYetDue.remindersSent === 0, "not yet due (before the window)");
+  assert(notYetDue.remindersSuppressed.notYetDue === 1, "counted as notYetDue (diagnostic counter)");
+  assert(notYetDue.remindersSuppressed.windowMissed === 0, "not counted as windowMissed");
+  assert(notYetDue.remindersSuppressed.noCandidate === 0, "not counted as noCandidate");
 
   const alreadyPassed = new Date(EVENT_INSTANT_UTC.getTime() + 60_000);
   const past = await runRemindersTick({ firestore, sendWebPush, now: alreadyPassed, windowMs: WINDOW_MS });
   assert(past.remindersSent === 0, "already past its own event time with a 15min-before offset — window missed");
+  assert(past.remindersSuppressed.windowMissed === 1, "counted as windowMissed (diagnostic counter)");
+  assert(past.remindersSuppressed.notYetDue === 0, "not counted as notYetDue");
 });
 
 await group("one user's failure does not stop reminders for other users", async () => {

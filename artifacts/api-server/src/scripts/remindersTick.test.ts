@@ -45,7 +45,15 @@ function baseSummary(overrides: Partial<RemindersTickSummary> = {}): RemindersTi
     usersScanned: 1,
     eventsConsidered: 0,
     remindersSent: 0,
-    remindersSuppressed: { inAppDisabled: 0, moduleDisabled: 0, quietHours: 0, duplicate: 0 },
+    remindersSuppressed: {
+      inAppDisabled: 0,
+      moduleDisabled: 0,
+      quietHours: 0,
+      duplicate: 0,
+      noCandidate: 0,
+      notYetDue: 0,
+      windowMissed: 0,
+    },
     subscriptionsCleanedUp: 0,
     errors: [],
     ...overrides,
@@ -93,6 +101,27 @@ group('default (no REMINDERS_TICK_VERBOSE_ERRORS): the uid/error breakdown never
     'neither raw error message appears anywhere in the printed output',
   )
 })
+
+group('the three new diagnostic counters print as aggregate numbers only', () => {
+  const summary = baseSummary({
+    remindersSuppressed: {
+      inAppDisabled: 0,
+      moduleDisabled: 0,
+      quietHours: 0,
+      duplicate: 0,
+      noCandidate: 3,
+      notYetDue: 7,
+      windowMissed: 2,
+    },
+  });
+
+  const { logLines } = captureLogs(() => logTickSummary(summary, {}));
+  const text = logLines.join('\n');
+
+  assert(text.includes('suppressed (no candidate):3'), 'noCandidate count is printed');
+  assert(text.includes('suppressed (not yet due): 7'), 'notYetDue count is printed');
+  assert(text.includes('suppressed (window missed):2'), 'windowMissed count is printed');
+});
 
 group('REMINDERS_TICK_VERBOSE_ERRORS is anything other than the exact string "true": still silent', () => {
   const summaryWithErrors = baseSummary({ errors: [{ uid: 'user-abc-123', error: 'boom' }] })
