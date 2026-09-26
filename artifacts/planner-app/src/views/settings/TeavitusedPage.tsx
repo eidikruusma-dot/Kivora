@@ -10,6 +10,7 @@ import {
   Sparkles,
   Shield,
   Smartphone,
+  Clock,
   Moon,
   CheckCircle2,
   AlertCircle,
@@ -24,7 +25,9 @@ import {
 import type {
   NotificationSettings,
   NotificationModules,
+  ReminderOffset,
 } from '@/lib/notificationsStore'
+import { REMINDER_OFFSET_ORDER, reminderOffsetLabel } from '@/lib/calendar/reminderOptions'
 import {
   subscribeToLanguage,
   getLocalLanguage,
@@ -667,7 +670,36 @@ export default function TeavitusedPage({ onBack }: Props) {
           </div>
         </SectionCard>
 
-        {/* ── 3. Quiet hours ── */}
+        {/* ── 3. Default reminder ── */}
+        <SectionCard
+          icon={<Clock size={20} strokeWidth={1.8} />}
+          iconBg="#DBEAFE"
+          iconColor="#2563EB"
+          title={t('notifSettings.reminder.title', lang)}
+          description={t('notifSettings.reminder.sectionDesc', lang)}
+        >
+          <div>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              {t('notifSettings.reminder.label', lang)}
+            </label>
+            <select
+              value={settings.defaultReminder}
+              onChange={(e) => update({ defaultReminder: e.target.value as ReminderOffset })}
+              className="w-full h-10 rounded-xl border border-[#E2E8F0] bg-[#FAFAFA] px-3 text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:bg-white transition-colors appearance-none"
+            >
+              {REMINDER_OFFSET_ORDER.map((value) => (
+                <option key={value} value={value}>
+                  {reminderOffsetLabel(value, lang)}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-[#94A3B8] mt-1.5">
+              {t('notifSettings.reminder.override', lang)}
+            </p>
+          </div>
+        </SectionCard>
+
+        {/* ── 4. Quiet hours ── */}
         <SectionCard
           icon={<Moon size={20} strokeWidth={1.8} />}
           iconBg="#EDE9FB"

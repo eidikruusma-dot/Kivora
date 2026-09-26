@@ -4,6 +4,14 @@
  * user's `defaultReminder` setting and timezone, into the exact instant a
  * reminder should fire and a deterministic dedup id — or `null` when this
  * mechanism should never fire for the event at all.
+ *
+ * An event's own optional `reminder` field (Tier 2: per-event override,
+ * see planner-app's MockCalendarEvent) takes precedence over the user's
+ * global `defaultReminder` when present:
+ *   - undefined  -> use `defaultReminder` (every existing event's current
+ *                   behavior, unchanged — no migration needed)
+ *   - 'none'     -> never produce a candidate for this event at all
+ *   - a real ReminderOffset -> use that instead of the global default
  */
 
 import { zonedWallClockToInstant, subtractOneCalendarDay } from '../lib/timeZoneWallClock.js'
@@ -15,6 +23,8 @@ export interface CalendarEventLike {
   date: string // 'YYYY-MM-DD'
   startTime?: string // 'HH:mm'
   allDay?: boolean
+  /** Per-event override — see this file's header comment for the three states. */
+  reminder?: ReminderOffset | 'none'
 }
 
 export interface ReminderCandidate {
@@ -31,8 +41,10 @@ const OFFSET_MINUTES: Partial<Record<ReminderOffset, number>> = {
 }
 
 /**
- * `null` for an all-day event or one missing a start time — this
- * mechanism is strictly scoped to timed Calendar events (Phase 1).
+ * `null` for an all-day event, one missing a start time, or one whose
+ * effective reminder resolves to `'none'` — this mechanism is strictly
+ * scoped to timed Calendar events that actually want a reminder
+ * (Phase 1 + Tier 2).
  *
  * For every offset except `1day`, the trigger instant is the event's
  * real instant minus a fixed number of minutes — safe because none of
@@ -55,23 +67,29 @@ export function extractCalendarReminderCandidate(
   if (event.allDay) return null
   if (!event.startTime) return null
 
+  const effectiveReminder = event.reminder ?? defaultReminder
+  if (effectiveReminder === 'none') return null
+
   let triggerInstant: Date
 
-  if (defaultReminder === '1day') {
+  if (effectiveReminder === '1day') {
     const priorDate = subtractOneCalendarDay(event.date)
     triggerInstant = zonedWallClockToInstant(priorDate, event.startTime, timeZone)
   } else {
     const eventInstant = zonedWallClockToInstant(event.date, event.startTime, timeZone)
-    const offsetMinutes = OFFSET_MINUTES[defaultReminder] ?? 0
+    const offsetMinutes = OFFSET_MINUTES[effectiveReminder] ?? 0
     triggerInstant = new Date(eventInstant.getTime() - offsetMinutes * 60_000)
   }
 
   // Includes the event's own date/startTime (not just its id+offset): if
   // the event is edited to a new time after an earlier reminder already
   // fired, the id changes too, so the stale doc never blocks the new,
-  // correctly-timed one — see remindersTick.ts's dedup design.
+  // correctly-timed one — see remindersTick.ts's dedup design. Using
+  // effectiveReminder (not the raw defaultReminder param) here means an
+  // override change is itself treated as a distinct reminder for dedup
+  // purposes too, for the same reason.
   const safeTime = event.startTime.replace(':', '')
-  const dedupId = `srv-cal-${event.id}-${event.date}-${safeTime}-${defaultReminder}`
+  const dedupId = `srv-cal-${event.id}-${event.date}-${safeTime}-${effectiveReminder}`
 
   return { triggerInstant, dedupId }
 }

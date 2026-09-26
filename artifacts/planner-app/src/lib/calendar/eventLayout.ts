@@ -1,4 +1,5 @@
 import { timeToMinutes } from './dateUtils'
+import type { ReminderOffset } from '@/lib/notificationsStore'
 
 export interface MockCalendarEvent {
   id: string
@@ -9,6 +10,16 @@ export interface MockCalendarEvent {
   location?: string
   description?: string
   date: string
+  /**
+   * Per-event reminder override for the server-side reminders tick (see
+   * artifacts/api-server/src/reminders/calendarReminderCandidates.ts).
+   * Absent (undefined) means "use the user's global defaultReminder
+   * setting" — the behavior every existing event already has, so no
+   * migration is needed. `'none'` means the tick must never produce a
+   * reminder for this event at all. Any other value overrides the
+   * global default with this event's own offset.
+   */
+  reminder?: ReminderOffset | 'none'
   /**
    * Inclusive end date (YYYY-MM-DD) for a multi-day all-day event. Absent
    * on every single-day event (the entire existing calendar, manual or

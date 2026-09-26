@@ -30,6 +30,7 @@ import type { CalendarViewType, UserPreferences } from '@/types'
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
 import { useAuth } from '@/context/AuthContext'
 import { getUserProfile, getEffectivePreferences, DEFAULT_PREFERENCES } from '@/lib/userProfile'
+import { getNotificationSettings, DEFAULT_NOTIFICATION_SETTINGS, type ReminderOffset } from '@/lib/notificationsStore'
 
 export default function CalendarPage() {
   const { user } = useAuth()
@@ -49,6 +50,19 @@ export default function CalendarPage() {
         setPreferences(getEffectivePreferences(profile))
       })
       .catch(() => { /* keep defaults on error */ })
+    return () => { cancelled = true }
+  }, [user])
+
+  // Loaded only to display the resolved value in EventDetailsModal when an
+  // event has no reminder override of its own — the reminders tick itself
+  // reads this same setting server-side; nothing here computes reminders.
+  const [defaultReminder, setDefaultReminder] = useState<ReminderOffset>(DEFAULT_NOTIFICATION_SETTINGS.defaultReminder)
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    getNotificationSettings(user.uid)
+      .then((settings) => { if (!cancelled) setDefaultReminder(settings.defaultReminder) })
+      .catch(() => { /* keep default on error */ })
     return () => { cancelled = true }
   }, [user])
 
@@ -381,6 +395,7 @@ export default function CalendarPage() {
         onDelete={handleDeleteEvent}
         calendars={CALENDARS}
         timeFormat={preferences.timeFormat}
+        defaultReminder={defaultReminder}
       />
       {postSave && (
         <PostSaveLinkSuggestionsDialog

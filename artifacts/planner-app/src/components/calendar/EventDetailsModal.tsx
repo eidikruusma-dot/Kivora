@@ -1,7 +1,9 @@
-import { X, Calendar, Clock, MapPin, AlignLeft, Pencil, Trash2 } from 'lucide-react'
+import { X, Calendar, Clock, MapPin, AlignLeft, Bell, Pencil, Trash2 } from 'lucide-react'
 import LinkedItemsPanel from '@/components/links/LinkedItemsPanel'
 import { Fragment, useEffect, useState } from 'react'
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
+import { DEFAULT_NOTIFICATION_SETTINGS, type ReminderOffset } from '@/lib/notificationsStore'
+import { reminderOffsetLabel } from '@/lib/calendar/reminderOptions'
 import { t } from '@/lib/translations'
 import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
@@ -15,6 +17,8 @@ interface Props {
   onDelete: (id: string) => void | Promise<void>
   calendars: { id: string; label: string; color: string }[]
   timeFormat?: TimeFormat
+  /** The user's global default reminder offset — used only to display the resolved value when this event has no override (see reminderText below). */
+  defaultReminder?: ReminderOffset
 }
 
 const ET_MONTHS = [
@@ -35,7 +39,10 @@ function formatDate(dateStr: string, lang: AppLang): string {
   return `${d}. ${ET_MONTHS[m - 1]} ${y}`
 }
 
-export default function EventDetailsModal({ event, onClose, onEdit, onDelete, calendars, timeFormat = '24h' }: Props) {
+export default function EventDetailsModal({
+  event, onClose, onEdit, onDelete, calendars, timeFormat = '24h',
+  defaultReminder = DEFAULT_NOTIFICATION_SETTINGS.defaultReminder,
+}: Props) {
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
 
@@ -80,6 +87,12 @@ export default function EventDetailsModal({ event, onClose, onEdit, onDelete, ca
   const timeLabel = event.allDay
     ? t('cal.allDay', lang)
     : formatTimeRange(event.startTime, event.endTime, timeFormat)
+
+  const reminderText = event.reminder === 'none'
+    ? t('cal.event.reminder.none', lang)
+    : event.reminder
+      ? reminderOffsetLabel(event.reminder, lang)
+      : t('cal.event.reminder.usingDefault', lang).replace('{value}', reminderOffsetLabel(defaultReminder, lang))
 
   return (
     <Fragment>
@@ -133,6 +146,17 @@ export default function EventDetailsModal({ event, onClose, onEdit, onDelete, ca
               <Clock size={15} className="text-[#94A3B8] mt-0.5 flex-shrink-0" />
               <span className="text-sm text-[#1A1F36]">{timeLabel}</span>
             </div>
+
+            {/* Reminder — only meaningful for a timed event; the server-side
+                tick never produces a reminder for an all-day event at all
+                (see calendarReminderCandidates.ts), so showing this row for
+                one would promise something that never fires. */}
+            {!event.allDay && (
+              <div className="flex items-start gap-3">
+                <Bell size={15} className="text-[#94A3B8] mt-0.5 flex-shrink-0" />
+                <span className="text-sm text-[#1A1F36]">{reminderText}</span>
+              </div>
+            )}
 
             {/* Location */}
             {event.location && (

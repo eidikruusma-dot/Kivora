@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
+import type { ReminderOffset } from '@/lib/notificationsStore'
+import { REMINDER_OFFSET_ORDER, reminderOffsetLabel } from '@/lib/calendar/reminderOptions'
 import { t } from '@/lib/translations'
 import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
@@ -16,6 +18,7 @@ interface NewEventModalProps {
 }
 
 type Recurrence = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'
+type ReminderChoice = 'default' | 'none' | ReminderOffset
 
 function toDateInput(d?: Date): string {
   const date = d ?? new Date()
@@ -47,7 +50,14 @@ export default function NewEventModal({
   const [allDay, setAllDay] = useState(false)
   const [calendarId, setCalendarId] = useState(calendars[0]?.id ?? '')
   const [recurrence, setRecurrence] = useState<Recurrence>('none')
+  const [reminderChoice, setReminderChoice] = useState<ReminderChoice>('default')
   const [error, setError] = useState('')
+
+  const REMINDER_CHOICE_OPTIONS: { value: ReminderChoice; label: string }[] = [
+    { value: 'default', label: t('cal.event.reminder.useDefault', lang) },
+    { value: 'none',    label: t('cal.event.reminder.none', lang) },
+    ...REMINDER_OFFSET_ORDER.map((value) => ({ value, label: reminderOffsetLabel(value, lang) })),
+  ]
 
   // Reset / pre-fill whenever the modal opens or the target event changes
   useEffect(() => {
@@ -61,6 +71,7 @@ export default function NewEventModal({
       setAllDay(initialEvent?.allDay ?? false)
       setCalendarId(initialEvent?.calendarId ?? calendars[0]?.id ?? '')
       setRecurrence('none')
+      setReminderChoice(initialEvent?.reminder ?? 'default')
       setError('')
     }
   }, [open, initialEvent, defaultDate, calendars])
@@ -89,6 +100,7 @@ export default function NewEventModal({
       color: cal?.color ?? '#EDE9FB',
       calendarId: cal?.id ?? calendarId,
       allDay,
+      reminder: reminderChoice === 'default' ? undefined : reminderChoice,
     }
     onSave(event)
     onClose()
@@ -214,6 +226,19 @@ export default function NewEventModal({
               className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] bg-white focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             >
               {RECURRENCE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[#64748B] mb-1.5">{t('cal.event.reminder', lang)}</label>
+            <select
+              value={reminderChoice}
+              onChange={(e) => setReminderChoice(e.target.value as ReminderChoice)}
+              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] bg-white focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
+            >
+              {REMINDER_CHOICE_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>

@@ -620,6 +620,10 @@ export type TranslationKey =
     | "cal.event.endTime"
     | "cal.event.calendar"
     | "cal.event.recurrence"
+    | "cal.event.reminder"
+    | "cal.event.reminder.useDefault"
+    | "cal.event.reminder.none"
+    | "cal.event.reminder.usingDefault"
     | "cal.event.save"
     | "cal.event.addTitle"
     | "cal.event.editTitle"
@@ -801,6 +805,12 @@ export type TranslationKey =
     | "notifSettings.system.blocked"
     | "notifSettings.reminder.sectionDesc"
     | "notifSettings.reminder.override"
+    | "reminder.offset.atTime"
+    | "reminder.offset.min5"
+    | "reminder.offset.min15"
+    | "reminder.offset.min30"
+    | "reminder.offset.hour1"
+    | "reminder.offset.day1"
     | "notifSettings.quiet.pauseDesc"
     | "notifSettings.quiet.overnight"
     | "notifSettings.test.title"
@@ -2472,6 +2482,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "cal.event.endTime": "Lõpuaeg",
         "cal.event.calendar": "Kalender",
         "cal.event.recurrence": "Korduvus",
+        "cal.event.reminder": "Meeldetuletus",
+        "cal.event.reminder.useDefault": "Kasuta vaikeväärtust",
+        "cal.event.reminder.none": "Meeldetuletus puudub",
+        "cal.event.reminder.usingDefault": "Vaikimisi ({value})",
         "cal.event.save": "Salvesta",
         "cal.event.addTitle": "Uus sündmus",
         "cal.event.editTitle": "Muuda sündmust",
@@ -2701,6 +2715,12 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
             "Globaalne vaikeväärtus kõigi uute sündmuste ja ülesannete jaoks",
         "notifSettings.reminder.override":
             "Üksikud sündmused saavad seda hiljem alistada.",
+        "reminder.offset.atTime": "Sündmuse ajal",
+        "reminder.offset.min5": "5 minutit enne",
+        "reminder.offset.min15": "15 minutit enne",
+        "reminder.offset.min30": "30 minutit enne",
+        "reminder.offset.hour1": "1 tund enne",
+        "reminder.offset.day1": "1 päev enne",
         "notifSettings.quiet.pauseDesc":
             "Kõik teavitused peatatakse valitud perioodi vältel",
         "notifSettings.quiet.overnight":
@@ -4472,6 +4492,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "cal.event.endTime": "End time",
         "cal.event.calendar": "Calendar",
         "cal.event.recurrence": "Recurrence",
+        "cal.event.reminder": "Reminder",
+        "cal.event.reminder.useDefault": "Use default",
+        "cal.event.reminder.none": "No reminder",
+        "cal.event.reminder.usingDefault": "Using default ({value})",
         "cal.event.save": "Save",
         "cal.event.addTitle": "New event",
         "cal.event.editTitle": "Edit event",
@@ -4702,6 +4726,12 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
             "Global default for all new events and tasks",
         "notifSettings.reminder.override":
             "Individual events can override this later.",
+        "reminder.offset.atTime": "At event time",
+        "reminder.offset.min5": "5 minutes before",
+        "reminder.offset.min15": "15 minutes before",
+        "reminder.offset.min30": "30 minutes before",
+        "reminder.offset.hour1": "1 hour before",
+        "reminder.offset.day1": "1 day before",
         "notifSettings.quiet.pauseDesc":
             "All notifications are paused during the selected period",
         "notifSettings.quiet.overnight":

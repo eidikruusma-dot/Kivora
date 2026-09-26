@@ -246,6 +246,61 @@ await group("1day: fires exactly one calendar day before, at the corresponding l
   assert(rawMinus24h.getTime() === oneDayBeforeInstant.getTime(), "sanity: the two coincide in this non-DST case");
 });
 
+await group("Tier 2 — legacy events (no reminder field) fall back to the global default", async () => {
+  const { firestore, users, setSubs, setEvents } = makeFakeFirestore();
+  users.set("u1", userRecord({ notifications: settings({ defaultReminder: "15min" }) }));
+  setSubs([sub("u1", "s1")]);
+  setEvents("u1", [calEvent()]); // no `reminder` field at all — every pre-Tier-2 event looks like this
+
+  const { fn: sendWebPush, calls } = makeSendWebPush();
+  const now = new Date(EVENT_INSTANT_UTC.getTime() - 15 * 60_000); // due under the 15min global default
+  const summary = await runRemindersTick({ firestore, sendWebPush, now, windowMs: WINDOW_MS });
+
+  assert(summary.remindersSent === 1, "a legacy event with no reminder field still uses the global default, unchanged");
+  assert(calls.length === 1, "push still sent exactly as before Tier 2");
+});
+
+await group("Tier 2 — a per-event override changes which reminder actually fires", async () => {
+  const { firestore, users, setSubs, setEvents } = makeFakeFirestore();
+  users.set("u1", userRecord({ notifications: settings({ defaultReminder: "30min" }) }));
+  setSubs([sub("u1", "s1")]);
+  setEvents("u1", [calEvent({ reminder: "5min" })]);
+
+  const { fn: sendWebPush } = makeSendWebPush();
+
+  // Due under the event's own 5min override...
+  const dueUnderOverride = new Date(EVENT_INSTANT_UTC.getTime() - 5 * 60_000);
+  const atOverride = await runRemindersTick({ firestore, sendWebPush, now: dueUnderOverride, windowMs: WINDOW_MS });
+  assert(atOverride.remindersSent === 1, "fires at the event's own 5min override time");
+
+  // ...but NOT under the global 30min default, since the override takes precedence.
+  const dueUnderGlobalDefaultOnly = new Date(EVENT_INSTANT_UTC.getTime() - 30 * 60_000);
+  const atGlobalDefault = await runRemindersTick({
+    firestore,
+    sendWebPush,
+    now: dueUnderGlobalDefaultOnly,
+    windowMs: WINDOW_MS,
+  });
+  assert(
+    atGlobalDefault.remindersSent === 0,
+    "does NOT fire at the global default's time — the override fully replaces it, it doesn't add a second reminder",
+  );
+});
+
+await group("Tier 2 — reminder: 'none' suppresses the event entirely, even with a global default set", async () => {
+  const { firestore, users, setSubs, setEvents } = makeFakeFirestore();
+  users.set("u1", userRecord({ notifications: settings({ defaultReminder: "15min" }) }));
+  setSubs([sub("u1", "s1")]);
+  setEvents("u1", [calEvent({ reminder: "none" })]);
+
+  const { fn: sendWebPush, calls } = makeSendWebPush();
+  const now = new Date(EVENT_INSTANT_UTC.getTime() - 15 * 60_000); // exactly when the global default would have fired
+  const summary = await runRemindersTick({ firestore, sendWebPush, now, windowMs: WINDOW_MS });
+
+  assert(summary.remindersSent === 0, "no reminder is sent for a 'none' event");
+  assert(calls.length === 0, "push is never called for a 'none' event");
+});
+
 await group("stale (410) subscriptions are cleaned up after a send", async () => {
   const { firestore, users, setSubs, setEvents, deletedSubIds } = makeFakeFirestore();
   users.set("u1", userRecord());

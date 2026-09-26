@@ -1,8 +1,11 @@
 /**
  * Unit tests for extractCalendarReminderCandidate() — allDay exclusion,
  * offset-to-instant math for every non-1day defaultReminder value, the
- * 1day "same local time, one calendar day earlier" composition, and the
- * dedup id's sensitivity to an edited event time.
+ * 1day "same local time, one calendar day earlier" composition, the
+ * dedup id's sensitivity to an edited event time, and (Tier 2) the
+ * per-event `reminder` override: undefined falls back to the global
+ * default, 'none' suppresses the candidate entirely, and a real
+ * ReminderOffset value takes precedence over the global default.
  *
  * Compile and run:
  *   cd artifacts/api-server
@@ -45,6 +48,39 @@ group("exclusions", () => {
   assert(
     extractCalendarReminderCandidate(event({ startTime: undefined }), "15min", TZ) === null,
     "an event with no startTime never produces a candidate",
+  );
+  assert(
+    extractCalendarReminderCandidate(event({ reminder: "none" }), "15min", TZ) === null,
+    "an event whose reminder override is 'none' never produces a candidate, regardless of the global default",
+  );
+});
+
+group("Tier 2 — per-event reminder override", () => {
+  // 14:00 local summer Tallinn (EEST, UTC+3) = 11:00 UTC.
+  const eventUtc = new Date("2026-06-15T11:00:00.000Z").getTime();
+
+  const noOverride = extractCalendarReminderCandidate(event(), "30min", TZ);
+  assert(
+    noOverride !== null && noOverride.triggerInstant.getTime() === eventUtc - 30 * 60_000,
+    "undefined reminder falls back to the global defaultReminder (30min)",
+  );
+
+  const overridden = extractCalendarReminderCandidate(event({ reminder: "5min" }), "30min", TZ);
+  assert(
+    overridden !== null && overridden.triggerInstant.getTime() === eventUtc - 5 * 60_000,
+    "a real ReminderOffset override (5min) takes precedence over the global default (30min)",
+  );
+
+  const overriddenAtTime = extractCalendarReminderCandidate(event({ reminder: "at_time" }), "1day", TZ);
+  assert(
+    overriddenAtTime !== null && overriddenAtTime.triggerInstant.getTime() === eventUtc,
+    "an at_time override takes precedence even when the global default is 1day",
+  );
+
+  const overridden1day = extractCalendarReminderCandidate(event({ reminder: "1day" }), "5min", TZ);
+  assert(
+    overridden1day !== null && overridden1day.triggerInstant.toISOString() === "2026-06-14T11:00:00.000Z",
+    "a 1day override still uses the DST-safe calendar-day composition, not a raw 24h subtraction",
   );
 });
 
@@ -118,6 +154,13 @@ group("dedup id", () => {
 
   const differentOffset = extractCalendarReminderCandidate(event(), "1hour", TZ)!;
   assert(a.dedupId !== differentOffset.dedupId, "a different defaultReminder offset changes the dedup id");
+
+  const overridden = extractCalendarReminderCandidate(event({ reminder: "1hour" }), "15min", TZ)!;
+  assert(
+    overridden.dedupId === differentOffset.dedupId,
+    "an override that resolves to the same effective offset (1hour) produces the same dedup id as that global default would",
+  );
+  assert(a.dedupId !== overridden.dedupId, "...and still differs from the unoverridden (15min) dedup id");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
