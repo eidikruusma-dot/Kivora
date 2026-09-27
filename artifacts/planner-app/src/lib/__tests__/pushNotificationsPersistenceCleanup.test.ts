@@ -39,16 +39,30 @@ vi.mock('@/lib/firebase', () => ({ db: {} }))
 const setDocMock = vi.fn()
 const getDocsMock = vi.fn(async () => ({ empty: true, docs: [] }))
 const deleteDocMock = vi.fn(async () => {})
+// Path -> stored data, so getDoc() can reflect what setDoc()/deleteDoc() actually did —
+// needed to test ensureCurrentDevicePushPersisted()'s "already persisted, don't rewrite"
+// and "missing, recover" branches against real doc paths rather than a blind stub.
+const fakeDocs = new Map<string, Record<string, unknown>>()
 
 vi.mock('firebase/firestore', () => ({
   collection: vi.fn((...segments: unknown[]) => ({ path: segments.slice(1).join('/') })),
   doc: vi.fn((...segments: unknown[]) => ({ path: segments.slice(1).join('/') })),
-  setDoc: (...args: unknown[]) => setDocMock(...args),
+  setDoc: async (ref: { path: string }, data: Record<string, unknown>) => {
+    await setDocMock(ref, data)
+    fakeDocs.set(ref.path, data)
+  },
+  getDoc: vi.fn(async (ref: { path: string }) => ({
+    exists: () => fakeDocs.has(ref.path),
+    data: () => fakeDocs.get(ref.path),
+  })),
   getDocs: (...args: unknown[]) => getDocsMock(...args),
-  deleteDoc: (...args: unknown[]) => deleteDocMock(...args),
+  deleteDoc: async (ref: { path: string }) => {
+    await deleteDocMock(ref)
+    fakeDocs.delete(ref.path)
+  },
 }))
 
-import { enablePush } from '@/lib/pushNotifications'
+import { enablePush, disablePush, ensureCurrentDevicePushPersisted } from '@/lib/pushNotifications'
 
 function makeSubscription(endpoint: string) {
   return {
@@ -93,6 +107,7 @@ beforeEach(() => {
   setDocMock.mockReset()
   getDocsMock.mockClear()
   deleteDocMock.mockClear()
+  fakeDocs.clear()
 })
 
 afterEach(() => {
@@ -159,5 +174,100 @@ describe('successful subscription + persistence behavior is unchanged', () => {
     expect(newSub.unsubscribe).not.toHaveBeenCalled()
     const [, persistedData] = setDocMock.mock.calls[0] as [unknown, Record<string, unknown>]
     expect(persistedData.endpoint).toBe('https://push.example.com/ok')
+  })
+})
+
+// ── Regression: multi-device subId collision (Windows + Android both on FCM) ──
+
+const WINDOWS_ENDPOINT =
+  'https://fcm.googleapis.com/fcm/send/dWluZG93cy10b2tlbi1hYmMxMjM0NTY3ODkwLXVuaXF1ZS1wYXJ0'
+const ANDROID_ENDPOINT =
+  'https://fcm.googleapis.com/fcm/send/YW5kcm9pZC10b2tlbi14eXo5ODc2NTQzMjEwLWRpZmZlcmVudA'
+
+describe('multiple devices for the same user get distinct Firestore documents', () => {
+  it('a Windows Chrome and an Android Chrome subscription (same FCM URL prefix) persist as two separate docs', async () => {
+    const windowsSub = makeSubscription(WINDOWS_ENDPOINT)
+    stubBrowserPushSupport({ existingSubscription: null, subscribeReturns: windowsSub })
+    expect(await enablePush(UID)).toBe('active')
+
+    const androidSub = makeSubscription(ANDROID_ENDPOINT)
+    stubBrowserPushSupport({ existingSubscription: null, subscribeReturns: androidSub })
+    expect(await enablePush(UID)).toBe('active')
+
+    // The exact bug: encodeSubId used to slice(0, 40), which never reaches past
+    // the shared "https://fcm.googleapis.com/fcm/send/" prefix (48 base64 chars
+    // on its own) — so the second enablePush() silently overwrote the first
+    // device's document instead of creating its own.
+    expect(setDocMock).toHaveBeenCalledTimes(2)
+    expect(fakeDocs.size).toBe(2)
+
+    const [firstPath] = (setDocMock.mock.calls[0] as [{ path: string }, unknown])
+    const [secondPath] = (setDocMock.mock.calls[1] as [{ path: string }, unknown])
+    expect(firstPath.path).not.toBe(secondPath.path)
+
+    const persistedEndpoints = Array.from(fakeDocs.values()).map((d) => d.endpoint)
+    expect(persistedEndpoints).toContain(WINDOWS_ENDPOINT)
+    expect(persistedEndpoints).toContain(ANDROID_ENDPOINT)
+  })
+})
+
+describe('disablePush() deletes only the current device\'s own document', () => {
+  it('disabling push on Android does not remove the Windows subscription', async () => {
+    const windowsSub = makeSubscription(WINDOWS_ENDPOINT)
+    stubBrowserPushSupport({ existingSubscription: null, subscribeReturns: windowsSub })
+    await enablePush(UID)
+
+    const androidSub = makeSubscription(ANDROID_ENDPOINT)
+    stubBrowserPushSupport({ existingSubscription: null, subscribeReturns: androidSub })
+    await enablePush(UID)
+
+    expect(fakeDocs.size).toBe(2)
+
+    // Disabling from the Android device: its local browser subscription is androidSub.
+    stubBrowserPushSupport({ existingSubscription: androidSub, subscribeReturns: androidSub })
+    await disablePush(UID)
+
+    expect(fakeDocs.size).toBe(1)
+    const [remaining] = Array.from(fakeDocs.values())
+    expect(remaining.endpoint).toBe(WINDOWS_ENDPOINT)
+  })
+})
+
+describe('ensureCurrentDevicePushPersisted() reflects and self-heals the REAL device state', () => {
+  it('re-persists when the browser has an active subscription but Firestore has no matching document', async () => {
+    const sub = makeSubscription('https://fcm.googleapis.com/fcm/send/some-real-token-1234567890')
+    stubBrowserPushSupport({ existingSubscription: sub, subscribeReturns: sub })
+
+    expect(fakeDocs.size).toBe(0)
+
+    const result = await ensureCurrentDevicePushPersisted(UID)
+
+    expect(result).toBe(sub)
+    expect(fakeDocs.size).toBe(1)
+    expect(setDocMock).toHaveBeenCalledTimes(1)
+    const [persisted] = Array.from(fakeDocs.values())
+    expect(persisted.endpoint).toBe(sub.endpoint)
+  })
+
+  it('does not rewrite a document that is already correctly persisted', async () => {
+    const sub = makeSubscription('https://fcm.googleapis.com/fcm/send/some-real-token-1234567890')
+    stubBrowserPushSupport({ existingSubscription: sub, subscribeReturns: sub })
+
+    await ensureCurrentDevicePushPersisted(UID)
+    expect(setDocMock).toHaveBeenCalledTimes(1)
+
+    const result = await ensureCurrentDevicePushPersisted(UID)
+
+    expect(result).toBe(sub)
+    expect(setDocMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns null (never fabricates "active") when this device has no local subscription', async () => {
+    stubBrowserPushSupport({ existingSubscription: null, subscribeReturns: makeSubscription('unused') })
+
+    const result = await ensureCurrentDevicePushPersisted(UID)
+
+    expect(result).toBeNull()
+    expect(setDocMock).not.toHaveBeenCalled()
   })
 })

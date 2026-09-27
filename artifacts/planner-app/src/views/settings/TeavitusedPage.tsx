@@ -38,7 +38,7 @@ import {
   isPushSupported,
   enablePush,
   disablePush,
-  getActivePushSubscription,
+  ensureCurrentDevicePushPersisted,
 } from '@/lib/pushNotifications'
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
@@ -337,7 +337,7 @@ export default function TeavitusedPage({ onBack }: Props) {
       return
     }
 
-    getActivePushSubscription()
+    ensureCurrentDevicePushPersisted(user.uid)
       .then((sub) => {
         if (!cancelled) {
           setPushStatus(sub ? 'active' : 'inactive')

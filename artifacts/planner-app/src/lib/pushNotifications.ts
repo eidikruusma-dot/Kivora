@@ -8,7 +8,7 @@
  * Push API — they return early without throwing.
  */
 
-import { collection, doc, setDoc, getDocs, deleteDoc } from 'firebase/firestore'
+import { collection, doc, getDoc, setDoc, getDocs, deleteDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -23,9 +23,21 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   return output
 }
 
-/** Stable, Firestore-safe ID derived from the push endpoint URL */
+/**
+ * Stable, Firestore-safe ID derived from the push endpoint URL.
+ *
+ * MUST NOT truncate to a fixed prefix length: every browser using Google's
+ * FCM push service (i.e. every Chrome-family browser, on any OS) shares the
+ * literal URL prefix "https://fcm.googleapis.com/fcm/send/", which alone
+ * base64-encodes to 48 characters. A previous version of this function did
+ * `.slice(0, 40)`, so it returned the *same* id for every FCM-based device
+ * regardless of the unique token after that prefix — e.g. a Windows Chrome
+ * subscription and an Android Chrome subscription for the same user
+ * collided onto one Firestore document, each overwriting the other's
+ * endpoint/keys. Only the (unbounded) full encoding is safe.
+ */
 function encodeSubId(endpoint: string): string {
-  return btoa(endpoint).replace(/[^a-zA-Z0-9]/g, '').slice(0, 40)
+  return btoa(endpoint).replace(/[^a-zA-Z0-9]/g, '')
 }
 
 // ── VAPID public key (cached) ─────────────────────────────────────────────────
@@ -80,6 +92,22 @@ export async function getActivePushSubscription(): Promise<PushSubscription | nu
   }
 }
 
+/** Writes/overwrites this device's subscription doc — the one persistence path used by enablePush() and the recovery check below, so there is exactly one place that shapes this document. */
+async function persistSubscription(uid: string, sub: PushSubscription): Promise<void> {
+  const subJson = sub.toJSON() as {
+    endpoint: string
+    keys: { auth: string; p256dh: string }
+  }
+  const subId = encodeSubId(sub.endpoint)
+  await setDoc(doc(db, 'users', uid, 'pushSubscriptions', subId), {
+    endpoint: sub.endpoint,
+    keys: subJson.keys,
+    subId,
+    createdAt: Date.now(),
+    userAgent: navigator.userAgent.slice(0, 150),
+  })
+}
+
 /**
  * Full opt-in flow: request Notification permission → register SW →
  * create a push subscription → persist it in Firestore.
@@ -112,19 +140,8 @@ export async function enablePush(uid: string): Promise<'active' | 'denied' | 'er
     const createdNewSubscription = !existingSub
 
     // 4. Persist subscription in Firestore under the user's path
-    const subJson = sub.toJSON() as {
-      endpoint: string
-      keys: { auth: string; p256dh: string }
-    }
-    const subId = encodeSubId(sub.endpoint)
     try {
-      await setDoc(doc(db, 'users', uid, 'pushSubscriptions', subId), {
-        endpoint: sub.endpoint,
-        keys: subJson.keys,
-        subId,
-        createdAt: Date.now(),
-        userAgent: navigator.userAgent.slice(0, 150),
-      })
+      await persistSubscription(uid, sub)
     } catch (persistErr) {
       // Don't leave an orphaned browser subscription behind that would
       // later make the UI incorrectly appear active on reload.
@@ -139,6 +156,35 @@ export async function enablePush(uid: string): Promise<'active' | 'denied' | 'er
     console.warn('[Kivora] Push subscription error:', err)
     return 'error'
   }
+}
+
+/**
+ * Checks this device's REAL push state and self-heals it: if the browser
+ * reports an active local subscription but this device's Firestore
+ * document is missing (e.g. it was never persisted, or an earlier version
+ * of encodeSubId collided it away with another device's — see that
+ * function's comment), re-persists it before reporting 'active'. This is
+ * what the Settings toggle should call instead of the bare local check, so
+ * "active" always means "and the backend can actually reach this device",
+ * never just a leftover local subscription with nothing behind it.
+ */
+export async function ensureCurrentDevicePushPersisted(
+  uid: string,
+): Promise<PushSubscription | null> {
+  const sub = await getActivePushSubscription()
+  if (!sub) return null
+
+  try {
+    const subId = encodeSubId(sub.endpoint)
+    const snap = await getDoc(doc(db, 'users', uid, 'pushSubscriptions', subId))
+    if (!snap.exists()) {
+      await persistSubscription(uid, sub)
+    }
+  } catch (err) {
+    console.warn('[Kivora] Push subscription recovery check failed:', err)
+  }
+
+  return sub
 }
 
 /**
