@@ -26,6 +26,7 @@ import {
   clonePlanForCreation,
   type PlanItem,
   type Plan,
+  type WorkShiftReminder,
 } from '@/lib/plansStore'
 
 const inputClass =
@@ -49,6 +50,7 @@ export default function PlanDetailPage() {
   const [editDate, setEditDate] = useState('')
   const [editStartTime, setEditStartTime] = useState('')
   const [editEndTime, setEditEndTime] = useState('')
+  const [editReminder, setEditReminder] = useState<WorkShiftReminder>('off')
 
   const [deleteConfirmItemId, setDeleteConfirmItemId] = useState<string | null>(null)
 
@@ -58,6 +60,7 @@ export default function PlanDetailPage() {
   const [newItemDate, setNewItemDate] = useState('')
   const [newItemStartTime, setNewItemStartTime] = useState('')
   const [newItemEndTime, setNewItemEndTime] = useState('')
+  const [newItemReminder, setNewItemReminder] = useState<WorkShiftReminder>('off')
   const [addItemSaving, setAddItemSaving] = useState(false)
   const [addItemError, setAddItemError] = useState('')
 
@@ -98,6 +101,7 @@ export default function PlanDetailPage() {
     setEditDate(item.date ?? '')
     setEditStartTime(item.startTime ?? '')
     setEditEndTime(item.endTime ?? '')
+    setEditReminder(item.reminder ?? 'off')
     setItemError('')
   }
 
@@ -108,6 +112,7 @@ export default function PlanDetailPage() {
     setEditDate('')
     setEditStartTime('')
     setEditEndTime('')
+    setEditReminder('off')
   }
 
   /**
@@ -143,6 +148,7 @@ export default function PlanDetailPage() {
           date: editDate,
           startTime: editStartTime,
           endTime: editEndTime,
+          reminder: editReminder,
         })
       } else {
         await updatePlanItem(plan.id, id, { label: editLabel, note: editNote })
@@ -178,6 +184,7 @@ export default function PlanDetailPage() {
     setNewItemDate('')
     setNewItemStartTime('')
     setNewItemEndTime('')
+    setNewItemReminder('off')
     setAddItemError('')
   }
 
@@ -189,6 +196,7 @@ export default function PlanDetailPage() {
     setNewItemDate('')
     setNewItemStartTime('')
     setNewItemEndTime('')
+    setNewItemReminder('off')
     setAddItemError('')
   }
 
@@ -220,6 +228,7 @@ export default function PlanDetailPage() {
           date: newItemDate,
           startTime: newItemStartTime,
           endTime: newItemEndTime,
+          reminder: newItemReminder,
         })
       } else {
         await addPlanItem(plan.id, newItemLabel, newItemNote)
@@ -229,6 +238,7 @@ export default function PlanDetailPage() {
       setNewItemDate('')
       setNewItemStartTime('')
       setNewItemEndTime('')
+      setNewItemReminder('off')
       setAddingItem(false)
     } catch {
       setAddItemError(t('plans.detail.errorSaveItem', lang))
@@ -394,42 +404,59 @@ export default function PlanDetailPage() {
               return (
                 <div key={item.id} className="px-5 py-3.5 flex flex-col gap-2">
                   {isWorkScheduleItem ? (
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem] sm:items-end">
-                      <div className="col-span-2 sm:col-span-1">
-                        <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
-                          {t('plans.workSchedule.shiftDateLabel', lang)}
-                        </label>
-                        <input
-                          autoFocus
-                          type="date"
-                          value={editDate}
-                          onChange={(e) => { setEditDate(e.target.value); setItemError('') }}
-                          className={inputClass}
-                        />
+                    <>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem] sm:items-end">
+                        <div className="col-span-2 sm:col-span-1">
+                          <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
+                            {t('plans.workSchedule.shiftDateLabel', lang)}
+                          </label>
+                          <input
+                            autoFocus
+                            type="date"
+                            value={editDate}
+                            onChange={(e) => { setEditDate(e.target.value); setItemError('') }}
+                            className={inputClass}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
+                            {t('plans.workSchedule.shiftStartLabel', lang)}
+                          </label>
+                          <input
+                            type="time"
+                            value={editStartTime}
+                            onChange={(e) => { setEditStartTime(e.target.value); setItemError('') }}
+                            className={inputClass}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
+                            {t('plans.workSchedule.shiftEndLabel', lang)}
+                          </label>
+                          <input
+                            type="time"
+                            value={editEndTime}
+                            onChange={(e) => { setEditEndTime(e.target.value); setItemError('') }}
+                            className={inputClass}
+                          />
+                        </div>
                       </div>
                       <div>
                         <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
-                          {t('plans.workSchedule.shiftStartLabel', lang)}
+                          {t('plans.workSchedule.reminderLabel', lang)}
                         </label>
-                        <input
-                          type="time"
-                          value={editStartTime}
-                          onChange={(e) => { setEditStartTime(e.target.value); setItemError('') }}
+                        <select
+                          value={editReminder}
+                          onChange={(e) => setEditReminder(e.target.value as WorkShiftReminder)}
                           className={inputClass}
-                        />
+                        >
+                          <option value="off">{t('plans.workSchedule.reminderOff', lang)}</option>
+                          <option value="eveningBefore">{t('plans.workSchedule.reminderEveningBefore', lang)}</option>
+                          <option value="oneHourBefore">{t('plans.workSchedule.reminderOneHourBefore', lang)}</option>
+                          <option value="both">{t('plans.workSchedule.reminderBoth', lang)}</option>
+                        </select>
                       </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
-                          {t('plans.workSchedule.shiftEndLabel', lang)}
-                        </label>
-                        <input
-                          type="time"
-                          value={editEndTime}
-                          onChange={(e) => { setEditEndTime(e.target.value); setItemError('') }}
-                          className={inputClass}
-                        />
-                      </div>
-                    </div>
+                    </>
                   ) : (
                     <input
                       autoFocus
@@ -513,42 +540,59 @@ export default function PlanDetailPage() {
           {addingItem && (
             <div className="px-5 py-3.5 flex flex-col gap-2 bg-[#FAFAF8]">
               {isWorkScheduleItem ? (
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem] sm:items-end">
-                  <div className="col-span-2 sm:col-span-1">
-                    <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
-                      {t('plans.workSchedule.shiftDateLabel', lang)}
-                    </label>
-                    <input
-                      autoFocus
-                      type="date"
-                      value={newItemDate}
-                      onChange={(e) => { setNewItemDate(e.target.value); setAddItemError('') }}
-                      className={inputClass}
-                    />
+                <>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem] sm:items-end">
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
+                        {t('plans.workSchedule.shiftDateLabel', lang)}
+                      </label>
+                      <input
+                        autoFocus
+                        type="date"
+                        value={newItemDate}
+                        onChange={(e) => { setNewItemDate(e.target.value); setAddItemError('') }}
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
+                        {t('plans.workSchedule.shiftStartLabel', lang)}
+                      </label>
+                      <input
+                        type="time"
+                        value={newItemStartTime}
+                        onChange={(e) => { setNewItemStartTime(e.target.value); setAddItemError('') }}
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
+                        {t('plans.workSchedule.shiftEndLabel', lang)}
+                      </label>
+                      <input
+                        type="time"
+                        value={newItemEndTime}
+                        onChange={(e) => { setNewItemEndTime(e.target.value); setAddItemError('') }}
+                        className={inputClass}
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
-                      {t('plans.workSchedule.shiftStartLabel', lang)}
+                      {t('plans.workSchedule.reminderLabel', lang)}
                     </label>
-                    <input
-                      type="time"
-                      value={newItemStartTime}
-                      onChange={(e) => { setNewItemStartTime(e.target.value); setAddItemError('') }}
+                    <select
+                      value={newItemReminder}
+                      onChange={(e) => setNewItemReminder(e.target.value as WorkShiftReminder)}
                       className={inputClass}
-                    />
+                    >
+                      <option value="off">{t('plans.workSchedule.reminderOff', lang)}</option>
+                      <option value="eveningBefore">{t('plans.workSchedule.reminderEveningBefore', lang)}</option>
+                      <option value="oneHourBefore">{t('plans.workSchedule.reminderOneHourBefore', lang)}</option>
+                      <option value="both">{t('plans.workSchedule.reminderBoth', lang)}</option>
+                    </select>
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-medium text-[#94A3B8] mb-1">
-                      {t('plans.workSchedule.shiftEndLabel', lang)}
-                    </label>
-                    <input
-                      type="time"
-                      value={newItemEndTime}
-                      onChange={(e) => { setNewItemEndTime(e.target.value); setAddItemError('') }}
-                      className={inputClass}
-                    />
-                  </div>
-                </div>
+                </>
               ) : (
                 <input
                   autoFocus

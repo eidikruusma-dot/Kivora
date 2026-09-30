@@ -19,6 +19,18 @@ import type { PlanDraft } from '@/lib/planDraftValidation'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+/**
+ * A Work Schedule shift's own reminder choice — entirely per-item, with no
+ * global default to fall back to (unlike Calendar's defaultReminder): a
+ * shift with this field absent behaves exactly like 'off', so every shift
+ * saved before this feature existed needs no migration.
+ *   - 'off'            -> no reminder for this shift
+ *   - 'eveningBefore'  -> pushed at 19:00 the calendar day before the shift
+ *   - 'oneHourBefore'  -> pushed exactly one hour before the shift starts
+ *   - 'both'           -> both of the above, independently
+ */
+export type WorkShiftReminder = 'off' | 'eveningBefore' | 'oneHourBefore' | 'both'
+
 export interface PlanItem {
   id: string
   label: string
@@ -29,6 +41,8 @@ export interface PlanItem {
   startTime?: string
   /** Shift end time ("HH:MM") — set only by the Work Schedule template's shifts. */
   endTime?: string
+  /** Work Schedule shift reminder choice — see WorkShiftReminder. Absent means 'off'. */
+  reminder?: WorkShiftReminder
 }
 
 export interface Plan {
@@ -419,17 +433,19 @@ export async function mutatePlanItems(
 }
 
 /**
- * `date`/`startTime`/`endTime` are only ever meaningful for a Work Schedule
- * shift item (see buildWorkScheduleItems) — every other template's items
- * simply never pass them, so omitting them here leaves new items exactly
- * as before. Mirrors the same optional fields updatePlanItem already
- * accepts, for the same reason.
+ * `date`/`startTime`/`endTime`/`reminder` are only ever meaningful for a
+ * Work Schedule shift item (see buildWorkScheduleItems) — every other
+ * template's items simply never pass them, so omitting them here leaves
+ * new items exactly as before. Mirrors the same optional fields
+ * updatePlanItem already accepts, for the same reason. `reminder: 'off'`
+ * is treated the same as omitting it — the field is only ever persisted
+ * when it means something.
  */
 export async function addPlanItem(
   planId: string,
   label: string,
   note?: string,
-  dateTimeFields?: { date?: string; startTime?: string; endTime?: string },
+  dateTimeFields?: { date?: string; startTime?: string; endTime?: string; reminder?: WorkShiftReminder },
 ): Promise<void> {
   if (!isValidItemLabel(label)) throw new Error('INVALID_ITEM_LABEL')
   const trimmedNote = note?.trim()
@@ -441,24 +457,30 @@ export async function addPlanItem(
     ...(dateTimeFields?.date ? { date: dateTimeFields.date } : {}),
     ...(dateTimeFields?.startTime ? { startTime: dateTimeFields.startTime } : {}),
     ...(dateTimeFields?.endTime ? { endTime: dateTimeFields.endTime } : {}),
+    ...(dateTimeFields?.reminder && dateTimeFields.reminder !== 'off' ? { reminder: dateTimeFields.reminder } : {}),
   }
   await mutatePlanItems(planId, (items) => [...items, newItem])
 }
 
 /**
- * `date`/`startTime`/`endTime` are only ever meaningful for a Work Schedule
- * shift item (see buildWorkScheduleItems) — every other template's items
- * simply never pass them, so omitting them here leaves those items exactly
- * as before. When they ARE passed, updating them here is enough to move a
- * shift's derived Calendar entry: planItemToCalendarEvent recomputes the
- * entry fresh from this same item on every render, so a moved date/time (or
- * a cleared one) is reflected immediately, under the SAME entry id — never
- * a second, stale, or orphaned entry.
+ * `date`/`startTime`/`endTime`/`reminder` are only ever meaningful for a
+ * Work Schedule shift item (see buildWorkScheduleItems) — every other
+ * template's items simply never pass them, so omitting them here leaves
+ * those items exactly as before. When they ARE passed, updating them here
+ * is enough to move a shift's derived Calendar entry: planItemToCalendarEvent
+ * recomputes the entry fresh from this same item on every render, so a
+ * moved date/time (or a cleared one) is reflected immediately, under the
+ * SAME entry id — never a second, stale, or orphaned entry. The server-side
+ * reminders tick reads this same live item on every tick too, so an edited
+ * date/startTime changes a shift reminder's dedup id the same way an edited
+ * Calendar event's does (see workScheduleReminderCandidates.ts) — a stale
+ * reminder for the old time never blocks the new one, and a deleted shift
+ * simply stops appearing to the tick at all.
  */
 export async function updatePlanItem(
   planId: string,
   itemId: string,
-  patch: { label?: string; note?: string; date?: string; startTime?: string; endTime?: string },
+  patch: { label?: string; note?: string; date?: string; startTime?: string; endTime?: string; reminder?: WorkShiftReminder },
 ): Promise<void> {
   await mutatePlanItems(planId, (items) => {
     const index = items.findIndex((item) => item.id === itemId)
@@ -470,6 +492,7 @@ export async function updatePlanItem(
     const nextDate = patch.date !== undefined ? patch.date : item.date
     const nextStartTime = patch.startTime !== undefined ? patch.startTime : item.startTime
     const nextEndTime = patch.endTime !== undefined ? patch.endTime : item.endTime
+    const nextReminder = patch.reminder !== undefined ? patch.reminder : item.reminder
     const next = [...items]
     next[index] = {
       ...item,
@@ -478,6 +501,7 @@ export async function updatePlanItem(
       date: nextDate || undefined,
       startTime: nextStartTime || undefined,
       endTime: nextEndTime || undefined,
+      reminder: nextReminder && nextReminder !== 'off' ? nextReminder : undefined,
     }
     return next
   })

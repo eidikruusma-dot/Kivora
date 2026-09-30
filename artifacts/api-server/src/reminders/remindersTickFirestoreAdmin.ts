@@ -18,6 +18,7 @@ import type {
   PushSubscriptionRecord,
   UserSettingsRecord,
   CalendarEventRecord,
+  WorkSchedulePlanRecord,
   NotificationDocFields,
 } from './remindersTick.js'
 
@@ -71,6 +72,19 @@ export function createAdminRemindersFirestore(): RemindersFirestore {
         .where('date', '<=', toDateIso)
         .get()
       return snap.docs.map((doc) => doc.data() as CalendarEventRecord)
+    },
+
+    async getWorkSchedulePlans(uid: string): Promise<WorkSchedulePlanRecord[]> {
+      const snap = await db
+        .collection('users')
+        .doc(uid)
+        .collection('plans')
+        .where('type', '==', 'workSchedule')
+        .get()
+      return snap.docs.map((doc) => {
+        const data = doc.data() as { items?: WorkSchedulePlanRecord['items'] }
+        return { id: doc.id, items: data.items ?? [] }
+      })
     },
 
     async notificationExists(uid: string, id: string): Promise<boolean> {

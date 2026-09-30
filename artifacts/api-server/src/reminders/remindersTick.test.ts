@@ -18,6 +18,7 @@ import {
   type PushSubscriptionRecord,
   type UserSettingsRecord,
   type CalendarEventRecord,
+  type WorkSchedulePlanRecord,
   type NotificationDocFields,
   type SendWebPush,
 } from "./remindersTick.js";
@@ -49,6 +50,7 @@ function makeFakeFirestore() {
   const users = new Map<string, UserSettingsRecord>();
   let subs: PushSubscriptionRecord[] = [];
   const events = new Map<string, CalendarEventRecord[]>();
+  const workSchedulePlans = new Map<string, WorkSchedulePlanRecord[]>();
   const notifications = new Map<string, NotificationDocFields>();
   const deletedSubIds: string[] = [];
   const getUserSettingsErrors = new Set<string>();
@@ -63,6 +65,13 @@ function makeFakeFirestore() {
     },
     async getCalendarEventsInRange(uid, from, to) {
       return (events.get(uid) ?? []).filter((e) => e.date >= from && e.date <= to);
+    },
+    async getWorkSchedulePlans(uid) {
+      // Real per-plan `type` filtering happens at the Firestore query level
+      // (see remindersTickFirestoreAdmin.ts) — this fake just returns
+      // whatever was seeded for this uid, defaulting to none (empty), so
+      // every existing Calendar-only test is completely unaffected.
+      return workSchedulePlans.get(uid) ?? [];
     },
     async notificationExists(uid, id) {
       return notifications.has(`${uid}/${id}`);
@@ -81,6 +90,7 @@ function makeFakeFirestore() {
     users,
     setSubs: (v: PushSubscriptionRecord[]) => { subs = v; },
     setEvents: (uid: string, list: CalendarEventRecord[]) => { events.set(uid, list); },
+    setWorkSchedulePlans: (uid: string, list: WorkSchedulePlanRecord[]) => { workSchedulePlans.set(uid, list); },
     notifications,
     deletedSubIds,
     getUserSettingsErrors,
@@ -101,6 +111,14 @@ function userRecord(overrides: Partial<UserSettingsRecord> = {}): UserSettingsRe
 
 function calEvent(overrides: Partial<CalendarEventRecord> = {}): CalendarEventRecord {
   return { id: "evt-1", title: "Hambaarst", date: "2026-06-15", startTime: "14:00", ...overrides };
+}
+
+function wsPlan(overrides: Partial<WorkSchedulePlanRecord> = {}): WorkSchedulePlanRecord {
+  return {
+    id: "ws-plan-1",
+    items: [{ id: "shift-1", date: "2026-06-15", startTime: "08:00", endTime: "20:00", reminder: "off" }],
+    ...overrides,
+  };
 }
 
 function sub(uid: string, subId: string): PushSubscriptionRecord {
@@ -361,6 +379,158 @@ await group("one user's failure does not stop reminders for other users", async 
 
   assert(summary.errors.some((e) => e.uid === "broken"), "the broken user's failure is recorded");
   assert(summary.remindersSent === 1, "the other user's reminder still went out");
+});
+
+// ── Work Schedule shift reminders ───────────────────────────────────────────
+// 08:00-20:00 local summer Tallinn (EEST, UTC+3) on 2026-06-15.
+const SHIFT_START_UTC = new Date("2026-06-15T05:00:00.000Z");
+const ONE_HOUR_BEFORE_UTC = new Date("2026-06-15T04:00:00.000Z");
+const EVENING_BEFORE_UTC = new Date("2026-06-14T16:00:00.000Z");
+
+await group("Work Schedule — 'off' (and no reminder field at all) produces nothing, unchanged from before this feature", async () => {
+  const { firestore, users, setSubs, setWorkSchedulePlans } = makeFakeFirestore();
+  users.set("u1", userRecord());
+  setSubs([sub("u1", "s1")]);
+  setWorkSchedulePlans("u1", [wsPlan({ items: [{ id: "shift-1", date: "2026-06-15", startTime: "08:00", endTime: "20:00", reminder: "off" }] })]);
+
+  const { fn: sendWebPush, calls } = makeSendWebPush();
+  // Due instant for BOTH offsets, in case 'off' were somehow ignored.
+  const atHourBefore = await runRemindersTick({ firestore, sendWebPush, now: ONE_HOUR_BEFORE_UTC, windowMs: WINDOW_MS });
+  const atEveningBefore = await runRemindersTick({ firestore, sendWebPush, now: EVENING_BEFORE_UTC, windowMs: WINDOW_MS });
+
+  assert(atHourBefore.remindersSent === 0 && atEveningBefore.remindersSent === 0, "no reminder sent for an 'off' shift");
+  assert(calls.length === 0, "push never called");
+  assert(atHourBefore.eventsConsidered === 0, "an 'off' shift is not even counted as considered — no telemetry noise for the common case");
+
+  const noReminderField = makeFakeFirestore();
+  noReminderField.users.set("u1", userRecord());
+  noReminderField.setSubs([sub("u1", "s1")]);
+  noReminderField.setWorkSchedulePlans("u1", [wsPlan()]); // wsPlan()'s default item already omits/sets reminder: 'off'
+  const legacy = await runRemindersTick({
+    firestore: noReminderField.firestore,
+    sendWebPush,
+    now: ONE_HOUR_BEFORE_UTC,
+    windowMs: WINDOW_MS,
+  });
+  assert(legacy.remindersSent === 0, "a shift with no reminder field at all (every pre-existing shift) sends nothing");
+});
+
+await group("Work Schedule — 'eveningBefore' pushes at 19:00 local the day before, with the expected message", async () => {
+  const { firestore, users, setSubs, setWorkSchedulePlans, notifications } = makeFakeFirestore();
+  users.set("u1", userRecord());
+  setSubs([sub("u1", "s1")]);
+  setWorkSchedulePlans("u1", [
+    wsPlan({ items: [{ id: "shift-1", date: "2026-06-15", startTime: "08:00", endTime: "20:00", reminder: "eveningBefore" }] }),
+  ]);
+
+  const { fn: sendWebPush, calls } = makeSendWebPush();
+  const summary = await runRemindersTick({ firestore, sendWebPush, now: EVENING_BEFORE_UTC, windowMs: WINDOW_MS });
+
+  assert(summary.remindersSent === 1, "exactly one reminder sent");
+  assert(notifications.size === 1, "exactly one notification doc written");
+  const [, payload] = calls[0] as [unknown, { title: string; body: string }];
+  assert(payload.body === "Homme on tööpäev: 08:00–20:00", `evening-before message matches the exact expected text (got ${JSON.stringify(payload.body)})`);
+});
+
+await group("Work Schedule — 'oneHourBefore' pushes exactly one hour before shift start, with the expected message", async () => {
+  const { firestore, users, setSubs, setWorkSchedulePlans, notifications } = makeFakeFirestore();
+  users.set("u1", userRecord());
+  setSubs([sub("u1", "s1")]);
+  setWorkSchedulePlans("u1", [
+    wsPlan({ items: [{ id: "shift-1", date: "2026-06-15", startTime: "08:00", endTime: "20:00", reminder: "oneHourBefore" }] }),
+  ]);
+
+  const { fn: sendWebPush, calls } = makeSendWebPush();
+  const summary = await runRemindersTick({ firestore, sendWebPush, now: ONE_HOUR_BEFORE_UTC, windowMs: WINDOW_MS });
+
+  assert(summary.remindersSent === 1, "exactly one reminder sent");
+  assert(notifications.size === 1, "exactly one notification doc written");
+  const [, payload] = calls[0] as [unknown, { title: string; body: string }];
+  assert(payload.body === "Töövahetus algab kell 08:00.", `1-hour-before message matches the exact expected text (got ${JSON.stringify(payload.body)})`);
+});
+
+await group("Work Schedule — 'both' creates two independently deduplicated reminders, to every subscribed device", async () => {
+  const { firestore, users, setSubs, setWorkSchedulePlans, notifications } = makeFakeFirestore();
+  users.set("u1", userRecord());
+  setSubs([sub("u1", "s1"), sub("u1", "s2")]);
+  setWorkSchedulePlans("u1", [
+    wsPlan({ items: [{ id: "shift-1", date: "2026-06-15", startTime: "08:00", endTime: "20:00", reminder: "both" }] }),
+  ]);
+
+  const { fn: sendWebPush, calls } = makeSendWebPush();
+
+  const eveningTick = await runRemindersTick({ firestore, sendWebPush, now: EVENING_BEFORE_UTC, windowMs: WINDOW_MS });
+  assert(eveningTick.remindersSent === 1, "the evening-before half of 'both' fires on its own");
+  assert(notifications.size === 1, "exactly one notification doc exists after the evening tick");
+
+  // A second tick at the SAME instant must not duplicate the evening send,
+  // and must NOT have sent the hour-before half either (not due yet).
+  const repeatEveningTick = await runRemindersTick({ firestore, sendWebPush, now: EVENING_BEFORE_UTC, windowMs: WINDOW_MS });
+  assert(repeatEveningTick.remindersSent === 0, "repeating the same instant sends nothing more");
+  assert(repeatEveningTick.remindersSuppressed.duplicate === 1, "the evening half is suppressed as a duplicate, not resent");
+
+  const hourTick = await runRemindersTick({ firestore, sendWebPush, now: ONE_HOUR_BEFORE_UTC, windowMs: WINDOW_MS });
+  assert(hourTick.remindersSent === 1, "the hour-before half of 'both' fires independently, later");
+  assert(notifications.size === 2, "both notification docs now exist — two independent reminders, not one blocking the other");
+  assert(calls.length === 2, "sendWebPush called exactly twice in total (once per independent candidate)");
+  for (const [subsSent] of calls as [Array<{ endpoint: string }>, unknown][]) {
+    assert(subsSent.length === 2, "each send reaches BOTH of the user's subscribed devices");
+  }
+});
+
+await group("Work Schedule — editing a shift's time changes the dedup id, so the corrected time still fires", async () => {
+  const { firestore, users, setSubs, setWorkSchedulePlans } = makeFakeFirestore();
+  users.set("u1", userRecord());
+  setSubs([sub("u1", "s1")]);
+  setWorkSchedulePlans("u1", [
+    wsPlan({ items: [{ id: "shift-1", date: "2026-06-15", startTime: "08:00", endTime: "20:00", reminder: "oneHourBefore" }] }),
+  ]);
+
+  const { fn: sendWebPush } = makeSendWebPush();
+  const first = await runRemindersTick({ firestore, sendWebPush, now: ONE_HOUR_BEFORE_UTC, windowMs: WINDOW_MS });
+  assert(first.remindersSent === 1, "reminder fires for the original 08:00 start time");
+
+  // Shift edited to start at 10:00 instead — a new instant, 2 hours later.
+  setWorkSchedulePlans("u1", [
+    wsPlan({ items: [{ id: "shift-1", date: "2026-06-15", startTime: "10:00", endTime: "22:00", reminder: "oneHourBefore" }] }),
+  ]);
+  const newDue = new Date(ONE_HOUR_BEFORE_UTC.getTime() + 2 * 3600 * 1000);
+  const second = await runRemindersTick({ firestore, sendWebPush, now: newDue, windowMs: WINDOW_MS });
+  assert(second.remindersSent === 1, "reminder fires again for the new 10:00 time — not blocked by the old dedup id");
+});
+
+await group("Work Schedule — a deleted shift produces no candidate and nothing is ever sent for it", async () => {
+  const { firestore, users, setSubs, setWorkSchedulePlans } = makeFakeFirestore();
+  users.set("u1", userRecord());
+  setSubs([sub("u1", "s1")]);
+  setWorkSchedulePlans("u1", [
+    wsPlan({ items: [{ id: "shift-1", date: "2026-06-15", startTime: "08:00", endTime: "20:00", reminder: "oneHourBefore" }] }),
+  ]);
+
+  // The shift (and its whole plan) is deleted before its reminder ever became due.
+  setWorkSchedulePlans("u1", []);
+
+  const { fn: sendWebPush, calls } = makeSendWebPush();
+  const summary = await runRemindersTick({ firestore, sendWebPush, now: ONE_HOUR_BEFORE_UTC, windowMs: WINDOW_MS });
+
+  assert(summary.remindersSent === 0, "no reminder sent for a deleted shift");
+  assert(calls.length === 0, "push never called");
+});
+
+await group("Work Schedule — a plan with no reminder set alongside it does not affect an existing Calendar reminder", async () => {
+  const { firestore, users, setSubs, setEvents, setWorkSchedulePlans } = makeFakeFirestore();
+  users.set("u1", userRecord({ notifications: settings({ defaultReminder: "15min" }) }));
+  setSubs([sub("u1", "s1")]);
+  setEvents("u1", [calEvent()]);
+  setWorkSchedulePlans("u1", [wsPlan()]); // present, but reminder: 'off' — must not interfere
+
+  const { fn: sendWebPush, calls } = makeSendWebPush();
+  const now = new Date(EVENT_INSTANT_UTC.getTime() - 15 * 60_000);
+  const summary = await runRemindersTick({ firestore, sendWebPush, now, windowMs: WINDOW_MS });
+
+  assert(summary.remindersSent === 1, "the Calendar reminder still fires exactly as before — unaffected by the Work Schedule plan");
+  assert(summary.eventsConsidered === 1, "only the Calendar event is counted — the 'off' shift contributes nothing");
+  assert(calls.length === 1, "sendWebPush called exactly once, for the Calendar event only");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

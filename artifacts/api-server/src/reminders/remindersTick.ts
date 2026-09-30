@@ -40,6 +40,11 @@
 import { isInQuietHours, isModuleEnabled } from '../lib/notificationRules.js'
 import { instantToZonedClockDate } from '../lib/timeZoneWallClock.js'
 import { extractCalendarReminderCandidate, type CalendarEventLike } from './calendarReminderCandidates.js'
+import {
+  extractWorkScheduleReminderCandidates,
+  type WorkScheduleShiftLike,
+  type WorkScheduleReminderCandidate,
+} from './workScheduleReminderCandidates.js'
 import type { NotificationSettings } from '../lib/notificationSettingsTypes.js'
 import type { PushSubscriptionLike, WebPushPayload, WebPushSendResult } from '../lib/webPushSend.js'
 
@@ -59,6 +64,15 @@ export interface UserSettingsRecord {
 }
 
 export type CalendarEventRecord = CalendarEventLike & { title: string }
+
+/** One Work Schedule shift item, as stored inside a plan doc's `items` array. */
+export type WorkScheduleShiftRecord = WorkScheduleShiftLike
+
+/** users/{uid}/plans/{planId} — only the fields this tick needs from a 'workSchedule' plan. */
+export interface WorkSchedulePlanRecord {
+  id: string
+  items: WorkScheduleShiftRecord[]
+}
 
 export interface NotificationDocFields {
   id: string
@@ -87,6 +101,17 @@ export interface RemindersFirestore {
    * extractCalendarReminderCandidate downstream, not from this range.
    */
   getCalendarEventsInRange(uid: string, fromDateIso: string, toDateIso: string): Promise<CalendarEventRecord[]>
+  /**
+   * Every users/{uid}/plans/{planId} doc whose `type` is 'workSchedule'.
+   * Unlike getCalendarEventsInRange, this is not date-range-filtered at the
+   * Firestore level — `type` is the only indexable top-level field on a
+   * plan doc (a shift's own `date` lives inside the `items` array, which
+   * Firestore cannot filter on directly) — so the date window is applied
+   * in-process downstream, exactly the same "generous pre-filter, exact
+   * correctness computed after" philosophy getCalendarEventsInRange's own
+   * date range already follows.
+   */
+  getWorkSchedulePlans(uid: string): Promise<WorkSchedulePlanRecord[]>
   /** True when users/{uid}/notifications/{id} already exists. */
   notificationExists(uid: string, id: string): Promise<boolean>
   /** Writes users/{uid}/notifications/{id}. */
@@ -150,6 +175,130 @@ function messageFor(lang: string, eventTitle: string, startTime: string) {
   return (lang === 'en' ? MESSAGES.en : MESSAGES.et)(eventTitle, startTime)
 }
 
+const WORK_SHIFT_MESSAGES = {
+  et: {
+    eveningBefore: (startTime: string, endTime: string) => ({
+      title: 'Homme tööl',
+      description: `Homme on tööpäev: ${startTime}–${endTime}`,
+      timeLabel: 'Homme',
+    }),
+    oneHourBefore: (startTime: string) => ({
+      title: 'Töövahetus varsti',
+      description: `Töövahetus algab kell ${startTime}.`,
+      timeLabel: 'Täna',
+    }),
+  },
+  en: {
+    eveningBefore: (startTime: string, endTime: string) => ({
+      title: 'Work tomorrow',
+      description: `Tomorrow is a work day: ${startTime}–${endTime}`,
+      timeLabel: 'Tomorrow',
+    }),
+    oneHourBefore: (startTime: string) => ({
+      title: 'Shift starting soon',
+      description: `Your shift starts at ${startTime}.`,
+      timeLabel: 'Today',
+    }),
+  },
+} as const
+
+function workShiftMessageFor(
+  lang: string,
+  kind: WorkScheduleReminderCandidate['kind'],
+  startTime: string,
+  endTime: string,
+) {
+  const table = lang === 'en' ? WORK_SHIFT_MESSAGES.en : WORK_SHIFT_MESSAGES.et
+  return kind === 'eveningBefore' ? table.eveningBefore(startTime, endTime) : table.oneHourBefore(startTime)
+}
+
+interface NotificationContent {
+  title: string
+  description: string
+  timeLabel: string
+}
+
+interface CandidateLike {
+  triggerInstant: Date
+  dedupId: string
+}
+
+/**
+ * The one shared "given an already-extracted candidate, decide + act" body
+ * — due/window check, quiet hours, dedup, write + push, gone-subscription
+ * cleanup — used by BOTH the Calendar loop and the Work Schedule loop
+ * below. Extracted unchanged from what was previously inline only in the
+ * Calendar loop (Calendar's own tests, unaffected by this refactor, are
+ * what prove its behavior is identical to before). `module`/`link` let
+ * each source pick its own notification-doc `module` and click-through
+ * URL; `link` is deliberately not forced to '/app/calendar' here since a
+ * Work Schedule shift may not have been added to Calendar at all.
+ */
+async function processCandidate(
+  firestore: RemindersFirestore,
+  sendWebPush: SendWebPush,
+  now: Date,
+  windowMs: number,
+  summary: RemindersTickSummary,
+  uid: string,
+  subs: PushSubscriptionRecord[],
+  settings: NotificationSettings,
+  localNow: Date,
+  candidate: CandidateLike,
+  content: NotificationContent,
+  module: NotificationDocFields['module'],
+  link: string,
+): Promise<void> {
+  const dueMs = candidate.triggerInstant.getTime()
+  const nowMs = now.getTime()
+  if (dueMs > nowMs) {
+    summary.remindersSuppressed.notYetDue++
+    return
+  }
+  if (dueMs <= nowMs - windowMs) {
+    summary.remindersSuppressed.windowMissed++
+    return
+  }
+
+  if (isInQuietHours(settings, localNow)) {
+    summary.remindersSuppressed.quietHours++
+    return
+  }
+
+  if (await firestore.notificationExists(uid, candidate.dedupId)) {
+    summary.remindersSuppressed.duplicate++
+    return
+  }
+
+  await firestore.writeNotification(uid, candidate.dedupId, {
+    id: candidate.dedupId,
+    type: candidate.dedupId,
+    module,
+    title: content.title,
+    description: content.description,
+    timeLabel: content.timeLabel,
+    read: false,
+    icon: 'calendar',
+    accent: '#2563EB',
+    createdAt: now.getTime(),
+    link,
+  })
+
+  const pushResult = await sendWebPush(
+    subs.map((s) => ({ endpoint: s.endpoint, keys: s.keys })),
+    { title: content.title, body: content.description, url: link, tag: candidate.dedupId },
+  )
+  summary.remindersSent++
+
+  for (const goneEndpoint of pushResult.goneEndpoints) {
+    const match = subs.find((s) => s.endpoint === goneEndpoint)
+    if (match) {
+      await firestore.deletePushSubscription(uid, match.subId)
+      summary.subscriptionsCleanedUp++
+    }
+  }
+}
+
 /**
  * Runs one tick. Never throws for a single user's failure — that user is
  * recorded in `errors` and the tick continues with the rest, so one
@@ -202,6 +351,8 @@ export async function runRemindersTick(deps: RemindersTickDeps): Promise<Reminde
         continue
       }
 
+      const localNow = instantToZonedClockDate(now, timezone)
+
       const events = await firestore.getCalendarEventsInRange(uid, fromDateIso, toDateIso)
 
       for (const event of events) {
@@ -213,55 +364,69 @@ export async function runRemindersTick(deps: RemindersTickDeps): Promise<Reminde
           continue
         }
 
-        const dueMs = candidate.triggerInstant.getTime()
-        const nowMs = now.getTime()
-        if (dueMs > nowMs) {
-          summary.remindersSuppressed.notYetDue++
-          continue
-        }
-        if (dueMs <= nowMs - windowMs) {
-          summary.remindersSuppressed.windowMissed++
-          continue
-        }
-
-        const localNow = instantToZonedClockDate(now, timezone)
-        if (isInQuietHours(settings, localNow)) {
-          summary.remindersSuppressed.quietHours++
-          continue
-        }
-
-        if (await firestore.notificationExists(uid, candidate.dedupId)) {
-          summary.remindersSuppressed.duplicate++
-          continue
-        }
-
         const msg = messageFor(preferredLanguage, event.title, event.startTime ?? '')
-
-        await firestore.writeNotification(uid, candidate.dedupId, {
-          id: candidate.dedupId,
-          type: candidate.dedupId,
-          module: 'calendar',
-          title: msg.title,
-          description: msg.description,
-          timeLabel: msg.timeLabel,
-          read: false,
-          icon: 'calendar',
-          accent: '#2563EB',
-          createdAt: now.getTime(),
-          link: '/app/calendar',
-        })
-
-        const pushResult = await sendWebPush(
-          subs.map((s) => ({ endpoint: s.endpoint, keys: s.keys })),
-          { title: msg.title, body: msg.description, url: '/app/calendar', tag: candidate.dedupId },
+        await processCandidate(
+          firestore,
+          sendWebPush,
+          now,
+          windowMs,
+          summary,
+          uid,
+          subs,
+          settings,
+          localNow,
+          candidate,
+          msg,
+          'calendar',
+          '/app/calendar',
         )
-        summary.remindersSent++
+      }
 
-        for (const goneEndpoint of pushResult.goneEndpoints) {
-          const match = subs.find((s) => s.endpoint === goneEndpoint)
-          if (match) {
-            await firestore.deletePushSubscription(uid, match.subId)
-            summary.subscriptionsCleanedUp++
+      // Work Schedule shift reminders — gated behind the SAME Calendar
+      // module toggle checked above (see this file's header/investigation:
+      // there is no dedicated 'plans' notification module), reusing the
+      // exact same due/quiet-hours/dedup/send/cleanup body as Calendar via
+      // processCandidate. A shift with no reminder set (the default, and
+      // every shift that existed before this feature) is skipped before
+      // eventsConsidered is even incremented — "no reminder configured"
+      // stays invisible to this tick's telemetry, exactly as it was before
+      // this feature existed, rather than showing up as noCandidate noise
+      // on every single ordinary shift.
+      const workSchedulePlans = await firestore.getWorkSchedulePlans(uid)
+
+      for (const plan of workSchedulePlans) {
+        for (const item of plan.items) {
+          if ((item.reminder ?? 'off') === 'off') continue
+          summary.eventsConsidered++
+
+          const candidates = extractWorkScheduleReminderCandidates(plan.id, item, timezone)
+          if (candidates.length === 0) {
+            summary.remindersSuppressed.noCandidate++
+            continue
+          }
+
+          for (const candidate of candidates) {
+            const msg = workShiftMessageFor(
+              preferredLanguage,
+              candidate.kind,
+              item.startTime ?? '',
+              item.endTime ?? '',
+            )
+            await processCandidate(
+              firestore,
+              sendWebPush,
+              now,
+              windowMs,
+              summary,
+              uid,
+              subs,
+              settings,
+              localNow,
+              candidate,
+              msg,
+              'calendar',
+              `/app/plans/${plan.id}`,
+            )
           }
         }
       }

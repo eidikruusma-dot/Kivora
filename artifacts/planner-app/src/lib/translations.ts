@@ -1717,6 +1717,11 @@ export type TranslationKey =
     | "plans.workSchedule.errorNoShifts"
     | "plans.workSchedule.errorShiftFields"
     | "plans.workSchedule.submit"
+    | "plans.workSchedule.reminderLabel"
+    | "plans.workSchedule.reminderOff"
+    | "plans.workSchedule.reminderEveningBefore"
+    | "plans.workSchedule.reminderOneHourBefore"
+    | "plans.workSchedule.reminderBoth"
     | "plans.template.blank.title"
     | "plans.template.blank.desc"
     | "plans.modal.title"
@@ -3728,6 +3733,11 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.workSchedule.errorNoShifts": "Lisa vähemalt üks kehtiv töövahetus (kuupäev, algus- ja lõpuaeg, kus lõpuaeg on hilisem kui algusaeg).",
         "plans.workSchedule.errorShiftFields": "Vali kuupäev ning lõpuaeg, mis on hilisem kui algusaeg.",
         "plans.workSchedule.submit": "Loo töögraafik",
+        "plans.workSchedule.reminderLabel": "Meeldetuletus",
+        "plans.workSchedule.reminderOff": "Väljas",
+        "plans.workSchedule.reminderEveningBefore": "Eelmisel õhtul",
+        "plans.workSchedule.reminderOneHourBefore": "1 tund enne",
+        "plans.workSchedule.reminderBoth": "Mõlemad",
         "plans.template.blank.title": "Tühi plaan",
         "plans.template.blank.desc": "Alusta täiesti tühjalt lehelt.",
         "plans.modal.title": "Uus tühi plaan",
@@ -5732,6 +5742,11 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "plans.workSchedule.errorNoShifts": "Add at least one valid shift (date, start and end time, with end time after start time).",
         "plans.workSchedule.errorShiftFields": "Choose a date, and an end time after the start time.",
         "plans.workSchedule.submit": "Create work schedule",
+        "plans.workSchedule.reminderLabel": "Reminder",
+        "plans.workSchedule.reminderOff": "Off",
+        "plans.workSchedule.reminderEveningBefore": "Previous evening",
+        "plans.workSchedule.reminderOneHourBefore": "1 hour before",
+        "plans.workSchedule.reminderBoth": "Both",
         "plans.template.blank.title": "Blank plan",
         "plans.template.blank.desc": "Start completely from scratch.",
         "plans.modal.title": "New blank plan",
