@@ -24,6 +24,7 @@ import {
   deletePlan,
   addPlan,
   clonePlanForCreation,
+  sortWorkScheduleItemsForDisplay,
   type PlanItem,
   type Plan,
   type WorkShiftReminder,
@@ -305,6 +306,10 @@ export default function PlanDetailPage() {
   const canAddItem = isWorkScheduleItem
     ? Boolean(newItemDate) && isValidShiftTimes(newItemStartTime, newItemEndTime)
     : isValidItemLabel(newItemLabel)
+  // Work Schedule shifts are always shown chronologically, regardless of
+  // add/edit order or storage order — every other template keeps its
+  // existing (stored/insertion) order, untouched.
+  const displayItems = isWorkScheduleItem ? sortWorkScheduleItemsForDisplay(plan.items) : plan.items
 
   return (
     <div className="p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto w-full flex flex-col gap-5">
@@ -388,11 +393,11 @@ export default function PlanDetailPage() {
         {itemError && <p className="px-5 pt-3 text-xs text-[#E11D48]">{itemError}</p>}
 
         <div className="divide-y divide-[#F4F4F0]">
-          {plan.items.length === 0 && !addingItem && (
+          {displayItems.length === 0 && !addingItem && (
             <p className="px-5 py-8 text-sm text-[#94A3B8] text-center">{t('plans.detail.noItems', lang)}</p>
           )}
 
-          {plan.items.map((item) => {
+          {displayItems.map((item) => {
             const isEditing = editingItemId === item.id
             const isSaving = savingItemIds.has(item.id)
 

@@ -246,6 +246,39 @@ export function buildWorkScheduleItems(shifts: WorkScheduleShiftDraft[], workpla
 }
 
 /**
+ * Sort key for one Work Schedule shift item: date ascending, then startTime
+ * ascending on the same date. Both fields are 'YYYY-MM-DD'/'HH:MM' strings,
+ * which are lexicographically sortable in their own right, so concatenating
+ * them ('date' + 'T' + 'time') gives a single comparable string with no
+ * date-math involved. A missing or non-string date/startTime (an
+ * incomplete/mid-edit shift) is coerced to a sentinel that always sorts
+ * after every real value — display order degrades safely instead of
+ * throwing or silently reordering unpredictably.
+ */
+function workScheduleItemSortKey(item: PlanItem): string {
+  const date = typeof item.date === 'string' && item.date ? item.date : '9999-99-99'
+  const startTime = typeof item.startTime === 'string' && item.startTime ? item.startTime : '99:99'
+  return `${date}T${startTime}`
+}
+
+/**
+ * Returns a NEW array of Work Schedule shift items in chronological display
+ * order — date ascending, then startTime ascending for same-date shifts —
+ * regardless of the order they were added or are stored in Firestore.
+ * Never mutates `items`, and never reorders persisted data: this is a
+ * display-only sort, called by the Work Schedule item list right before
+ * rendering. Scoped to Work Schedule alone — every other Plan template
+ * keeps its own items in stored/insertion order, unchanged.
+ */
+export function sortWorkScheduleItemsForDisplay(items: PlanItem[]): PlanItem[] {
+  return [...items].sort((a, b) => {
+    const ka = workScheduleItemSortKey(a)
+    const kb = workScheduleItemSortKey(b)
+    return ka < kb ? -1 : ka > kb ? 1 : 0
+  })
+}
+
+/**
  * Builds a trusted, ready-to-save Plan from an already-sanitized AI plan
  * draft (see planDraftValidation.ts). This is the ONE place a
  * preview_plan_creation draft is turned into a real Plan: every id, every
