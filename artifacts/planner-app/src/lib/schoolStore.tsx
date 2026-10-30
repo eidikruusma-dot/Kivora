@@ -695,9 +695,30 @@ export async function updateSchoolSubject(
  * partially-deleted state — the caller's catch block sees one rejected
  * promise and the local state (synced from Firestore via the live
  * onSnapshot listener above) reflects nothing having changed.
+ *
+ * Reproduced live bug fix: this throws SUBJECT_NOT_FOUND when `id` has no
+ * real users/{uid}/schoolItems/subject-{id} document in `_subjects` at
+ * all, instead of committing a no-op batch and reporting success. Without
+ * this guard, SchoolPage.tsx's Ained tab (which renders subject cards from
+ * useSchoolSubjectsFromLessons()'s MERGED stored+lesson-derived list, by
+ * deliberate design — see that hook's own comment) could hand this
+ * function the id of a purely lesson-derived "ghost" subject: one that
+ * predates the dedicated subject store, has no corresponding stored
+ * document, and exists only because a lesson still references its name.
+ * Deleting such an id previously resolved cleanly (writeBatch happily
+ * commits a batch whose only real delete is for a path that was never
+ * there), the confirmation dialog closed as if it worked, and the exact
+ * same subject reappeared on the next load — because nothing about it was
+ * ever actually persisted to begin with. Throwing here instead routes
+ * straight into the existing confirmDeleteSubject catch block (toast.error
+ * + dialog stays open), which is an honest outcome: there was never a
+ * real record for this id to permanently delete.
  */
 export async function deleteSchoolSubject(id: string): Promise<void> {
   if (!_currentUid) return
+  if (!_subjects.some((s) => s.id === id)) {
+    throw new Error('SUBJECT_NOT_FOUND')
+  }
   const linkedTaskIds = _tasks.filter((t) => t.subjectId === id).map((t) => t.id)
   const batch = writeBatch(db)
   batch.delete(schoolDoc(_currentUid, `subject-${id}`))

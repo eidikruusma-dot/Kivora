@@ -221,9 +221,13 @@ describe('repeated confirmation cannot trigger duplicate deletion (SchoolPage.ts
 
     await deleteSchoolSubject('sub-mat')
     pumpSchool()
-    // Second call finds no matching tasks left (subject and task already
-    // gone) — resolves cleanly, deletes nothing further, never throws.
-    await expect(deleteSchoolSubject('sub-mat')).resolves.toBeUndefined()
+    // Second call finds the subject already gone — now correctly rejects
+    // (SUBJECT_NOT_FOUND) rather than silently "succeeding" on a no-op
+    // batch, which is exactly the bug this guard fixes (see
+    // schoolSubjectDeletePersistsAfterReload.test.ts). It never throws an
+    // UNEXPECTED error, never resurrects anything, and never touches any
+    // other data.
+    await expect(deleteSchoolSubject('sub-mat')).rejects.toThrow('SUBJECT_NOT_FOUND')
     pumpSchool()
 
     expect(getAllSchoolTasks().length).toBe(0)
