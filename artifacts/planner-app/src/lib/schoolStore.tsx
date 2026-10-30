@@ -696,32 +696,70 @@ export async function updateSchoolSubject(
  * promise and the local state (synced from Firestore via the live
  * onSnapshot listener above) reflects nothing having changed.
  *
- * Reproduced live bug fix: this throws SUBJECT_NOT_FOUND when `id` has no
- * real users/{uid}/schoolItems/subject-{id} document in `_subjects` at
- * all, instead of committing a no-op batch and reporting success. Without
- * this guard, SchoolPage.tsx's Ained tab (which renders subject cards from
- * useSchoolSubjectsFromLessons()'s MERGED stored+lesson-derived list, by
- * deliberate design — see that hook's own comment) could hand this
- * function the id of a purely lesson-derived "ghost" subject: one that
- * predates the dedicated subject store, has no corresponding stored
- * document, and exists only because a lesson still references its name.
- * Deleting such an id previously resolved cleanly (writeBatch happily
- * commits a batch whose only real delete is for a path that was never
- * there), the confirmation dialog closed as if it worked, and the exact
- * same subject reappeared on the next load — because nothing about it was
- * ever actually persisted to begin with. Throwing here instead routes
- * straight into the existing confirmDeleteSubject catch block (toast.error
- * + dialog stays open), which is an honest outcome: there was never a
- * real record for this id to permanently delete.
+ * Reproduced live bug fix — real deletion for synthetic subjects: when
+ * `id` has no real users/{uid}/schoolItems/subject-{id} document in
+ * `_subjects`, it can only be one SchoolPage.tsx's Ained tab could still
+ * have handed this function: the id of a purely lesson-derived "ghost"
+ * subject synthesized by mergeStoredAndLessonSubjects (that hook's own
+ * comment explains why the Ained tab deliberately renders from that
+ * merged, not raw, list). Such a subject has no document of its own — the
+ * only persisted thing that causes it to exist at all is every lesson
+ * (and, if the user picked it from a subject dropdown when adding/editing
+ * a task, every task) that references it, by subjectId or by name. The
+ * only way to make it actually, permanently gone — so it cannot be
+ * resynthesized on the next reload — is to delete every one of those
+ * lessons and tasks. `isLinkedToSynthetic` below mirrors
+ * isSubjectReferenced/mergeStoredAndLessonSubjects' own id-first,
+ * name-fallback matching, but is intentionally stricter: a lesson or task
+ * whose OWN subjectId resolves to a DIFFERENT, still-existing real subject
+ * is never touched even if its display name happens to coincide — that
+ * item unambiguously belongs to that other subject, not to this ghost.
+ * Nothing here ever touches a real, separately stored subject document;
+ * that path above is completely unchanged. Still a single atomic
+ * writeBatch, so a failure here leaves every lesson, task, and the
+ * (never-existing) subject record exactly as they were, same as above.
  */
 export async function deleteSchoolSubject(id: string): Promise<void> {
   if (!_currentUid) return
-  if (!_subjects.some((s) => s.id === id)) {
+
+  const batch = writeBatch(db)
+
+  if (_subjects.some((s) => s.id === id)) {
+    batch.delete(schoolDoc(_currentUid, `subject-${id}`))
+    const linkedTaskIds = _tasks.filter((t) => t.subjectId === id).map((t) => t.id)
+    for (const taskId of linkedTaskIds) {
+      batch.delete(schoolDoc(_currentUid, `task-${taskId}`))
+    }
+    await batch.commit()
+    return
+  }
+
+  const synthetic = mergeStoredAndLessonSubjects(_lessons, _subjects).find((s) => s.id === id)
+  if (!synthetic) {
     throw new Error('SUBJECT_NOT_FOUND')
   }
-  const linkedTaskIds = _tasks.filter((t) => t.subjectId === id).map((t) => t.id)
-  const batch = writeBatch(db)
-  batch.delete(schoolDoc(_currentUid, `subject-${id}`))
+  const normalizedName = synthetic.name.toLowerCase().trim()
+
+  const resolvesToADifferentRealSubject = (subjectId: string | undefined): boolean =>
+    !!subjectId && subjectId !== id && _subjects.some((s) => s.id === subjectId)
+
+  const isLinkedToSynthetic = (item: { subjectId?: string; subject: string }): boolean =>
+    item.subjectId === id ||
+    (item.subject.toLowerCase().trim() === normalizedName && !resolvesToADifferentRealSubject(item.subjectId))
+
+  const linkedLessonIds = _lessons.filter(isLinkedToSynthetic).map((l) => l.id)
+  const linkedTaskIds = _tasks.filter(isLinkedToSynthetic).map((t) => t.id)
+
+  if (linkedLessonIds.length === 0 && linkedTaskIds.length === 0) {
+    // Nothing left anywhere that could have synthesized this entry —
+    // there is truly no record of it (e.g. it was already cleaned up by
+    // another tab/device). Same honest-failure contract as above.
+    throw new Error('SUBJECT_NOT_FOUND')
+  }
+
+  for (const lessonId of linkedLessonIds) {
+    batch.delete(schoolDoc(_currentUid, `lesson-${lessonId}`))
+  }
   for (const taskId of linkedTaskIds) {
     batch.delete(schoolDoc(_currentUid, `task-${taskId}`))
   }

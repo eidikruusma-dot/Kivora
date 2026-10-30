@@ -1059,6 +1059,12 @@ export default function SchoolPage() {
       )}
       {confirmDeleteSubjectId && (() => {
         const subjectToDelete = subjects.find((s) => s.id === confirmDeleteSubjectId);
+        // A subject with no real stored document only exists because a
+        // legacy lesson still references it by name (see
+        // mergeStoredAndLessonSubjects) — deleting it must also remove
+        // those lessons (see deleteSchoolSubject, schoolStore.tsx), so the
+        // warning says so instead of only mentioning tasks.
+        const isRealSubject = realSubjects.some((s) => s.id === confirmDeleteSubjectId);
         return (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
             <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-6 flex flex-col gap-4">
@@ -1066,9 +1072,13 @@ export default function SchoolPage() {
                 {lang === 'et' ? 'Kustuta aine?' : 'Delete subject?'}
               </p>
               <p className="text-sm text-[#64748B]">
-                {lang === 'et'
-                  ? `Aine „${subjectToDelete?.name}" ja kõik sellega seotud ülesanded kustutatakse. Seda toimingut ei saa tagasi võtta.`
-                  : `"${subjectToDelete?.name}" and all tasks linked to it will be deleted. This action cannot be undone.`}
+                {isRealSubject
+                  ? (lang === 'et'
+                      ? `Aine „${subjectToDelete?.name}" ja kõik sellega seotud ülesanded kustutatakse. Seda toimingut ei saa tagasi võtta.`
+                      : `"${subjectToDelete?.name}" and all tasks linked to it will be deleted. This action cannot be undone.`)
+                  : (lang === 'et'
+                      ? `Ainel „${subjectToDelete?.name}" pole eraldi salvestust — kustutamine eemaldab kõik sellega seotud tunniplaani kirjed ja ülesanded. Seda toimingut ei saa tagasi võtta.`
+                      : `"${subjectToDelete?.name}" has no separate record — deleting it will remove every timetable lesson and task linked to it. This action cannot be undone.`)}
               </p>
               <div className="flex justify-end gap-2">
                 <button

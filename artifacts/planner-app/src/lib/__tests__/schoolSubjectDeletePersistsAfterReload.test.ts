@@ -12,10 +12,11 @@
  * never existed — Firestore reports that as a clean success, the
  * confirmation dialog closed as if it worked, and the exact same subject
  * reappeared on the next load because nothing was ever actually
- * persisted to begin with. Fixed by having deleteSchoolSubject() reject
- * with SUBJECT_NOT_FOUND whenever `id` has no real stored document,
- * routing into the existing confirmDeleteSubject catch block (toast.error
- * + dialog stays open) instead of lying about success.
+ * persisted to begin with. Fixed by having deleteSchoolSubject() delete
+ * every lesson (and task) that causes such an id to be synthesized, so
+ * it is permanently gone — not merely guarded with an error. See
+ * schoolSyntheticSubjectCascadeDelete.test.ts for the full regression
+ * suite for that path.
  *
  * Also exercises the exact scenario against the REAL deleteSchoolSubject
  * (schoolStore.tsx) for subjects that DO have a real document — both
@@ -232,27 +233,29 @@ describe('the exact document path deleteSchoolSubject targets is user-scoped and
 })
 
 // ── ROOT CAUSE FIX: a purely lesson-derived "subject" (no real stored
-// document) must never silently "succeed" at deletion. SchoolPage.tsx's
+// document) must never silently "succeed" at deletion without actually
+// removing the data that causes it to be synthesized. SchoolPage.tsx's
 // deleteSubject/confirmDeleteSubject receive their `id` from
 // useSchoolSubjectsFromLessons() — the MERGED (stored + lesson-derived)
 // list every subject card in that file deliberately renders from (see that
 // hook's own comment) — not the raw stored list. For a legacy lesson that
 // predates the dedicated subject store, that merge synthesizes a
 // subject-shaped entry with NO corresponding Firestore document at all.
-// This is the actual root cause of the reported bug: deleting such an
-// entry used to resolve cleanly (writeBatch happily commits a batch whose
-// only real delete targets a path that was never there), closing the
-// dialog as if it worked — then the exact same subject reappeared on the
-// next load, because nothing about it was ever persisted to begin with.
+// deleteSchoolSubject() now deletes every lesson (and task) that causes
+// such an entry to be synthesized, so it is permanently gone — see
+// schoolSyntheticSubjectCascadeDelete.test.ts for the full regression
+// suite (cascade, unrelated-data isolation, cancellation, failure
+// handling); this one test keeps proving the exact reload scenario here.
 
-describe('a purely lesson-derived subject (no real stored document) cannot be silently "deleted" — it now fails honestly instead of reappearing after reload', () => {
-  it('mergeStoredAndLessonSubjects synthesizes an id for a legacy lesson with no matching subject document, and deleteSchoolSubject now rejects for it rather than no-op-succeeding', async () => {
+describe('a purely lesson-derived subject (no real stored document) is permanently deleted, not just guarded against', () => {
+  it('deleting it removes the underlying lesson, so it cannot be resynthesized after a reload', async () => {
     // A legacy timetable lesson that predates the dedicated subject store:
     // a bare `subject` name string, no subjectId, and critically, NO
     // corresponding real `subject-*` document was ever created for it.
     await addSchoolLesson({
       id: 'lesson-legacy-1', subject: 'Muusikaõpetus', dotColor: '#6F5AE8', cardBg: '#EDE9FB',
     } as never)
+    pumpLatestSubscription()
 
     const merged = mergeStoredAndLessonSubjects(
       [{ id: 'lesson-legacy-1', subject: 'Muusikaõpetus', dotColor: '#6F5AE8', cardBg: '#EDE9FB' }],
@@ -265,19 +268,18 @@ describe('a purely lesson-derived subject (no real stored document) cannot be si
     expect(fakeDb.has(schoolItemPath(`subject-${idShownInUi}`))).toBe(false) // confirms: no real document exists at that path
 
     // This is exactly what confirmDeleteSubject(idShownInUi) does — it now
-    // rejects (SUBJECT_NOT_FOUND), which SchoolPage.tsx's existing catch
-    // block turns into a toast.error + keeps the dialog open, instead of
-    // silently closing as if the deletion had worked.
-    await expect(deleteSchoolSubject(idShownInUi)).rejects.toThrow('SUBJECT_NOT_FOUND')
+    // actually deletes the underlying lesson, instead of rejecting or
+    // committing a no-op batch.
+    await expect(deleteSchoolSubject(idShownInUi)).resolves.toBeUndefined()
     simulatePageReload()
 
-    // The lesson (the only real persisted trace of this "subject") is
-    // correctly still there — this was never a real, deletable document,
-    // and the honest rejection reflects that instead of lying about it.
+    expect(fakeDb.has(schoolItemPath('lesson-lesson-legacy-1'))).toBe(false)
     const mergedAfter = mergeStoredAndLessonSubjects(
-      [{ id: 'lesson-legacy-1', subject: 'Muusikaõpetus', dotColor: '#6F5AE8', cardBg: '#EDE9FB' }],
+      [...fakeDb.entries()]
+        .filter(([path]) => path.includes('/lesson-'))
+        .map(([, data]) => data as never),
       getAllSchoolSubjects(),
     )
-    expect(mergedAfter.some((s) => s.name === 'Muusikaõpetus')).toBe(true)
+    expect(mergedAfter.some((s) => s.name === 'Muusikaõpetus')).toBe(false)
   })
 })
