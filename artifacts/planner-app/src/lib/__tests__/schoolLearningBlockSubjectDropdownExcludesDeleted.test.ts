@@ -122,12 +122,24 @@ const setDocMock = vi.fn(async (ref: { path: string }, data: Record<string, unkn
 const deleteDocMock = vi.fn(async (ref: { path: string }) => {
   fakeDb.delete(ref.path)
 })
+// deleteSchoolSubject (schoolStore.tsx) now deletes the subject and its
+// linked tasks in one atomic writeBatch rather than a plain deleteDoc.
+const writeBatchMock = vi.fn(() => {
+  const pending: string[] = []
+  return {
+    delete: (ref: { path: string }) => { pending.push(ref.path) },
+    commit: async () => {
+      for (const p of pending) fakeDb.delete(p)
+    },
+  }
+})
 
 vi.mock('firebase/firestore', () => ({
   collection: vi.fn(() => ({})),
   doc: vi.fn((_db: unknown, ...segments: string[]) => ({ path: segments.join('/') })),
   setDoc: (...args: Parameters<typeof setDocMock>) => setDocMock(...args),
   deleteDoc: (...args: Parameters<typeof deleteDocMock>) => deleteDocMock(...args),
+  writeBatch: (...args: Parameters<typeof writeBatchMock>) => writeBatchMock(...args),
   onSnapshot: (...args: Parameters<typeof onSnapshotMock>) => onSnapshotMock(...args),
 }))
 

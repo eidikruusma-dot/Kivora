@@ -87,12 +87,26 @@ const setDocMock = vi.fn(async (ref: { path: string }, data: Record<string, unkn
 const deleteDocMock = vi.fn(async (ref: { path: string }) => {
   fakeDb.delete(ref.path)
 })
+// deleteSchoolSubject (schoolStore.tsx) deletes the subject AND its linked
+// tasks via one atomic writeBatch, never a plain deleteDoc — this mirrors
+// that shape: staged deletes only land in fakeDb once commit() resolves.
+const writeBatchDeleteMock = vi.fn((_path: string) => {})
+const writeBatchMock = vi.fn(() => {
+  const pending: string[] = []
+  return {
+    delete: (ref: { path: string }) => { pending.push(ref.path); writeBatchDeleteMock(ref.path) },
+    commit: async () => {
+      for (const p of pending) fakeDb.delete(p)
+    },
+  }
+})
 
 vi.mock('firebase/firestore', () => ({
   collection: vi.fn(() => ({})),
   doc: vi.fn((_db: unknown, ...segments: string[]) => ({ path: segments.join('/') })),
   setDoc: (...args: Parameters<typeof setDocMock>) => setDocMock(...args),
   deleteDoc: (...args: Parameters<typeof deleteDocMock>) => deleteDocMock(...args),
+  writeBatch: (...args: Parameters<typeof writeBatchMock>) => writeBatchMock(...args),
   onSnapshot: (...args: Parameters<typeof onSnapshotMock>) => onSnapshotMock(...args),
 }))
 
@@ -196,6 +210,7 @@ beforeEach(() => {
   onSnapshotMock.mockClear()
   setDocMock.mockClear()
   deleteDocMock.mockClear()
+  writeBatchDeleteMock.mockClear()
   initSchoolStore(UID) // onSnapshot call index 0
   pumpSchool()
 })
@@ -235,13 +250,14 @@ describe('deleting the only Study plan card for a subject also removes it from f
     // control, not deleteSchoolSubject directly.
     deleteStudyPlanCard('Kirjandus')
 
-    // Both the lesson doc and the now-orphaned subject doc are removed via
-    // deleteDoc (deleteSchoolLesson/deleteSchoolSubject both use deleteDoc,
-    // never setDoc).
+    // The lesson doc is removed via plain deleteDoc; the now-orphaned
+    // subject doc is removed via deleteSchoolSubject's atomic writeBatch
+    // (never setDoc for either).
     await vi.waitFor(() => {
-      const paths = deleteDocMock.mock.calls.map((c) => (c[0] as { path: string }).path)
-      expect(paths).toContain(schoolItemPath('lesson-lesson-kirjandus'))
-      expect(paths).toContain(schoolItemPath('subject-sub-kirjandus'))
+      const deletedPaths = deleteDocMock.mock.calls.map((c) => (c[0] as { path: string }).path)
+      const batchDeletedPaths = writeBatchDeleteMock.mock.calls.map((c) => c[0] as string)
+      expect(deletedPaths).toContain(schoolItemPath('lesson-lesson-kirjandus'))
+      expect(batchDeletedPaths).toContain(schoolItemPath('subject-sub-kirjandus'))
     })
     pumpSchool()
 

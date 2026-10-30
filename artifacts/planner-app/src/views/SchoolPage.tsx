@@ -37,6 +37,7 @@ import {
   Plus,
   User as UserIcon,
   MapPin,
+  Loader2,
 } from "lucide-react";
 import { subscribeToLanguage, getLocalLanguage } from "@/lib/languageStore";
 import type { AppLang } from "@/lib/languageStore";
@@ -501,6 +502,7 @@ export default function SchoolPage() {
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
   const [quickAddSubject, setQuickAddSubject] = useState<string>("");
   const [confirmDeleteSubjectId, setConfirmDeleteSubjectId] = useState<string | null>(null);
+  const [deletingSubject, setDeletingSubject] = useState(false);
   const [scheduleMode, setScheduleModeState] = useState<ScheduleMode>(() => {
     try {
       const saved = localStorage.getItem("kivora_schedule_mode");
@@ -632,20 +634,35 @@ export default function SchoolPage() {
   const addTask     = (task: Task) => addSchoolTask(task);
 
   const deleteSubject = (id: string) => {
-    const linked = scheduleLessons.filter(
+    const linkedLessons = scheduleLessons.filter(
       (l) => l.subject === (subjects.find((s) => s.id === id)?.name ?? "")
     );
-    if (linked.length > 0) {
+    const linkedTasks = tasks.filter((t) => t.subjectId === id);
+    if (linkedLessons.length > 0 || linkedTasks.length > 0) {
       setConfirmDeleteSubjectId(id);
     } else {
-      storeDeleteSchoolSubject(id);
+      storeDeleteSchoolSubject(id).catch(() => {
+        toast.error(lang === 'et' ? 'Aine kustutamine ebaõnnestus' : 'Failed to delete subject');
+      });
       setSelectedSubject(null);
     }
   };
-  const confirmDeleteSubject = (id: string) => {
-    storeDeleteSchoolSubject(id);
-    setConfirmDeleteSubjectId(null);
-    setSelectedSubject(null);
+  const confirmDeleteSubject = async (id: string) => {
+    if (deletingSubject) return;
+    setDeletingSubject(true);
+    try {
+      await storeDeleteSchoolSubject(id);
+      setConfirmDeleteSubjectId(null);
+      setSelectedSubject(null);
+    } catch {
+      // Keep the confirmation dialog open (and the subject + its tasks
+      // untouched — the batched Firestore write that failed is all-or-
+      // nothing) so the user can see the error and retry, rather than
+      // silently closing on a failed delete.
+      toast.error(lang === 'et' ? 'Aine kustutamine ebaõnnestus' : 'Failed to delete subject');
+    } finally {
+      setDeletingSubject(false);
+    }
   };
 
   const updateExam = async (id: number, patch: Partial<ExamItem>) => {
@@ -1050,20 +1067,23 @@ export default function SchoolPage() {
               </p>
               <p className="text-sm text-[#64748B]">
                 {lang === 'et'
-                  ? `Aine „${subjectToDelete?.name}" on seotud tunniplaaniga. Kas kustutad aine?`
-                  : `Subject "${subjectToDelete?.name}" is used in your timetable. Delete anyway?`}
+                  ? `Aine „${subjectToDelete?.name}" ja kõik sellega seotud ülesanded kustutatakse. Seda toimingut ei saa tagasi võtta.`
+                  : `"${subjectToDelete?.name}" and all tasks linked to it will be deleted. This action cannot be undone.`}
               </p>
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setConfirmDeleteSubjectId(null)}
-                  className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors"
+                  disabled={deletingSubject}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors disabled:opacity-50"
                 >
                   {lang === 'et' ? 'Tühista' : 'Cancel'}
                 </button>
                 <button
                   onClick={() => confirmDeleteSubject(confirmDeleteSubjectId)}
-                  className="px-4 py-2 rounded-lg text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
+                  disabled={deletingSubject}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
                 >
+                  {deletingSubject && <Loader2 size={14} className="animate-spin" />}
                   {lang === 'et' ? 'Kustuta' : 'Delete'}
                 </button>
               </div>

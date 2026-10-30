@@ -5,6 +5,7 @@ import {
   doc,
   setDoc,
   deleteDoc,
+  writeBatch,
   onSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore'
@@ -416,6 +417,7 @@ function taskToStored(t: SchoolTask): StoredTask {
     deadline: t.deadline,
     progress: t.progress,
     moodleUrl: t.moodleUrl,
+    ...(t.subjectId !== undefined ? { subjectId: t.subjectId } : {}),
     ...(t.prevProgress !== undefined ? { prevProgress: t.prevProgress } : {}),
     ...(t.parts !== undefined ? { parts: t.parts } : {}),
     ...(t.linkedTaskId !== undefined ? { linkedTaskId: t.linkedTaskId } : {}),
@@ -680,9 +682,29 @@ export async function updateSchoolSubject(
   await setDoc(schoolDoc(_currentUid, `subject-${id}`), sanitizeForFirestore(updated))
 }
 
+/**
+ * Deletes the subject and, in the same atomic batch, every task linked to
+ * it (task.subjectId === id) — reusing the existing subjectId relationship
+ * tasks already carry (see SchoolTask above), not a new linkage concept.
+ * Unrelated tasks (any other subjectId, or none) are never touched.
+ * Lessons/exams referencing this subject are deliberately left alone —
+ * only tasks are in scope for this cascade; a lesson's own handling of a
+ * deleted subject is unaffected (see isSubjectReferenced et al. below).
+ * A single writeBatch means this is all-or-nothing: a failure leaves BOTH
+ * the subject and every one of its tasks exactly as they were, never a
+ * partially-deleted state — the caller's catch block sees one rejected
+ * promise and the local state (synced from Firestore via the live
+ * onSnapshot listener above) reflects nothing having changed.
+ */
 export async function deleteSchoolSubject(id: string): Promise<void> {
   if (!_currentUid) return
-  await deleteDoc(schoolDoc(_currentUid, `subject-${id}`))
+  const linkedTaskIds = _tasks.filter((t) => t.subjectId === id).map((t) => t.id)
+  const batch = writeBatch(db)
+  batch.delete(schoolDoc(_currentUid, `subject-${id}`))
+  for (const taskId of linkedTaskIds) {
+    batch.delete(schoolDoc(_currentUid, `task-${taskId}`))
+  }
+  await batch.commit()
 }
 
 // ── Lesson CRUD ──────────────────────────────────────────────────────────────
