@@ -67,6 +67,7 @@ import {
   addSchoolLesson,
   updateSchoolLesson as storeUpdateSchoolLesson,
   deleteSchoolLesson as storeDeleteSchoolLesson,
+  cleanupOrphanedSchoolItems,
 } from "@/lib/schoolStore";
 import {
   addTask as tasksStoreAddTask,
@@ -561,6 +562,37 @@ export default function SchoolPage() {
     setSelectedSubject(null);
     setShowAllExams(false);
   }, [location.key]);
+
+  // Permanently removes any School task/exam left behind by a subject that
+  // no longer exists — the real production bug: deleteSchoolSubject's own
+  // cascade did not always cover exams/tests (see cleanupOrphanedSchoolItems,
+  // schoolStore.tsx), so a subject deleted before that gap was fixed could
+  // leave its tasks and tests/exams stranded, visible on every refresh
+  // since nothing ever deleted them. Runs once per mount; cleanupOrphaned-
+  // SchoolItems is idempotent and guards its own re-entrancy, so repeated
+  // mounts (including React Strict Mode's double-invoke) are always safe
+  // no-ops once the data is clean. Calendar events/EntityLinks for the
+  // items it actually deletes are cleaned up here (not in schoolStore.tsx,
+  // which cannot import automaticLinking.ts without a circular import) —
+  // the same deleteSchoolCalendarEvent + removeLinksForEntity calls
+  // deleteTask/deleteExam below already make for a single explicit delete.
+  useEffect(() => {
+    cleanupOrphanedSchoolItems(({ taskIds, examIds }) => {
+      for (const id of taskIds) {
+        deleteSchoolCalendarEvent('task', id);
+        removeLinksForEntity('school', encodeSchoolId('task', id));
+      }
+      for (const id of examIds) {
+        deleteSchoolCalendarEvent('exam', id);
+        removeLinksForEntity('school', encodeSchoolId('exam', id));
+      }
+    }).catch(() => {
+      // Best-effort — a failed cleanup must never block rendering School;
+      // the next mount simply retries (nothing here was removed locally,
+      // since cleanupOrphanedSchoolItems only updates local state via the
+      // live Firestore subscription after a successful commit).
+    });
+  }, []);
 
   // Deep-link: open specific school item navigated from a linked items panel
   useEffect(() => {

@@ -683,15 +683,20 @@ export async function updateSchoolSubject(
 }
 
 /**
- * Deletes the subject and, in the same atomic batch, every task linked to
- * it (task.subjectId === id) — reusing the existing subjectId relationship
- * tasks already carry (see SchoolTask above), not a new linkage concept.
- * Unrelated tasks (any other subjectId, or none) are never touched.
- * Lessons/exams referencing this subject are deliberately left alone —
- * only tasks are in scope for this cascade; a lesson's own handling of a
- * deleted subject is unaffected (see isSubjectReferenced et al. below).
- * A single writeBatch means this is all-or-nothing: a failure leaves BOTH
- * the subject and every one of its tasks exactly as they were, never a
+ * Deletes the subject and, in the same atomic batch, every task AND every
+ * exam/test linked to it (subjectId === id) — reusing the existing
+ * subjectId relationship tasks and exams already carry (see SchoolTask/
+ * SchoolExam above), not a new linkage concept. Unrelated tasks/exams (any
+ * other subjectId, or none) are never touched. Lessons referencing a REAL
+ * subject are deliberately left alone here — only this subject's own tasks
+ * and exams are in scope for this branch's cascade; a lesson's own handling
+ * of a deleted subject is unaffected (see isSubjectReferenced et al.
+ * below). Exams were not previously included in this cascade — a subject
+ * deleted before this fix could leave its tests/exams stranded with no
+ * subject (see cleanupOrphanedSchoolItems below for the one-time repair of
+ * data orphaned that way before this fix existed).
+ * A single writeBatch means this is all-or-nothing: a failure leaves the
+ * subject and every one of its tasks/exams exactly as they were, never a
  * partially-deleted state — the caller's catch block sees one rejected
  * promise and the local state (synced from Firestore via the live
  * onSnapshot listener above) reflects nothing having changed.
@@ -705,19 +710,20 @@ export async function updateSchoolSubject(
  * merged, not raw, list). Such a subject has no document of its own — the
  * only persisted thing that causes it to exist at all is every lesson
  * (and, if the user picked it from a subject dropdown when adding/editing
- * a task, every task) that references it, by subjectId or by name. The
- * only way to make it actually, permanently gone — so it cannot be
- * resynthesized on the next reload — is to delete every one of those
- * lessons and tasks. `isLinkedToSynthetic` below mirrors
+ * a task or exam, every task/exam) that references it, by subjectId or by
+ * name. The only way to make it actually, permanently gone — so it cannot
+ * be resynthesized on the next reload — is to delete every one of those
+ * lessons, tasks, and exams. `isLinkedToSynthetic` below mirrors
  * isSubjectReferenced/mergeStoredAndLessonSubjects' own id-first,
- * name-fallback matching, but is intentionally stricter: a lesson or task
- * whose OWN subjectId resolves to a DIFFERENT, still-existing real subject
- * is never touched even if its display name happens to coincide — that
- * item unambiguously belongs to that other subject, not to this ghost.
- * Nothing here ever touches a real, separately stored subject document;
- * that path above is completely unchanged. Still a single atomic
- * writeBatch, so a failure here leaves every lesson, task, and the
- * (never-existing) subject record exactly as they were, same as above.
+ * name-fallback matching, but is intentionally stricter: a lesson, task,
+ * or exam whose OWN subjectId resolves to a DIFFERENT, still-existing real
+ * subject is never touched even if its display name happens to coincide —
+ * that item unambiguously belongs to that other subject, not to this
+ * ghost. Nothing here ever touches a real, separately stored subject
+ * document; that path above is completely unchanged. Still a single
+ * atomic writeBatch, so a failure here leaves every lesson, task, exam,
+ * and the (never-existing) subject record exactly as they were, same as
+ * above.
  */
 export async function deleteSchoolSubject(id: string): Promise<void> {
   if (!_currentUid) return
@@ -727,8 +733,12 @@ export async function deleteSchoolSubject(id: string): Promise<void> {
   if (_subjects.some((s) => s.id === id)) {
     batch.delete(schoolDoc(_currentUid, `subject-${id}`))
     const linkedTaskIds = _tasks.filter((t) => t.subjectId === id).map((t) => t.id)
+    const linkedExamIds = _exams.filter((e) => e.subjectId === id).map((e) => e.id)
     for (const taskId of linkedTaskIds) {
       batch.delete(schoolDoc(_currentUid, `task-${taskId}`))
+    }
+    for (const examId of linkedExamIds) {
+      batch.delete(schoolDoc(_currentUid, `exam-${examId}`))
     }
     await batch.commit()
     return
@@ -749,8 +759,9 @@ export async function deleteSchoolSubject(id: string): Promise<void> {
 
   const linkedLessonIds = _lessons.filter(isLinkedToSynthetic).map((l) => l.id)
   const linkedTaskIds = _tasks.filter(isLinkedToSynthetic).map((t) => t.id)
+  const linkedExamIds = _exams.filter(isLinkedToSynthetic).map((e) => e.id)
 
-  if (linkedLessonIds.length === 0 && linkedTaskIds.length === 0) {
+  if (linkedLessonIds.length === 0 && linkedTaskIds.length === 0 && linkedExamIds.length === 0) {
     // Nothing left anywhere that could have synthesized this entry —
     // there is truly no record of it (e.g. it was already cleaned up by
     // another tab/device). Same honest-failure contract as above.
@@ -762,6 +773,9 @@ export async function deleteSchoolSubject(id: string): Promise<void> {
   }
   for (const taskId of linkedTaskIds) {
     batch.delete(schoolDoc(_currentUid, `task-${taskId}`))
+  }
+  for (const examId of linkedExamIds) {
+    batch.delete(schoolDoc(_currentUid, `exam-${examId}`))
   }
   await batch.commit()
 }
@@ -978,6 +992,148 @@ export async function cleanupOrphanedLegacySubjects(): Promise<SchoolSubject[]> 
  */
 export function previewOrphanedSubjects(): SchoolSubject[] {
   return findOrphanedSubjects(_subjects, _lessons)
+}
+
+// ── Orphaned school-item cleanup (tasks/exams whose subject is gone) ────────
+//
+// Reported live bug: a subject deleted while deleteSchoolSubject's cascade
+// above did not yet cover exams (or, further back, before this file's
+// cascade existed at all) leaves its tasks AND its tests/exams behind —
+// they keep their own subjectId/subject name, but nothing that id or name
+// resolves to exists any more, so they are permanently stranded: visible
+// after every refresh, because nothing has ever deleted them. Unlike the
+// ghost-subject branch of deleteSchoolSubject above (which only runs for
+// one id the user explicitly chose to delete), this is a general sweep
+// over every current task and exam, independent of any particular delete
+// action — exactly what's needed to repair data stranded by that earlier
+// gap, and to keep catching the same situation however else it might arise
+// (e.g. a subject edited/merged by hand, or deleted from another device).
+//
+// "Still exists" is the exact same universe deleteSchoolSubject's ghost-
+// subject branch treats as real: every stored subject AND every lesson-
+// derived synthetic one (mergeStoredAndLessonSubjects) — so a task/exam
+// whose subject was deleted but is still kept alive as a synthetic entry
+// (because a lesson still references that name) is correctly left alone;
+// only one with truly nothing left to resolve to, by id OR by name, is
+// orphaned. This never looks at Tasks-module tasks, Calendar events, Plans,
+// or Goals — only this collection's own 'task'/'exam' documents, the same
+// scope deleteSchoolSubject's cascades already operate in.
+
+function subjectStillExists(
+  item: { subjectId?: string; subject: string },
+  existingSubjects: SchoolSubject[],
+): boolean {
+  if (item.subjectId && existingSubjects.some((s) => s.id === item.subjectId)) return true
+  const normalizedName = item.subject.toLowerCase().trim()
+  return existingSubjects.some((s) => s.name.toLowerCase().trim() === normalizedName)
+}
+
+/**
+ * Pure and exported so it's directly testable without a rendering harness.
+ * `existingSubjects` is the caller's current merged (real + lesson-derived
+ * synthetic) subject list — pass mergeStoredAndLessonSubjects(lessons,
+ * subjects), the same "what counts as existing" every other function here
+ * already uses.
+ */
+export function findOrphanedSchoolTasks(
+  tasks: SchoolTask[],
+  existingSubjects: SchoolSubject[],
+): SchoolTask[] {
+  return tasks.filter((t) => !subjectStillExists(t, existingSubjects))
+}
+
+/** Exam/test equivalent of findOrphanedSchoolTasks above. */
+export function findOrphanedSchoolExams(
+  exams: SchoolExam[],
+  existingSubjects: SchoolSubject[],
+): SchoolExam[] {
+  return exams.filter((e) => !subjectStillExists(e, existingSubjects))
+}
+
+/**
+ * Read-only preview of exactly what cleanupOrphanedSchoolItems would delete
+ * right now, without deleting anything.
+ */
+export function previewOrphanedSchoolItems(): { tasks: SchoolTask[]; exams: SchoolExam[] } {
+  const existingSubjects = mergeStoredAndLessonSubjects(_lessons, _subjects)
+  return {
+    tasks: findOrphanedSchoolTasks(_tasks, existingSubjects),
+    exams: findOrphanedSchoolExams(_exams, existingSubjects),
+  }
+}
+
+// Firestore caps a single writeBatch at 500 mutations; staying well under
+// that means a single chunk below is always a legal batch no matter how
+// many orphaned items exist, without needing to special-case the exact
+// limit.
+const ORPHAN_CLEANUP_BATCH_SIZE = 450
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
+  return out
+}
+
+// Re-entrancy guard: this is wired to run automatically (see SchoolPage.tsx)
+// and is safe to call repeatedly or concurrently — a call that finds
+// another one already committing returns immediately, doing nothing, so
+// two overlapping calls can never double-delete or race on the same docs.
+let _orphanCleanupInFlight = false
+
+/**
+ * Idempotent, persistent repair: permanently deletes every School task and
+ * exam/test whose subject no longer exists (see "still exists" above),
+ * across as many writeBatch chunks as needed for the Firestore batch limit.
+ * A no-op (no Firestore call at all) when there is nothing orphaned, or
+ * while another cleanup call is already in flight.
+ *
+ * Local state is never touched directly — exactly like deleteSchoolSubject,
+ * it only commits to Firestore and lets the live onSnapshot listener above
+ * sync `_tasks`/`_exams` afterward, so a rejected commit leaves local state
+ * (and every item in the chunk that failed, and any chunk after it) exactly
+ * as it was. A chunk that already committed before a later chunk fails
+ * stays committed — Firestore gives no larger transaction to span multiple
+ * batches — but that chunk's items were genuinely deleted, not falsely
+ * removed, so local state still only ever reflects a real write.
+ *
+ * `onDeleted`, if given, is called with the ids that were actually deleted
+ * — but only after every chunk has committed successfully — so a caller
+ * that also needs to clean up calendar/EntityLink side effects (which this
+ * module cannot do directly without importing automaticLinking.ts, which
+ * itself imports this module) can do so exactly once, only for items that
+ * are truly gone. See SchoolPage.tsx for that wiring.
+ */
+export async function cleanupOrphanedSchoolItems(
+  onDeleted?: (deleted: { taskIds: number[]; examIds: number[] }) => void,
+): Promise<{ taskIds: number[]; examIds: number[] }> {
+  if (!_currentUid || _orphanCleanupInFlight) return { taskIds: [], examIds: [] }
+
+  const existingSubjects = mergeStoredAndLessonSubjects(_lessons, _subjects)
+  const orphanedTasks = findOrphanedSchoolTasks(_tasks, existingSubjects)
+  const orphanedExams = findOrphanedSchoolExams(_exams, existingSubjects)
+  if (orphanedTasks.length === 0 && orphanedExams.length === 0) {
+    return { taskIds: [], examIds: [] }
+  }
+
+  _orphanCleanupInFlight = true
+  try {
+    const uid = _currentUid
+    const docIds = [
+      ...orphanedTasks.map((t) => `task-${t.id}`),
+      ...orphanedExams.map((e) => `exam-${e.id}`),
+    ]
+    for (const batchDocIds of chunk(docIds, ORPHAN_CLEANUP_BATCH_SIZE)) {
+      const batch = writeBatch(db)
+      for (const docId of batchDocIds) batch.delete(schoolDoc(uid, docId))
+      await batch.commit()
+    }
+    const taskIds = orphanedTasks.map((t) => t.id)
+    const examIds = orphanedExams.map((e) => e.id)
+    onDeleted?.({ taskIds, examIds })
+    return { taskIds, examIds }
+  } finally {
+    _orphanCleanupInFlight = false
+  }
 }
 
 /**
