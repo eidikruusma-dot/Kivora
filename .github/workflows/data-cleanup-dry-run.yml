@@ -1,0 +1,59 @@
+name: Kivora data cleanup dry-run
+
+# READ-ONLY reconnaissance for the Kivora 2.0 data-cleanup project — see
+# artifacts/api-server/src/scripts/dataCleanupDryRun.ts for the full
+# read-only contract (no Firestore write/delete method is ever called;
+# dataCleanupDryRun.test.ts asserts this by scanning that file's own
+# source for write-method substrings).
+#
+# Deliberately manual-only: no "schedule" trigger exists on this workflow.
+# It only ever runs when a human explicitly starts it from the Actions tab
+# (or the GitHub mobile app) via "Run workflow" — never on its own, never
+# on a push, never on a schedule.
+#
+# Reuses the SAME FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL /
+# FIREBASE_PRIVATE_KEY repository secrets that reminders-tick.yml already
+# uses — no new secret is created for this workflow.
+
+"on":
+  workflow_dispatch:
+    inputs:
+      uid:
+        description: "Firebase Auth UID, mille andmeid loendada (ainult lugemine, midagi ei kustutata)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies (repo root, for the pnpm workspace)
+        run: pnpm install --frozen-lockfile
+
+      - name: Run the read-only dry-run
+        working-directory: artifacts/api-server
+        run: |
+          npx esbuild --bundle --platform=node --format=esm --packages=external \
+            src/scripts/runDataCleanupDryRun.ts --outfile=.tmp-runDataCleanupDryRun.mjs
+          node .tmp-runDataCleanupDryRun.mjs
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          OWNER_UID: ${{ github.event.inputs.uid }}
