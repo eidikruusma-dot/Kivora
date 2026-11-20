@@ -21,6 +21,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Timestamp } from "firebase-admin/firestore";
+import { RESTORE_VERIFICATION_SEGMENT, isReservedFirestoreId } from "./restoreVerification.js";
 import {
   readDocumentRecursively,
   classifyCollection,
@@ -217,7 +218,7 @@ await group("2b. discoverAndReadAllUserCollections never includes the existing b
     "users/u1/tasks/t1": { title: "normal" },
     "users/u1/backups/existing-1": { note: "pre-existing backup — must never be discovered as backupable data" },
     "users/u1/_fullBackups/bk_old/chunks/x_0": { path: "tasks", items: [] },
-    "users/u1/__restoreVerification__/bk_old/tasks/scratch1": { leftover: true },
+    [`users/u1/${RESTORE_VERIFICATION_SEGMENT}/bk_old/tasks/scratch1`]: { leftover: true },
   });
   const collections = await discoverAndReadAllUserCollections(firestore, "u1");
   const paths = collections.map((c) => c.path);
@@ -225,6 +226,25 @@ await group("2b. discoverAndReadAllUserCollections never includes the existing b
     assert(!paths.includes(excluded), `"${excluded}" is never included in discovery, by deliberate exclusion`);
   }
   assert(paths.includes("tasks"), "a normal collection alongside them is still discovered correctly");
+});
+
+await group("2c. EXCLUDED_FROM_DISCOVERY always stays in sync with restoreVerification.ts's RESTORE_VERIFICATION_SEGMENT, and neither is a Firestore-reserved id", () => {
+  // Regression test for "Kivora Firestore-only backup" run #1: the
+  // restorability check's scratch segment name matched Firestore's
+  // reserved "__.*__" pattern, so every real write under it was rejected.
+  // No hand-written fake in this suite replicates that real validation
+  // rule, so this checks it directly, and separately guards against the
+  // two independent EXCLUDED_FROM_DISCOVERY / RESTORE_VERIFICATION_SEGMENT
+  // literals (kept independent to avoid a circular module import) ever
+  // drifting apart again.
+  assert(
+    EXCLUDED_FROM_DISCOVERY.includes(RESTORE_VERIFICATION_SEGMENT),
+    "fullAccountBackup.ts's discovery exclusion list still contains restoreVerification.ts's exact current scratch segment name",
+  );
+  for (const name of EXCLUDED_FROM_DISCOVERY) {
+    assert(!isReservedFirestoreId(name), `"${name}" is not a Firestore-reserved collection id`);
+  }
+  assert(isReservedFirestoreId("__restoreVerification__"), "sanity check: the OLD, broken segment name is correctly detected as reserved — confirming this really was the bug");
 });
 
 // ── 3. classifyCollection ────────────────────────────────────────────────

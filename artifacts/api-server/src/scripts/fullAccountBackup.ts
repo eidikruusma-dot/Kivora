@@ -174,12 +174,19 @@ export function classifyCollection(path: string): Classification | "UNKNOWN" {
  * scratch area containing a backup of itself). Checked by exact
  * top-level name, so a genuine user collection would need this exact
  * name to be affected — none of this app's real collections do.
+ *
+ * The last entry here MUST always equal restoreVerification.ts's own
+ * RESTORE_VERIFICATION_SEGMENT constant. It is kept as an independent
+ * literal rather than an import to avoid a circular module dependency
+ * (restoreVerification.ts already imports from this file) — see
+ * fullAccountBackup.test.ts's cross-check test, which imports both and
+ * fails loudly if they are ever allowed to drift apart again.
  */
 export const EXCLUDED_FROM_DISCOVERY: readonly string[] = [
   "backups",
   "_fullBackups",
   "_fullBackup",
-  "__restoreVerification__",
+  "_restoreVerificationScratch",
 ];
 
 /**

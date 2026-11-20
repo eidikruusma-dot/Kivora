@@ -268,7 +268,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<numb
   let restorabilityCleanupOk = false;
   try {
     // The collision guard checks whether the scratch segment name
-    // ("__restoreVerification__") happens to collide with an ACTUAL,
+    // (restoreVerification.ts's RESTORE_VERIFICATION_SEGMENT) happens to collide with an ACTUAL,
     // currently-existing top-level collection — so this list must be only
     // the real, discovered collection paths. EXCLUDED_FROM_DISCOVERY must
     // NOT be spread in here: that constant itself always contains the

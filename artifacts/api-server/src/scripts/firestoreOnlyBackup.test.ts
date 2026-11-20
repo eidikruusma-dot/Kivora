@@ -37,7 +37,13 @@ import {
   type DocSnapshotLike,
   type ExportPayload,
 } from "./fullAccountBackup.js";
-import { verifyRestorability, type FirestoreWithDelete, type DeletableWriteBatchLike } from "./restoreVerification.js";
+import {
+  verifyRestorability,
+  isReservedFirestoreId,
+  RESTORE_VERIFICATION_SEGMENT,
+  type FirestoreWithDelete,
+  type DeletableWriteBatchLike,
+} from "./restoreVerification.js";
 import { encryptBackup, decryptBackup } from "./backupEncryption.js";
 import { decodeFromJson, type DocRefResolver } from "./firestoreValueCodec.js";
 
@@ -274,6 +280,10 @@ await group("7. End-to-end Firestore-only chain against a fake store (no real Fi
   // since it always contains the scratch segment's own name, which would
   // make the collision guard always refuse to run (a real bug this test
   // caught in an earlier draft of firestoreOnlyBackup.ts's main()).
+  assert(
+    !isReservedFirestoreId(RESTORE_VERIFICATION_SEGMENT),
+    "the real scratch segment name actually in use is NOT a Firestore-reserved id — the exact check that would have caught run #1's failure before ever touching real Firebase",
+  );
   const realCollectionNames = collections.map((c) => c.path);
   const verification = await verifyRestorability(firestore, "u1", "bk_fsonly", flat, realCollectionNames);
   assert(verification.allMatch, "every path's restored content matched the original exactly, via the scratch path");
@@ -283,7 +293,7 @@ await group("7. End-to-end Firestore-only chain against a fake store (no real Fi
   assert(store.get("users/u1/backups/existing-1")?.["note"] === "pre-existing backup #1 — must stay exactly as is", "pre-existing backup #1 is untouched");
   assert(store.get("users/u1/backups/existing-2")?.["note"] === "pre-existing backup #2 — must stay exactly as is", "pre-existing backup #2 is untouched");
   assert(
-    [...store.keys()].every((k) => !k.includes("__restoreVerification__")),
+    [...store.keys()].every((k) => !k.includes(RESTORE_VERIFICATION_SEGMENT)),
     "no trace of the restorability scratch namespace remains anywhere in the store after cleanup",
   );
 });

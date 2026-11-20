@@ -6,19 +6,25 @@
  * restoreFromBackup() writes real documents at real IDs — pointed at
  * users/{uid} directly, it would overwrite live data, which is exactly
  * what verification must never do. Instead this writes the SAME backup
- * content to an isolated, clearly-named scratch root
- * (users/{uid}/__restoreVerification__/{backupId}/...), reads every
- * document back, deep-compares it against the original in-memory backup
- * content, then deletes everything it just wrote — success or failure,
- * via a finally block.
+ * content to an isolated, clearly-named scratch root under RESTORE_VERIFICATION_SEGMENT
+ * (see below), reads every document back, deep-compares it against the
+ * original in-memory backup content, then deletes everything it just
+ * wrote — success or failure, via a finally block.
  *
  * ── The collision guard ───────────────────────────────────────────────────
  * assertScratchPathIsIsolated() is called before any write and throws if
- * "__restoreVerification__" is ever itself the name of a real, discovered
- * top-level collection — this is checked programmatically against the
- * actual discovered collection list (fullAccountBackup.ts's
+ * RESTORE_VERIFICATION_SEGMENT is ever itself the name of a real,
+ * discovered top-level collection — this is checked programmatically
+ * against the actual discovered collection list (fullAccountBackup.ts's
  * discoverAndReadAllUserCollections), not assumed safe just because the
- * name looks unlikely to collide.
+ * name looks unlikely to collide. It also refuses to run at all if that
+ * segment name is itself a Firestore-reserved identifier (see
+ * isReservedFirestoreId below) — this is exactly the bug found in
+ * "Kivora Firestore-only backup" run #1: the original segment name
+ * matched Firestore's own reserved pattern and every real write under it
+ * was rejected with "is invalid because it is reserved", something no
+ * hand-written fake in this test suite could ever catch, since none of
+ * them replicate Firestore's real ID validation rules.
  *
  * ── What a passing check proves, and what it does not ────────────────────
  * This writes through the Admin SDK, which bypasses firestore.rules
@@ -34,19 +40,52 @@
 import { deepEqualIgnoringKeyOrder, type BackedUpDocument, type DocRefLike, type FirestoreLike, type WriteBatchLike } from "./fullAccountBackup.js";
 import { restoreFromBackup } from "./restoreFromBackup.js";
 
-export const RESTORE_VERIFICATION_SEGMENT = "__restoreVerification__";
+/**
+ * Firestore reserves any collection or document ID matching this exact
+ * pattern (starts AND ends with a double underscore) — see
+ * https://firebase.google.com/docs/firestore/quotas#collections_documents_and_fields.
+ * A real write to such an ID is rejected with "is invalid because it is
+ * reserved", regardless of what the ID is otherwise used for. This has
+ * nothing to do with collision against a real user collection (that is
+ * assertScratchPathIsIsolated's separate job below) — a reserved ID is
+ * invalid even in a brand-new, otherwise-empty project.
+ */
+const RESERVED_FIRESTORE_ID_PATTERN = /^__.*__$/;
+
+export function isReservedFirestoreId(id: string): boolean {
+  return RESERVED_FIRESTORE_ID_PATTERN.test(id) || id === "." || id === "..";
+}
+
+/**
+ * The restorability check's isolated scratch segment name. A single
+ * leading underscore (matching this tool's own _fullBackups/_fullBackup
+ * namespaces) is deliberately NOT doubled at the end — a name of the
+ * form "__x__" is a Firestore-reserved identifier (see
+ * isReservedFirestoreId above) and every real write under it fails.
+ */
+export const RESTORE_VERIFICATION_SEGMENT = "_restoreVerificationScratch";
 
 export function scratchRootPathFor(uid: string, backupId: string): string {
   return `users/${uid}/${RESTORE_VERIFICATION_SEGMENT}/${backupId}`;
 }
 
 /**
- * Throws if the scratch segment name would ever collide with a real,
- * currently-existing top-level collection under users/{uid} — checked
- * against the actual discovered list the caller already has from backing
- * the account up, not merely assumed safe because of the name chosen.
+ * Throws if the scratch segment name is itself a Firestore-reserved
+ * identifier (a code-level mistake, checked unconditionally — no real
+ * Firebase call is needed to catch this), or if it would collide with a
+ * real, currently-existing top-level collection under users/{uid} —
+ * checked against the actual discovered list the caller already has from
+ * backing the account up, not merely assumed safe because of the name
+ * chosen.
  */
 export function assertScratchPathIsIsolated(realTopLevelCollectionPaths: string[]): void {
+  if (isReservedFirestoreId(RESTORE_VERIFICATION_SEGMENT)) {
+    throw new Error(
+      `Programmi viga: taastekontrolli ajutise kogu nimi "${RESTORE_VERIFICATION_SEGMENT}" on Firestore'i ` +
+        "reserveeritud nimi (vastab mustrile, mis algab ja lõpeb kahekordse alakriipsuga) — see tuleb " +
+        "parandada lähtekoodis, mitte käivitusajal.",
+    );
+  }
   if (realTopLevelCollectionPaths.includes(RESTORE_VERIFICATION_SEGMENT)) {
     throw new Error(
       `Turvarikkumise oht: kogu "${RESTORE_VERIFICATION_SEGMENT}" on juba tegelik, päris kogu selle ` +

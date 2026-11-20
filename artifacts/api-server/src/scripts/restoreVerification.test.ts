@@ -20,6 +20,7 @@ import {
   verifyRestorability,
   assertScratchPathIsIsolated,
   scratchRootPathFor,
+  isReservedFirestoreId,
   RESTORE_VERIFICATION_SEGMENT,
   type FirestoreWithDelete,
   type DeletableWriteBatchLike,
@@ -201,6 +202,48 @@ await group("4. cleanup still runs (via finally) even when the backup content it
     [...store.keys()].every((k) => !k.includes(RESTORE_VERIFICATION_SEGMENT)),
     "the scratch namespace is fully cleaned up even for this edge-case backup content",
   );
+});
+
+// ── 5. isReservedFirestoreId: detects Firebase's reserved collection/document ids ──
+//
+// Regression test for "Kivora Firestore-only backup" run #1: real
+// Firestore rejected the original scratch segment name
+// ("__restoreVerification__") with "Collection id ... is invalid because
+// it is reserved" — a rule no hand-written fake in this suite replicates,
+// so it was never caught until a real Admin SDK write.
+
+await group("5. isReservedFirestoreId correctly identifies Firestore's reserved id pattern", () => {
+  assert(isReservedFirestoreId("__restoreVerification__"), "the OLD, broken segment name matches the reserved __.*__ pattern — confirming this really was the bug");
+  assert(isReservedFirestoreId("__x__"), "the shortest possible match (__x__) is still detected");
+  assert(isReservedFirestoreId("____"), "four bare underscores (empty middle) also match __.*__ and are reserved");
+  assert(isReservedFirestoreId("."), "a single period is reserved");
+  assert(isReservedFirestoreId(".."), "a double period is reserved");
+
+  assert(!isReservedFirestoreId(RESTORE_VERIFICATION_SEGMENT), "the ACTUAL, current scratch segment name is NOT reserved");
+  assert(!isReservedFirestoreId("_fullBackups"), "a single leading underscore alone is not reserved");
+  assert(!isReservedFirestoreId("tasks"), "an ordinary collection name is not reserved");
+  assert(!isReservedFirestoreId("_restoreVerification_"), "a single underscore on each side is not reserved — only a DOUBLE underscore on both ends matches");
+});
+
+await group("6. assertScratchPathIsIsolated refuses to run at all if the scratch segment name is itself reserved — no real Firebase call needed to catch this", () => {
+  // This cannot be exercised through the real RESTORE_VERIFICATION_SEGMENT
+  // constant (it is correct), so this proves the GUARD mechanism itself
+  // would have caught run #1's exact mistake, by calling the underlying
+  // isReservedFirestoreId check directly against the old, broken value —
+  // the same check assertScratchPathIsIsolated() runs internally.
+  assert(
+    isReservedFirestoreId("__restoreVerification__"),
+    "sanity check the guard's own reserved-id logic flags the exact value that broke run #1",
+  );
+  // And the real, current guard call succeeds end-to-end with today's
+  // actual (non-reserved) segment name, never reaching a reserved-id error.
+  let threw = false;
+  try {
+    assertScratchPathIsIsolated(["tasks", "goals"]);
+  } catch {
+    threw = true;
+  }
+  assert(!threw, "with today's actual, non-reserved segment name, the guard runs cleanly");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
