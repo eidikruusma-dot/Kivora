@@ -1,0 +1,102 @@
+name: Kivora Firestore-only backup
+
+# Firestore-ONLY backup, built because Firebase Storage access is
+# currently blocked for this project (Spark pricing plan — see
+# https://firebase.google.com/docs/storage/faqs-storage-changes-announced-sept-2024:
+# existing default buckets require the Blaze plan since Feb 3, 2026, or
+# API calls return 402/403). This workflow NEVER attempts a Storage call
+# of any kind — see artifacts/api-server/src/scripts/firestoreOnlyBackup.ts
+# for the exact scope and the source-scan test that proves it.
+#
+# This is deliberately a SEPARATE workflow from full-account-backup.yml,
+# which is left completely unmodified by this change and remains the
+# dual-destination (Firestore + Storage) tool for whenever Storage access
+# is restored (Blaze upgrade).
+#
+# Safety contract (same discipline as full-account-backup.yml):
+#   - never deletes or overwrites anything
+#   - never touches the existing users/{uid}/backups collection or its
+#     two existing backups (EXCLUDED_FROM_DISCOVERY)
+#   - never performs a real restoration of real data — the one
+#     restore-shaped step (the restorability check) is hardcoded to an
+#     isolated scratch path it deletes before finishing
+#   - the plaintext backup is held only in memory; the ONLY file written
+#     to disk, logged, or uploaded is the AES-256-GCM-encrypted artifact
+#   - the encrypted export's own storageStatus field is always the fixed
+#     string "NOT_INCLUDED_BLOCKED_BY_BILLING_PLAN" — Storage is never
+#     silently implied to be empty
+#
+# Deliberately manual-only: no "schedule" trigger exists on this
+# workflow. It only ever runs when a human explicitly starts it from the
+# Actions tab (or the GitHub mobile app) via "Run workflow".
+#
+# Reuses the SAME FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL /
+# FIREBASE_PRIVATE_KEY / BACKUP_ENCRYPTION_PASSPHRASE repository secrets
+# full-account-backup.yml already uses. No new secret is needed — this
+# workflow never touches Storage, so it needs no Storage bucket name at
+# all (see firestoreOnlyBackup.ts's doc comment).
+
+"on":
+  workflow_dispatch:
+    inputs:
+      uid:
+        description: "Firebase Auth UID, mille Firestore andmed varundada (Storage EI OLE kaasatud)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies (repo root, for the pnpm workspace)
+        run: pnpm install --frozen-lockfile
+
+      - name: Run the Firestore-only backup
+        id: backup
+        working-directory: artifacts/api-server
+        run: |
+          npx esbuild --bundle --platform=node --format=esm --packages=external \
+            src/scripts/runFirestoreOnlyBackupCli.ts --outfile=.tmp-runFirestoreOnlyBackupCli.mjs
+          node .tmp-runFirestoreOnlyBackupCli.mjs
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+          OWNER_UID: ${{ github.event.inputs.uid }}
+
+      # A failed backup step above stops the job here (GitHub Actions'
+      # default fail-fast behavior) — the step's own clear, specific error
+      # message is what shows as the failure reason; this workflow adds no
+      # continue-on-error anywhere, so a half-finished or unverified
+      # backup is never uploaded as if it had succeeded.
+
+      - name: Upload the encrypted backup artifact (and ONLY the encrypted file)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kivora-firestore-only-backup-${{ github.event.inputs.uid }}-${{ github.run_id }}
+          path: artifacts/api-server/kivora-firestore-only-backup-*.enc
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Clean up local files on the runner
+        if: always()
+        working-directory: artifacts/api-server
+        run: rm -f kivora-firestore-only-backup-*.enc .tmp-runFirestoreOnlyBackupCli.mjs
