@@ -19,21 +19,40 @@
  * existing backups do NOT cover plans/calendars/documents/pushSubscriptions
  * /Money — so they must never be treated as a sufficient safety net.
  *
- * Firebase Storage is deliberately out of scope for this version — it
- * would need a new Admin accessor and a new secret (FIREBASE_STORAGE_
- * BUCKET), which this minimal, Firestore-only pass does not need. A
- * Storage check can be added later as its own, separate step.
+ * ── Added for the Kivora 2.0 cleanup-candidate review ───────────────────
+ * checkFullBackups() reports (never classifies as a cleanup candidate)
+ * users/{uid}/_fullBackups — the separate, newer backup namespace the
+ * Firestore-only/dual-destination backup tools write to — plus whether
+ * anything was left behind under the restore-verification scratch
+ * namespace (informational only; nothing here ever touches it).
+ * checkDocumentsStorageReferences() counts how many users/{uid}/documents
+ * records have a populated storagePath/downloadURL, WITHOUT ever logging
+ * the actual path/URL values, and without making any Storage API call —
+ * it only reads a Firestore field that happens to contain a Storage
+ * reference string. discoverUnknownAndNestedCollections() is a
+ * metadata-only (never reads document field data) recursive pass that
+ * flags any top-level collection outside this file's known plan, or any
+ * unexpected nested subcollection beyond the known aiConversations/
+ * messages case — always excluding every backup/restore-verification
+ * namespace from being reported as an "unknown" finding.
+ *
+ * Firebase Storage access itself is deliberately out of scope for this
+ * version — it would need a new Admin accessor and a new secret
+ * (FIREBASE_STORAGE_BUCKET), which this Firestore-only pass does not
+ * need (and, separately, Storage access for this project is currently
+ * blocked by its billing plan regardless).
  *
  * ── What this file NEVER does ───────────────────────────────────────────
  * This file contains no call to any Firestore write method (set, update,
- * delete, add, commit, batch) — only collection()/listDocuments()/
- * where()/get(), all of which are reads. dataCleanupDryRun.test.ts asserts
- * this file's own source contains none of those write-method substrings,
- * so a future edit that accidentally introduced one would fail that test
- * immediately — a structural, automatically-checked safety guarantee, not
- * just a comment's promise. It also never calls any Firebase Auth method
- * that changes an account's claims, profile, or existence — only
- * getUser/getUserByEmail, both reads.
+ * delete, add, commit, batch) — only collection()/doc()/listDocuments()/
+ * listCollections()/where()/get(), all of which are reads. dataCleanupDryRun.test.ts
+ * asserts this file's own source contains none of those write-method
+ * substrings, so a future edit that accidentally introduced one would
+ * fail that test immediately — a structural, automatically-checked
+ * safety guarantee, not just a comment's promise. It also never calls
+ * any Firebase Auth method that changes an account's claims, profile, or
+ * existence — only getUser/getUserByEmail, both reads. It never calls
+ * any Firebase Storage API at all.
  *
  * ── How this is actually run ─────────────────────────────────────────────
  * This file exports only pure, side-effect-free functions plus main()
@@ -80,9 +99,13 @@ export interface DocRefLike {
   id: string;
   collection(path: string): CollRefLike;
   get(): Promise<DocSnapshotLike>;
+  /** Metadata-only — returns collection REFERENCES, never reads any document's field data. Used by discoverUnknownAndNestedCollections(). */
+  listCollections(): Promise<CollRefLike[]>;
 }
 
 export interface CollRefLike {
+  /** The collection's own name (e.g. "tasks") — needed to report an unknown or unexpected nested collection by name without reading any of its documents' content. */
+  id: string;
   listDocuments(): Promise<DocRefLike[]>;
   get(): Promise<QuerySnapshotLike>;
   where(field: string, op: "==", value: unknown): { get(): Promise<QuerySnapshotLike> };
@@ -90,6 +113,8 @@ export interface CollRefLike {
 
 export interface FirestoreLike {
   collection(path: string): CollRefLike;
+  /** Needed only for listing a user's top-level collections (doc.listCollections()) — never used to read or write that document's own data. */
+  doc(path: string): DocRefLike;
 }
 
 // ── Classification plan — the single source of truth for this script ──────
@@ -252,6 +277,178 @@ export async function checkBackups(firestore: FirestoreLike, uid: string): Promi
   return { documentCount: refs.length, backups };
 }
 
+// ── Full (Firestore-only) backups + restore-verification scratch visibility ──
+//
+// Independent copies of fullAccountBackup.ts's EXCLUDED_FROM_DISCOVERY and
+// restoreVerification.ts's RESTORE_VERIFICATION_SEGMENT values — kept as
+// their own literals here, never imported, because fullAccountBackup.ts
+// already imports SIMPLE_SUBCOLLECTION_PLAN/ROOT_COLLECTION_PLAN from THIS
+// file; importing back from either of those would create a circular
+// module dependency. dataCleanupDryRun.test.ts's cross-check test imports
+// the real constants from both files and fails loudly if this list is
+// ever allowed to drift apart from them.
+
+export const BACKUP_AND_SCRATCH_NAMESPACES: readonly string[] = [
+  "backups",
+  "_fullBackups",
+  "_fullBackup",
+  "_restoreVerificationScratch",
+];
+
+export interface FullBackupSummary {
+  id: string;
+  createdAt: unknown;
+  chunksWritten: unknown;
+  collectionPaths: unknown;
+}
+
+export interface FullBackupsResult {
+  documentCount: number;
+  backups: FullBackupSummary[];
+  /** True if ANYTHING still exists under the restore-verification scratch namespace — a successful run always cleans this up itself; this is a read-only sanity check, not a guarantee (Firestore can retain "phantom" ancestor document references), and this script never touches or removes anything found here regardless of the result. */
+  restoreVerificationScratchFound: boolean;
+}
+
+/**
+ * Reports on users/{uid}/_fullBackups — the separate, newer Firestore-only
+ * and dual-destination backup namespace (see fullAccountBackup.ts /
+ * runFullAccountBackup.ts / firestoreOnlyBackup.ts). Never classified as a
+ * cleanup candidate anywhere in this file — this is PRESERVE-only
+ * reporting, included so an operator can see what exists there rather
+ * than it being entirely invisible to this tool.
+ */
+export async function checkFullBackups(firestore: FirestoreLike, uid: string): Promise<FullBackupsResult> {
+  const refs = await firestore.collection(`users/${uid}/_fullBackups`).listDocuments();
+  const backups: FullBackupSummary[] = [];
+  for (const ref of refs) {
+    const snap = await ref.get();
+    const data = snap.data() ?? {};
+    backups.push({
+      id: ref.id,
+      createdAt: data["createdAt"],
+      chunksWritten: data["chunksWritten"],
+      collectionPaths: data["collectionPaths"],
+    });
+  }
+  const scratchRefs = await firestore.collection(`users/${uid}/_restoreVerificationScratch`).listDocuments();
+  return { documentCount: refs.length, backups, restoreVerificationScratchFound: scratchRefs.length > 0 };
+}
+
+// ── Documents module: Storage-reference visibility (never touches Storage itself) ──
+
+export interface DocumentsStorageReferenceResult {
+  documentCount: number;
+  withStoragePathCount: number;
+  withDownloadUrlCount: number;
+}
+
+/**
+ * Reads each users/{uid}/documents document's OWN data (unlike
+ * countSubcollection()'s plain listDocuments()-only count) solely to
+ * check whether its "storagePath"/"downloadURL" fields are populated —
+ * every KivoraDocument in documentsStore.ts carries both by design. Only
+ * COUNTS are ever returned or logged; the actual path/URL string values
+ * are read into a local variable, checked, and discarded — never
+ * included in this function's return value, a console.log, or anywhere
+ * else. This makes no Firebase Storage call of any kind — it only reads
+ * a Firestore field that happens to contain a Storage path/URL string.
+ */
+export async function checkDocumentsStorageReferences(
+  firestore: FirestoreLike,
+  uid: string,
+): Promise<DocumentsStorageReferenceResult> {
+  const refs = await firestore.collection(`users/${uid}/documents`).listDocuments();
+  let withStoragePathCount = 0;
+  let withDownloadUrlCount = 0;
+  for (const ref of refs) {
+    const snap = await ref.get();
+    const data = snap.data() ?? {};
+    const storagePath = data["storagePath"];
+    const downloadURL = data["downloadURL"];
+    if (typeof storagePath === "string" && storagePath.length > 0) withStoragePathCount++;
+    if (typeof downloadURL === "string" && downloadURL.length > 0) withDownloadUrlCount++;
+  }
+  return { documentCount: refs.length, withStoragePathCount, withDownloadUrlCount };
+}
+
+// ── Recursive discovery of unknown top-level and unexpected nested collections ──
+
+export interface UnknownTopLevelCollectionFinding {
+  path: string;
+  documentCount: number;
+}
+
+export interface UnexpectedNestedSubcollectionFinding {
+  parentPath: string;
+  documentId: string;
+  nestedCollectionName: string;
+  nestedDocumentCount: number;
+}
+
+export interface UnknownOrNestedDiscoveryResult {
+  unknownTopLevelCollections: UnknownTopLevelCollectionFinding[];
+  unexpectedNestedSubcollections: UnexpectedNestedSubcollectionFinding[];
+}
+
+const KNOWN_TOP_LEVEL_PATHS = new Set<string>([
+  ...SIMPLE_SUBCOLLECTION_PLAN.map((e) => e.path),
+  "aiConversations",
+]);
+
+/**
+ * Read-only, metadata-only recursive discovery — the same algorithm as
+ * fullAccountBackup.ts's discoverAndReadAllUserCollections() (reimplemented
+ * here rather than imported, to avoid the circular dependency described
+ * above), but intentionally lighter: it NEVER reads a document's own
+ * field data, only collection/document existence and names via
+ * listCollections()/listDocuments() — both reference-only Firestore
+ * calls. Reports (a) any users/{uid} top-level collection not already
+ * known to this script's plan (aiConversations counts as known — it has
+ * its own dedicated check above) and not a backup/scratch namespace
+ * (BACKUP_AND_SCRATCH_NAMESPACES, excluded unconditionally — see the
+ * "cannot accidentally include backup data" requirement), and (b) any
+ * document anywhere that has a nested subcollection other than the one
+ * already-expected case (aiConversations/{id}/messages). Never exposes a
+ * document's field content — only path/collection NAMES and counts.
+ */
+export async function discoverUnknownAndNestedCollections(
+  firestore: FirestoreLike,
+  uid: string,
+): Promise<UnknownOrNestedDiscoveryResult> {
+  const userDoc = firestore.doc(`users/${uid}`);
+  const topLevel = await userDoc.listCollections();
+
+  const unknownTopLevelCollections: UnknownTopLevelCollectionFinding[] = [];
+  const unexpectedNestedSubcollections: UnexpectedNestedSubcollectionFinding[] = [];
+
+  for (const coll of topLevel) {
+    if (BACKUP_AND_SCRATCH_NAMESPACES.includes(coll.id)) continue;
+
+    const docRefs = await coll.listDocuments();
+    if (!KNOWN_TOP_LEVEL_PATHS.has(coll.id)) {
+      unknownTopLevelCollections.push({ path: coll.id, documentCount: docRefs.length });
+    }
+
+    for (const docRef of docRefs) {
+      const nestedCollections = await docRef.listCollections();
+      for (const nested of nestedCollections) {
+        if (coll.id === "aiConversations" && nested.id === "messages") continue;
+        const nestedDocs = await nested.listDocuments();
+        if (nestedDocs.length > 0) {
+          unexpectedNestedSubcollections.push({
+            parentPath: coll.id,
+            documentId: docRef.id,
+            nestedCollectionName: nested.id,
+            nestedDocumentCount: nestedDocs.length,
+          });
+        }
+      }
+    }
+  }
+
+  return { unknownTopLevelCollections, unexpectedNestedSubcollections };
+}
+
 export interface RootCollectionResult {
   path: string;
   label: string;
@@ -298,6 +495,9 @@ export interface DryRunReport {
   subcollections: CollectionResult[];
   aiConversations: AiConversationsResult;
   backups: BackupsResult;
+  fullBackups: FullBackupsResult;
+  documentsStorageReferences: DocumentsStorageReferenceResult;
+  unknownOrNestedDiscovery: UnknownOrNestedDiscoveryResult;
   rootCollections: RootCollectionResult[];
   warnings: string[];
 }
@@ -346,6 +546,43 @@ export async function runDryRun(
       "enne täiendava, täieliku varukoopia loomist.",
   );
 
+  const fullBackups = await checkFullBackups(firestore, uid);
+  if (fullBackups.restoreVerificationScratchFound) {
+    warnings.push(
+      "users/{uid}/_restoreVerificationScratch alt leiti midagi — mõne varasema taastatavuse kontrolli " +
+        "puhastus ei näi olnud täielik. See on ainult info, midagi SIIN ei puudutata; vaadake käsitsi " +
+        "üle enne edasisi otsuseid, ei kustutata automaatselt.",
+    );
+  }
+
+  const documentsStorageReferences = await checkDocumentsStorageReferences(firestore, uid);
+  if (documentsStorageReferences.withStoragePathCount > 0 || documentsStorageReferences.withDownloadUrlCount > 0) {
+    warnings.push(
+      `documents: ${documentsStorageReferences.withStoragePathCount}/${documentsStorageReferences.documentCount} ` +
+        `kirjel on storagePath ja ${documentsStorageReferences.withDownloadUrlCount}/${documentsStorageReferences.documentCount} ` +
+        "downloadURL täidetud — need viitavad Firebase Storage failidele, millele praegu ligipääs puudub " +
+        "(Spark pakett). Firestore kirje kustutamine EI kustuta vastavat Storage faili — see jääks orvuks.",
+    );
+  }
+
+  const unknownOrNestedDiscovery = await discoverUnknownAndNestedCollections(firestore, uid);
+  if (unknownOrNestedDiscovery.unknownTopLevelCollections.length > 0) {
+    warnings.push(
+      "Leiti tundmatu(id) users/{uid} kogu(sid), mida ei ole praeguses plaanis: " +
+        unknownOrNestedDiscovery.unknownTopLevelCollections.map((c) => `${c.path} (${c.documentCount} dok.)`).join(", ") +
+        " — vajab käsitsi klassifitseerimist enne mistahes kustutamist.",
+    );
+  }
+  if (unknownOrNestedDiscovery.unexpectedNestedSubcollections.length > 0) {
+    warnings.push(
+      "Leiti ootamatu(id) pesastatud alamkogu(sid) (väljaspool teadaolevat aiConversations/messages juhtumit): " +
+        unknownOrNestedDiscovery.unexpectedNestedSubcollections
+          .map((f) => `${f.parentPath}/${f.documentId}/${f.nestedCollectionName} (${f.nestedDocumentCount} dok.)`)
+          .join(", ") +
+        " — vajab käsitsi ülevaatust enne mistahes kustutamist.",
+    );
+  }
+
   const rootCollections: RootCollectionResult[] = [];
   for (const entry of ROOT_COLLECTION_PLAN) {
     rootCollections.push(await checkRootCollection(firestore, entry, uid, email));
@@ -356,11 +593,12 @@ export async function runDryRun(
       "Kontole ei leitud e-posti aadressi, nii et contactSubmissions (mis ei kanna kunagi uid-d) " +
         "kuvatakse ainult koguarvuna, ilma selle kontoga sidumata.",
     );
-  } else if (contact && contact.totalDocumentCount > contact.matchingDocumentCount) {
+  } else if (contact) {
     warnings.push(
-      `contactSubmissions: ${contact.totalDocumentCount} kirjet kokku, ainult ${contact.matchingDocumentCount} ` +
-        "vastab selle konto e-posti aadressile — ülejäänud kuuluvad kas teistele saatjatele või ei kattu " +
-        "e-posti aadress täpselt.",
+      `contactSubmissions: ${contact.matchingDocumentCount}/${contact.totalDocumentCount} kirjet vastab selle ` +
+        "konto e-posti aadressile. E-posti vastavus ÜKSI ei ole omandi tõend — kontaktivorm ei nõua " +
+        "sisselogimist, nii et keegi teine võis sisestada Teie e-posti aadressi. See ei tohi kunagi ÜKSI " +
+        "olla kustutamise aluseks.",
     );
   }
 
@@ -376,6 +614,9 @@ export async function runDryRun(
     subcollections,
     aiConversations,
     backups,
+    fullBackups,
+    documentsStorageReferences,
+    unknownOrNestedDiscovery,
     rootCollections,
     warnings,
   };
@@ -422,6 +663,44 @@ export function formatReport(report: DryRunReport): string {
       `  ${b.id}  loodud=${String(b.createdAt)}  kirjeid=${String(b.totalItems)}  tükke=${b.chunkCount}`,
     );
     lines.push(`    kogud: ${JSON.stringify(b.collectionNames)}`);
+  }
+  lines.push("");
+  lines.push("Täielikud Firestore varukoopiad (users/{uid}/_fullBackups) — SÄILITA, mitte kustutamiskandidaat");
+  lines.push("-".repeat(72));
+  if (report.fullBackups.backups.length === 0) {
+    lines.push("  Ühtegi _fullBackups kirjet ei leitud.");
+  }
+  for (const b of report.fullBackups.backups) {
+    lines.push(`  ${b.id}  loodud=${String(b.createdAt)}  tükke=${String(b.chunksWritten)}`);
+    lines.push(`    kogud: ${JSON.stringify(b.collectionPaths)}`);
+  }
+  lines.push(
+    `  Taastekontrolli ajutine nimeruum (_restoreVerificationScratch): ${
+      report.fullBackups.restoreVerificationScratchFound ? "LEITI SISU — vajab käsitsi ülevaatust" : "tühi (ootuspärane)"
+    }`,
+  );
+  lines.push("");
+  lines.push("Dokumendimooduli Storage-viited (users/{uid}/documents) — Storage'it EI puudutatud");
+  lines.push("-".repeat(72));
+  lines.push(
+    `  Dokumente kokku: ${report.documentsStorageReferences.documentCount}  ` +
+      `storagePath täidetud: ${report.documentsStorageReferences.withStoragePathCount}  ` +
+      `downloadURL täidetud: ${report.documentsStorageReferences.withDownloadUrlCount}`,
+  );
+  lines.push("");
+  lines.push("Tundmatud/ootamatud kogud (rekursiivne avastus)");
+  lines.push("-".repeat(72));
+  if (
+    report.unknownOrNestedDiscovery.unknownTopLevelCollections.length === 0 &&
+    report.unknownOrNestedDiscovery.unexpectedNestedSubcollections.length === 0
+  ) {
+    lines.push("  Midagi ootamatut ei leitud.");
+  }
+  for (const c of report.unknownOrNestedDiscovery.unknownTopLevelCollections) {
+    lines.push(`  TUNDMATU KOGU: ${c.path} (${c.documentCount} dok.)`);
+  }
+  for (const f of report.unknownOrNestedDiscovery.unexpectedNestedSubcollections) {
+    lines.push(`  OOTAMATU ALAMKOGU: ${f.parentPath}/${f.documentId}/${f.nestedCollectionName} (${f.nestedDocumentCount} dok.)`);
   }
   lines.push("");
   lines.push("Avalikud/jagatud kogud (root)");
