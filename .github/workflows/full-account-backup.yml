@@ -61,8 +61,8 @@ jobs:
         working-directory: artifacts/api-server
         run: |
           npx esbuild --bundle --platform=node --format=esm --packages=external \
-            src/scripts/runFullAccountBackup.ts --outfile=.tmp-runFullAccountBackup.mjs
-          node .tmp-runFullAccountBackup.mjs
+            src/scripts/runFullAccountBackupCli.ts --outfile=.tmp-runFullAccountBackupCli.mjs
+          node .tmp-runFullAccountBackupCli.mjs
         env:
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
@@ -89,4 +89,4 @@ jobs:
       - name: Clean up local files on the runner
         if: always()
         working-directory: artifacts/api-server
-        run: rm -f kivora-backup-*.enc .tmp-runFullAccountBackup.mjs
+        run: rm -f kivora-backup-*.enc .tmp-runFullAccountBackupCli.mjs

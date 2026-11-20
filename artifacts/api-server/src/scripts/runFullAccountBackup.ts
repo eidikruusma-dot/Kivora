@@ -45,13 +45,13 @@
  * (the GitHub Actions step) sees a failed step with a specific message,
  * never a silent or generic failure.
  *
- * Usage (from artifacts/api-server) — see .github/workflows/
- * full-account-backup.yml for how the real workflow invokes this:
- *
- *   OWNER_UID=<uid> BACKUP_ENCRYPTION_PASSPHRASE=<passphrase> \
- *     npx esbuild --bundle --platform=node --format=esm --packages=external \
- *     src/scripts/runFullAccountBackup.ts --outfile=.tmp-runFullAccountBackup.mjs \
- *     && node .tmp-runFullAccountBackup.mjs
+ * This file only DEFINES and EXPORTS main() — it deliberately never calls
+ * it, so it stays side-effect-free and safely importable by its own unit
+ * tests (runFullAccountBackup.test.ts). The actual CLI entry point that
+ * calls main() and sets the process exit code is the separate, tiny
+ * runFullAccountBackupCli.ts — see that file's doc comment for exactly
+ * why that split exists, and for the usage command .github/workflows/
+ * full-account-backup.yml actually runs.
  *
  * Requires the same FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL /
  * FIREBASE_PRIVATE_KEY Admin credentials as the rest of this server, plus
