@@ -1,0 +1,112 @@
+name: Kivora encrypted manifest capture (read-only)
+
+# READ-ONLY manifest capture for the Kivora 2.0 data-cleanup project — see
+# artifacts/api-server/src/scripts/captureManifestEncrypted.ts for the
+# full contract this implements. This workflow:
+#   - never deletes, writes, or modifies anything in Firestore — it only
+#     ever runs testDataCleanup.ts's existing "capture-manifest" mode
+#     (read-only, already tested — see testDataCleanup.test.ts), via a
+#     separate entry point that encrypts the result instead of printing
+#     it (captureManifestEncrypted.test.ts's own source-scan tests check
+#     this file never exposes a path to any other mode)
+#   - hardcodes the capture mode in the run step below — it is NEVER a
+#     workflow input, so there is no field on the "Run workflow" form
+#     that could change it
+#   - never defines the delete-confirmation phrase, the backup-id gate,
+#     or either finance/documents deletion-confirmation variable
+#     anywhere in this file — those simply do not exist in this
+#     workflow's environment
+#   - writes the captured manifest to disk ONLY as an AES-256-GCM
+#     ciphertext (via backupEncryption.ts's already-tested
+#     encryptBackup()) — the plaintext manifest, document ids, and the
+#     passphrase itself are never written to a file, printed to this
+#     workflow's logs, or uploaded in any form
+#   - uploads ONLY the encrypted artifact, with a 1-day retention, and
+#     removes every local file (plaintext or encrypted) from the runner
+#     in a cleanup step that also runs on failure
+#
+# Deliberately manual-only: no "schedule" trigger exists on this
+# workflow. It only ever runs when a human explicitly starts it from the
+# Actions tab (or the GitHub mobile app) via "Run workflow".
+#
+# ── New repository secrets this workflow needs (see the implementation
+# report for exactly why each one is separate from an existing secret) ──
+#   - EXPECTED_PROJECT_ID — the real Firebase project id, set
+#     independently of FIREBASE_PROJECT_ID, so the two must be
+#     separately configured to match; this is what actually validates
+#     FIREBASE_PROJECT_ID rather than comparing a secret to itself.
+#   - MANIFEST_ENCRYPTION_PASSPHRASE — a passphrase the account owner
+#     chooses, kept separate from BACKUP_ENCRYPTION_PASSPHRASE so a leak
+#     of one never also exposes the other.
+# Reuses the SAME FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL /
+# FIREBASE_PRIVATE_KEY secrets every other workflow in this project uses.
+
+"on":
+  workflow_dispatch:
+    inputs:
+      owner_email:
+        description: "Konto e-post, mille manifest hõivatakse (AINULT lugemine, midagi ei kustutata ega muudetata)"
+        required: true
+      expected_uid:
+        description: "Sama konto oodatav Firebase Auth UID — peab vastama ülal antud e-postile, muidu katkestatakse"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  capture-manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies (repo root, for the pnpm workspace)
+        run: pnpm install --frozen-lockfile
+
+      - name: Run the read-only, encrypted manifest capture
+        working-directory: artifacts/api-server
+        run: |
+          npx esbuild --bundle --platform=node --format=esm --packages=external \
+            src/scripts/runCaptureManifestEncryptedCli.ts --outfile=.tmp-runCaptureManifestEncryptedCli.mjs
+          node .tmp-runCaptureManifestEncryptedCli.mjs
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          EXPECTED_PROJECT_ID: ${{ secrets.EXPECTED_PROJECT_ID }}
+          MANIFEST_ENCRYPTION_PASSPHRASE: ${{ secrets.MANIFEST_ENCRYPTION_PASSPHRASE }}
+          OWNER_EMAIL: ${{ github.event.inputs.owner_email }}
+          EXPECTED_UID: ${{ github.event.inputs.expected_uid }}
+
+      # A failed step above stops the job here (GitHub Actions' default
+      # fail-fast behavior) — the step's own clear, specific error message
+      # is what shows as the failure reason; this workflow adds no
+      # continue-on-error anywhere, and the upload step below never runs
+      # on a failed capture, so a half-finished or unencrypted result is
+      # never uploaded as if it had succeeded.
+
+      - name: Upload the encrypted manifest artifact (and ONLY the encrypted file)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kivora-manifest-${{ github.run_id }}
+          path: artifacts/api-server/kivora-manifest-*.enc
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Clean up local files on the runner
+        if: always()
+        working-directory: artifacts/api-server
+        run: rm -f kivora-manifest-*.enc .tmp-runCaptureManifestEncryptedCli.mjs
