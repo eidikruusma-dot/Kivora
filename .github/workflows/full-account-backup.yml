@@ -1,0 +1,92 @@
+name: Kivora full account backup
+
+# Full, encrypted, dual-destination backup for the Kivora 2.0 data-cleanup
+# project — see artifacts/api-server/src/scripts/runFullAccountBackup.ts
+# for the exact safety contract this implements:
+#   - never deletes or overwrites anything (structurally provable — see
+#     fullAccountBackup.test.ts's source-scan test and the "never
+#     overwrites an existing backupId" check in runFullAccountBackup.ts)
+#   - never touches the existing users/{uid}/backups collection or its
+#     two existing backups
+#   - never performs a real restoration of real data — the one
+#     restore-shaped step here (the restorability check) is hardcoded to
+#     an isolated scratch path it deletes before finishing
+#   - the plaintext backup is held only in memory; the ONLY file written
+#     to disk, logged, or uploaded is the AES-256-GCM-encrypted artifact
+#
+# Deliberately manual-only: no "schedule" trigger exists on this
+# workflow. It only ever runs when a human explicitly starts it from the
+# Actions tab (or the GitHub mobile app) via "Run workflow".
+#
+# Reuses the SAME FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL /
+# FIREBASE_PRIVATE_KEY repository secrets reminders-tick.yml and
+# data-cleanup-dry-run.yml already use. The ONE new secret this workflow
+# needs is BACKUP_ENCRYPTION_PASSPHRASE — a passphrase the account owner
+# chooses and adds to the repository's secrets themselves; this workflow
+# never generates, logs, or stores that passphrase anywhere.
+
+"on":
+  workflow_dispatch:
+    inputs:
+      uid:
+        description: "Firebase Auth UID, mille andmed varundada"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies (repo root, for the pnpm workspace)
+        run: pnpm install --frozen-lockfile
+
+      - name: Run the full account backup
+        id: backup
+        working-directory: artifacts/api-server
+        run: |
+          npx esbuild --bundle --platform=node --format=esm --packages=external \
+            src/scripts/runFullAccountBackup.ts --outfile=.tmp-runFullAccountBackup.mjs
+          node .tmp-runFullAccountBackup.mjs
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+          OWNER_UID: ${{ github.event.inputs.uid }}
+
+      # A failed backup step above stops the job here (GitHub Actions'
+      # default fail-fast behavior) — the step's own clear, specific error
+      # message is what shows as the failure reason; this workflow adds no
+      # continue-on-error anywhere, and the steps below never run on a
+      # failed backup, so a half-finished, unencrypted, or unverified
+      # backup is never uploaded as if it had succeeded.
+
+      - name: Upload the encrypted backup artifact (and ONLY the encrypted file)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kivora-backup-${{ github.event.inputs.uid }}-${{ github.run_id }}
+          path: artifacts/api-server/kivora-backup-*.enc
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Clean up local files on the runner
+        if: always()
+        working-directory: artifacts/api-server
+        run: rm -f kivora-backup-*.enc .tmp-runFullAccountBackup.mjs

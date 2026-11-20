@@ -20,6 +20,7 @@
 import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { getStorage, type Storage } from "firebase-admin/storage";
 
 const REQUIRED_ENV_VARS = [
   "FIREBASE_PROJECT_ID",
@@ -56,6 +57,7 @@ export function normalizePrivateKey(raw: string): string {
 let cachedApp: App | null = null;
 let cachedAuth: Auth | null = null;
 let cachedFirestore: Firestore | null = null;
+let cachedStorage: Storage | null = null;
 
 /**
  * Returns the single shared Firebase Admin app, initializing it exactly
@@ -120,4 +122,17 @@ export function getFirebaseAdminFirestore(): Firestore {
   if (cachedFirestore) return cachedFirestore;
   cachedFirestore = getFirestore(getFirebaseAdminApp());
   return cachedFirestore;
+}
+
+/**
+ * Returns the Firebase Admin Storage instance, backed by the SAME shared
+ * Admin app as the accessors above. Used only by the read-only dry-run and
+ * full-backup tooling under src/scripts/ — nothing in the HTTP server
+ * itself reads or writes Storage via Admin. Same failure contract as the
+ * other accessors: missing/misconfigured credentials throw here.
+ */
+export function getFirebaseAdminStorage(): Storage {
+  if (cachedStorage) return cachedStorage;
+  cachedStorage = getStorage(getFirebaseAdminApp());
+  return cachedStorage;
 }
