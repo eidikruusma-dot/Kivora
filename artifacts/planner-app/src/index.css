@@ -543,6 +543,56 @@ html, body, #root {
   animation: kvCardFloat2 8s ease-in-out infinite;
 }
 
+/* ── Hero: Aurora Living Premium composition ─────────────────────────────
+ *  Organic 3D blobs drift slowly (floatA keeps each blob's own resting
+ *  rotation via --r while it bobs; floatB is a plain vertical drift for
+ *  the smaller glass fragments). Each element sets its own
+ *  animation-duration/-delay inline so nothing moves in unison. Aurora
+ *  light washes "breathe" (opacity + scale), and the primary CTA gets a
+ *  slow glow pulse plus a sweeping shine highlight.
+ * ─────────────────────────────────────────────────────────────────────── */
+@keyframes kvAuroraFloatA {
+  0%, 100% { transform: translateY(0) rotate(var(--r, 0deg)); }
+  50%      { transform: translateY(-14px) rotate(var(--r, 0deg)); }
+}
+.kv-aurora-float-a {
+  animation-name: kvAuroraFloatA;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+@keyframes kvAuroraFloatB {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+.kv-aurora-float-b {
+  animation-name: kvAuroraFloatB;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+@keyframes kvAuroraBreathe {
+  0%, 100% { opacity: .62; transform: scale(1); }
+  50%      { opacity: .88; transform: scale(1.07); }
+}
+.kv-aurora-breathe {
+  animation-name: kvAuroraBreathe;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+@keyframes kvAuroraShimmer {
+  0%   { transform: translateX(-130%) rotate(8deg); }
+  100% { transform: translateX(230%) rotate(8deg); }
+}
+.kv-aurora-shimmer {
+  animation: kvAuroraShimmer 4.2s ease-in-out infinite;
+}
+@keyframes kvAuroraGlowPulse {
+  0%, 100% { box-shadow: 0 14px 30px -8px rgba(107,70,240,.5), 0 2px 6px rgba(107,70,240,.3); }
+  50%      { box-shadow: 0 18px 42px -6px rgba(107,70,240,.68), 0 2px 10px rgba(107,70,240,.4); }
+}
+.kv-aurora-glow {
+  animation: kvAuroraGlowPulse 7s ease-in-out infinite;
+}
+
 /* ── Task/habit completion flash ─────────────────────────────────────── */
 @keyframes kvFlashComplete {
   0%   { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); }
@@ -659,7 +709,12 @@ html, body, #root {
   .kv-landing-float-1,
   .kv-landing-float-2,
   .kv-card-float-1,
-  .kv-card-float-2 {
+  .kv-card-float-2,
+  .kv-aurora-float-a,
+  .kv-aurora-float-b,
+  .kv-aurora-breathe,
+  .kv-aurora-shimmer,
+  .kv-aurora-glow {
     animation: none;
   }
   .kv-card {

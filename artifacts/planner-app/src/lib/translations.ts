@@ -179,6 +179,22 @@ export type TranslationKey =
     | "landing.hero.chip3"
     | "landing.hero.chip4"
     | "landing.hero.doneSuffix"
+    // ── Hero: Aurora Living Premium composition ─────────────────────────────────
+    | "landing.aurora.eyebrow"
+    | "landing.aurora.aiSub"
+    | "landing.aurora.dashLabel"
+    | "landing.aurora.calDayLabel"
+    | "landing.aurora.calEvent"
+    | "landing.aurora.presentationDone"
+    | "landing.aurora.yearGoal"
+    | "landing.aurora.morningYoga"
+    | "landing.aurora.streakSuffix"
+    | "landing.aurora.goalName"
+    | "landing.aurora.task1"
+    | "landing.aurora.task2"
+    | "landing.aurora.task3"
+    | "landing.aurora.goalDoneSuffix"
+    | "landing.aurora.goalDaysUnit"
     // ── Login ─────────────────────────────────────────────────────────────────
     | "login.title"
     | "login.subtitle"
@@ -2036,6 +2052,21 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "landing.hero.chip3": "AI abi igal sammul",
         "landing.hero.chip4": "Sünkroonne elu",
         "landing.hero.doneSuffix": "tehtud",
+        "landing.aurora.eyebrow": "AI-põhine elujuhtimine",
+        "landing.aurora.aiSub": "Küsi mida tahes",
+        "landing.aurora.dashLabel": "Kivora · Töölaud",
+        "landing.aurora.calDayLabel": "Reede, nov",
+        "landing.aurora.calEvent": "Kohtumine",
+        "landing.aurora.presentationDone": "Esitlus valmis",
+        "landing.aurora.yearGoal": "Aastaeesmärk",
+        "landing.aurora.morningYoga": "Hommikune jooga",
+        "landing.aurora.streakSuffix": "päeva järjest",
+        "landing.aurora.goalName": "Tervislik eluviis",
+        "landing.aurora.task1": "Hommikune jooks",
+        "landing.aurora.task2": "Projekti ülevaatus",
+        "landing.aurora.task3": "Kliendikohtumine 14:00",
+        "landing.aurora.goalDoneSuffix": "täidetud",
+        "landing.aurora.goalDaysUnit": "päeva",
         // login
         "login.title": "Logi sisse",
         "login.subtitle": "Tere tulemast tagasi.",
@@ -4067,6 +4098,21 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "landing.hero.chip3": "AI help at every step",
         "landing.hero.chip4": "A synced life",
         "landing.hero.doneSuffix": "done",
+        "landing.aurora.eyebrow": "AI-powered life management",
+        "landing.aurora.aiSub": "Ask anything",
+        "landing.aurora.dashLabel": "Kivora · Dashboard",
+        "landing.aurora.calDayLabel": "Fri, Nov",
+        "landing.aurora.calEvent": "Meeting",
+        "landing.aurora.presentationDone": "Presentation ready",
+        "landing.aurora.yearGoal": "Yearly goal",
+        "landing.aurora.morningYoga": "Morning yoga",
+        "landing.aurora.streakSuffix": "days in a row",
+        "landing.aurora.goalName": "Healthy habits",
+        "landing.aurora.task1": "Morning run",
+        "landing.aurora.task2": "Project review",
+        "landing.aurora.task3": "Client meeting 2:00 PM",
+        "landing.aurora.goalDoneSuffix": "complete",
+        "landing.aurora.goalDaysUnit": "days",
         // login
         "login.title": "Log in",
         "login.subtitle": "Welcome back.",

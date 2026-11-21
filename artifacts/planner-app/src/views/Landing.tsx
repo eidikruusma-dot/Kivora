@@ -6,20 +6,9 @@ import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
 import PublicHeader from '@/components/layout/PublicHeader'
 import PublicFooter from '@/components/layout/PublicFooter'
-import AppPreviewMock from '@/components/landing/AppPreviewMock'
-import PhoneFrame from '@/components/landing/PhoneFrame'
-import LaptopFrame from '@/components/landing/LaptopFrame'
-import TabletFrame from '@/components/landing/TabletFrame'
-import DesktopScreenMock from '@/components/landing/DesktopScreenMock'
-import TabletScreenMock from '@/components/landing/TabletScreenMock'
-import PhoneScreenMockCompact from '@/components/landing/PhoneScreenMockCompact'
-import FloatingFeatureCard from '@/components/landing/FloatingFeatureCard'
-import KivoraSymbolNew from '@/components/landing/KivoraSymbolNew'
-import HeroWaves from '@/components/landing/HeroWaves'
-import PlantIllustration from '@/components/landing/PlantIllustration'
-import CoffeeCupIllustration from '@/components/landing/CoffeeCupIllustration'
+import AuroraBackground from '@/components/landing/AuroraBackground'
+import { AuroraVisualDesktop, AuroraVisualMobile } from '@/components/landing/AuroraVisual'
 import DeviceSyncIllustration from '@/components/landing/DeviceSyncIllustration'
-import { useHeroDemoSequence } from '@/components/landing/useHeroDemoSequence'
 import { CheckSquare, Calendar, StickyNote, Activity, Target, Sparkles, ArrowRight, Zap, RefreshCw } from 'lucide-react'
 
 type FeatureKey = 'tasks' | 'calendar' | 'notes' | 'habits' | 'goals' | 'ai'
@@ -51,23 +40,6 @@ export default function Landing() {
   const navigate = useNavigate()
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
-
-  // The hero's three-device composition switches layout at the same
-  // breakpoint Tailwind's `sm:` prefix uses (640px). Below it, the phone
-  // renders far too small for the full interactive demo (tab row, AI
-  // banner, animated list) to stay legible, so it shows a simplified
-  // static screen instead — tracked here (rather than pure CSS
-  // show/hide) so the heavy demo never mounts on small screens.
-  const [isCompactHero, setIsCompactHero] = useState(
-    () => typeof window !== 'undefined' && window.innerWidth < 640,
-  )
-  useEffect(() => {
-    const mql = window.matchMedia('(max-width: 639px)')
-    const onChange = () => setIsCompactHero(mql.matches)
-    onChange()
-    mql.addEventListener('change', onChange)
-    return () => mql.removeEventListener('change', onChange)
-  }, [])
 
   const shouldReduceMotion = useReducedMotion()
 
@@ -102,78 +74,6 @@ export default function Landing() {
     t(`landing.principle.${i}` as Parameters<typeof t>[0], lang)
   )
 
-  // Single scripted demo sequence shared by the phone screen and the
-  // floating feature cards around it, so they animate on the same beat.
-  const demo = useHeroDemoSequence()
-  const { step } = demo
-  const tasksTotal = 8
-  const tasksDone = step >= 2 ? 6 : 5
-  const goalPct = step >= 5 ? 78 : 65
-  const calendarEvents = [
-    { key: 'event1', label: t('landing.preview.event1', lang), time: '10:00', color: '#6F5AE8' },
-    { key: 'event2', label: t('landing.preview.event2', lang), time: '18:30', color: '#EC4899' },
-    ...(step >= 4 ? [{ key: 'event3', label: t('landing.preview.event3', lang), time: '15:00', color: '#10B981' }] : []),
-  ]
-
-  const floatingTasksCard = (
-    <FloatingFeatureCard icon={CheckSquare} iconColor="text-blue-600" iconBg="bg-blue-50" title={t('dash.tasks.title', lang)}>
-      <p className="text-sm font-bold text-[#1A1F36] mb-1.5">
-        {tasksDone}/{tasksTotal} {t('landing.hero.doneSuffix', lang)}
-      </p>
-      <div className="h-1.5 rounded-full bg-[#F1EFFB] overflow-hidden">
-        <div className="h-full rounded-full bg-blue-500 transition-[width] duration-700 ease-out" style={{ width: `${(tasksDone / tasksTotal) * 100}%` }} />
-      </div>
-    </FloatingFeatureCard>
-  )
-
-  const floatingGoalsCard = (
-    <FloatingFeatureCard icon={Target} iconColor="text-orange-600" iconBg="bg-orange-50" title={t('dash.goals.title', lang)}>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-[#1A1F36] truncate pr-1">{t('landing.preview.goal1', lang)}</span>
-        <span className="text-xs font-bold text-orange-600 flex-shrink-0">{goalPct}%</span>
-      </div>
-      <div className="h-1.5 rounded-full bg-[#F1EFFB] overflow-hidden">
-        <div className="h-full rounded-full bg-orange-500 transition-[width] duration-700 ease-out" style={{ width: `${goalPct}%` }} />
-      </div>
-    </FloatingFeatureCard>
-  )
-
-  const floatingCalendarCard = (
-    <FloatingFeatureCard icon={Calendar} iconColor="text-sky-600" iconBg="bg-sky-50" title={t('dash.calendar.title', lang)}>
-      <div className="space-y-1.5">
-        {calendarEvents.map((ev) => (
-          <div key={ev.key} className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: ev.color }} />
-            <span className="text-[10px] text-[#475569] flex-shrink-0">{ev.time}</span>
-            <span className="text-xs text-[#1A1F36] font-medium truncate">{ev.label}</span>
-          </div>
-        ))}
-      </div>
-    </FloatingFeatureCard>
-  )
-
-  const floatingHabitsCard = (
-    <FloatingFeatureCard icon={Activity} iconColor="text-emerald-600" iconBg="bg-emerald-50" title={t('dash.habits.title', lang)}>
-      <p className="text-sm font-bold text-[#1A1F36] mb-1.5">
-        4/5 {t('dash.habits.done', lang)}
-      </p>
-      <div className="flex items-center gap-1.5">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <span
-            key={i}
-            className={`w-5 h-5 rounded-full flex items-center justify-center ${i < 4 ? 'bg-emerald-500' : 'bg-[#F1EFFB]'}`}
-          >
-            {i < 4 && (
-              <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
-                <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
-          </span>
-        ))}
-      </div>
-    </FloatingFeatureCard>
-  )
-
   const bottomChips = [
     { icon: Zap, labelKey: 'landing.hero.chip1' as const, bg: 'bg-blue-50', color: 'text-blue-600' },
     { icon: Target, labelKey: 'landing.hero.chip2' as const, bg: 'bg-orange-50', color: 'text-orange-600' },
@@ -181,143 +81,110 @@ export default function Landing() {
     { icon: RefreshCw, labelKey: 'landing.hero.chip4' as const, bg: 'bg-emerald-50', color: 'text-emerald-600' },
   ]
 
+  // The hero's five-item capability row (Kavand D's `.caps-row`) — real
+  // Kivora capabilities, each reusing the same translation key used for
+  // that module elsewhere on the page (no invented feature names).
+  const auroraCapabilities = [
+    { key: 'tasks', Icon: CheckSquare, label: t('hero.tasks', lang) },
+    { key: 'calendar', Icon: Calendar, label: t('dash.calendar.title', lang) },
+    { key: 'goals', Icon: Target, label: t('hero.goals', lang) },
+    { key: 'habits', Icon: Activity, label: t('hero.habits', lang) },
+    { key: 'ai', Icon: Sparkles, label: t('nav.assistant', lang) },
+  ]
+
   return (
     <div className="min-h-[100dvh] bg-gradient-to-b from-[#FBFAFF] via-[#F8F6FD] to-[#F4F1FB] overflow-x-hidden">
       <PublicHeader />
 
-      {/* Hero — the one "effective and modern" section; everything below stays minimal */}
-      <section className="relative isolate pt-16 pb-14 px-4 sm:px-6 sm:pt-20 sm:pb-20 overflow-hidden">
-        {/* Decorative background — pure CSS/SVG, no raster images, no layout
-            impact. Soft lavender glow blobs + flowing wave ribbons, with a
-            slow, cheap transform-only float; disabled entirely under
-            prefers-reduced-motion. */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-          <HeroWaves className="absolute inset-0 w-full h-full" />
+      {/* Hero — "Aurora Living Premium" (Kavand D, confirmed): a rich
+          lavender-to-pink aurora light wash, glossy organic 3D shapes,
+          floating glass UI fragments and one substantial dashboard
+          preview, interlocked into a single scene rather than stacked
+          layers. Ported from the approved static mockup; see
+          AuroraBackground / AuroraVisual / AuroraDashboardPanel /
+          AuroraGlassFragments for the piece-by-piece port notes. */}
+      <section className="relative isolate pt-16 sm:pt-20 pb-14 sm:pb-20 overflow-hidden">
+        <AuroraBackground />
+
+        <div className="relative z-[2] max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-16">
+          <div className="flex items-center gap-8 max-[720px]:flex-col max-[720px]:gap-[34px] lg:gap-[52px]">
+            {/* LEFT: copy */}
+            <motion.div
+              initial="hidden"
+              animate="visible"
+              variants={staggerContainer}
+              className="flex-1 basis-[680px] min-w-0 max-[720px]:text-center max-[720px]:basis-auto"
+            >
+              <motion.div
+                variants={fadeUp}
+                className="inline-flex items-center gap-2 text-[13px] font-bold tracking-wide text-[#6D28D9] bg-[#8B5CF6]/10 border border-[#8B5CF6]/[.22] rounded-full pl-3 pr-4 py-[7px] mb-[26px]"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[#8B5CF6] shadow-[0_0_0_4px_rgba(139,92,246,0.18)]" />
+                {t('landing.aurora.eyebrow', lang)}
+              </motion.div>
+
+              <motion.h1
+                variants={fadeUp}
+                className="text-[2.5rem] leading-[1.08] sm:text-5xl lg:text-[60px] font-extrabold tracking-tight text-[#1A1F36] mb-6 max-w-[580px] max-[720px]:max-w-full max-[720px]:mx-auto"
+              >
+                {t('landing.hero.title', lang)} {t('landing.hero.titleAccent', lang)}
+              </motion.h1>
+
+              <motion.p
+                variants={fadeUp}
+                className="text-lg text-[#4A4F6A] leading-relaxed mb-9 max-w-[510px] max-[720px]:max-w-full max-[720px]:mx-auto max-[720px]:text-[15px]"
+              >
+                {t('landing.hero.subtitle', lang)}
+              </motion.p>
+
+              <motion.div variants={fadeUp} className="flex items-center gap-[18px] mb-[52px] max-[720px]:flex-col max-[720px]:items-stretch max-[720px]:gap-3">
+                <button
+                  onClick={() => navigate('/register')}
+                  className="kv-aurora-glow relative overflow-hidden px-[34px] py-4 rounded-full text-[16px] font-bold text-white bg-gradient-to-br from-[#A78BFA] to-[#6D28D9] inline-flex items-center justify-center gap-2 max-[720px]:w-full"
+                >
+                  <span aria-hidden="true" className="kv-aurora-shimmer absolute top-[-40%] left-0 w-[38px] h-[180%] bg-gradient-to-r from-white/0 via-white/55 to-white/0 pointer-events-none" />
+                  <span className="relative">{t('landing.cta.start', lang)}</span>
+                  <ArrowRight size={16} className="relative" />
+                </button>
+                <button
+                  onClick={() => navigate('/login')}
+                  className="px-8 py-4 rounded-full text-[16px] font-semibold text-[#1A1F36] bg-white/50 backdrop-blur-xl border-[1.6px] border-[#DCD2FB] hover:bg-white/70 transition-colors max-[720px]:w-full"
+                >
+                  {t('landing.cta.login', lang)}
+                </button>
+              </motion.div>
+
+              <motion.div variants={fadeUp} className="flex flex-wrap gap-x-7 gap-y-3.5 max-[720px]:justify-center">
+                {auroraCapabilities.map(({ key, Icon, label }) => (
+                  <div key={key} className="flex items-center gap-[9px] text-sm font-semibold text-[#4A4F6A]">
+                    <span className="w-[30px] h-[30px] rounded-[9px] bg-[#8B5CF6]/10 flex items-center justify-center flex-shrink-0">
+                      <Icon size={15} className="text-[#6D28D9]" />
+                    </span>
+                    {label}
+                  </div>
+                ))}
+              </motion.div>
+            </motion.div>
+
+            {/* RIGHT: interlocked aurora scene — desktop above 720px, a
+                separate simplified composition at/under it (two mounted
+                trees, CSS-toggled, same convention as the rest of the
+                page's responsive sections). */}
+            <motion.div
+              variants={fadeUp}
+              initial="hidden"
+              animate="visible"
+              className="flex-1 basis-[820px] min-w-0 max-[720px]:basis-auto max-[720px]:w-full"
+            >
+              <div className="hidden min-[721px]:block">
+                <AuroraVisualDesktop lang={lang} />
+              </div>
+              <div className="max-[720px]:block hidden">
+                <AuroraVisualMobile lang={lang} />
+              </div>
+            </motion.div>
+          </div>
         </div>
-
-        <motion.div
-          initial="hidden"
-          animate="visible"
-          variants={staggerContainer}
-          className="max-w-3xl mx-auto text-center"
-        >
-          <motion.div variants={fadeUp} className="flex items-center justify-center gap-2 mb-5">
-            <KivoraSymbolNew size={34} />
-            <span className="text-xl font-extrabold tracking-tight text-[#1A1F36]">Kivora</span>
-          </motion.div>
-          <motion.h1
-            variants={fadeUp}
-            className="text-[2.5rem] leading-[1.08] sm:text-5xl lg:text-6xl font-extrabold tracking-tight mb-3 sm:mb-5"
-          >
-            <span className="block text-[#1A1F36]">{t('landing.hero.title', lang)}</span>
-            <span className="block bg-gradient-to-r from-[#6F5AE8] via-[#8B5CF6] to-[#6F5AE8] bg-clip-text text-transparent">
-              {t('landing.hero.titleAccent', lang)}
-            </span>
-          </motion.h1>
-          <motion.p variants={fadeUp} className="text-base sm:text-lg text-[#475569] leading-relaxed mb-5 sm:mb-6 max-w-xl mx-auto">
-            {t('landing.hero.subtitle', lang)}
-          </motion.p>
-          <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button
-              onClick={() => navigate('/register')}
-              className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-[#6F5AE8] to-[#8B5CF6] text-white text-sm font-bold shadow-[0_14px_32px_-10px_rgba(111,90,232,0.6)] hover:shadow-[0_18px_38px_-8px_rgba(111,90,232,0.7)] hover:-translate-y-0.5 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-            >
-              {t('landing.cta.start', lang)}
-              <ArrowRight size={16} />
-            </button>
-            <button
-              onClick={() => navigate('/login')}
-              className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-white/70 backdrop-blur border border-[#E4DEFB] text-[#1A1F36] text-sm font-semibold hover:bg-white hover:border-[#D6CCFA] active:scale-[0.98] transition-all"
-            >
-              {t('landing.cta.login', lang)}
-            </button>
-          </motion.div>
-          <motion.p variants={fadeUp} className="text-xs text-[#475569] mt-3">{t('landing.cta.free', lang)}</motion.p>
-        </motion.div>
-
-        {/* Three-device composition — a dominant central laptop (the real
-            dashboard), a smaller tablet tucked behind-right (the real
-            calendar), and the existing live-demo phone in front-left.
-            Every device's position/size is a percentage of this one
-            aspect-ratio box, so the whole cluster scales fluidly at any
-            width — the same arrangement renders correctly from a narrow
-            phone up to a wide desktop with no separate mobile layout. */}
-        <motion.div
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-          className="relative mt-8 sm:mt-10 mx-auto max-w-5xl px-2"
-        >
-          <PlantIllustration className="hidden lg:block absolute left-[-3rem] bottom-[-1rem] w-44 pointer-events-none z-0" />
-          <CoffeeCupIllustration className="hidden lg:block absolute right-[-1rem] bottom-[2rem] w-28 pointer-events-none z-0" />
-
-          <div ref={demo.containerRef} className="relative w-full aspect-[6/5] sm:aspect-[16/11]">
-            {/* tablet — behind, top-right. Mobile sizing/position is tuned
-                separately from sm+ so the cluster stays tight and
-                overlapping on small screens rather than reusing one
-                formula that leaves dead space at small sizes. */}
-            <div className="kv-card-float-2 absolute right-0 top-0 w-[32%] sm:w-[28%] z-10 opacity-95">
-              <TabletFrame>
-                <TabletScreenMock lang={lang} compact={isCompactHero} />
-              </TabletFrame>
-            </div>
-
-            {/* laptop — dominant, centered */}
-            <div className="absolute left-1/2 -translate-x-1/2 top-[6%] sm:top-[2%] w-[60%] sm:w-[58%] z-20">
-              <LaptopFrame>
-                <DesktopScreenMock lang={lang} compact={isCompactHero} />
-              </LaptopFrame>
-            </div>
-
-            {/* phone — front, overlapping the laptop's bottom-left corner
-                on mobile (rather than pinned to the box's bottom edge,
-                which left it stranded far below with a dead gap), tucked
-                further down-left at sm+ as before. Below the hero's `sm`
-                breakpoint it shows a simplified static screen instead of
-                the full interactive demo, which is too small to stay
-                legible at that size — the full demo (pause/play included)
-                is untouched and still used at sm+ and on its own. */}
-            <div className="absolute left-0 top-[38%] sm:top-auto sm:bottom-0 sm:left-[2%] w-[27%] sm:w-[21%] z-30">
-              <PhoneFrame>
-                {isCompactHero ? (
-                  <PhoneScreenMockCompact lang={lang} />
-                ) : (
-                  <AppPreviewMock
-                    lang={lang}
-                    step={demo.step}
-                    playing={demo.playing}
-                    onTogglePlay={demo.togglePlaying}
-                    shouldReduceMotion={demo.shouldReduceMotion}
-                  />
-                )}
-              </PhoneFrame>
-            </div>
-          </div>
-
-          {/* Desktop: cards float absolutely around the cluster */}
-          <div className="kv-card-float-1 hidden md:block absolute left-[-2rem] top-[8%] w-60 lg:w-64 z-40">
-            <div className="rotate-[-4deg]">{floatingTasksCard}</div>
-          </div>
-          <div className="kv-card-float-2 hidden md:block absolute left-[18%] bottom-[-14%] w-60 lg:w-64 z-40">
-            <div className="rotate-[3deg]">{floatingGoalsCard}</div>
-          </div>
-          <div className="kv-card-float-2 hidden md:block absolute right-[-1.5rem] top-[-2%] w-60 lg:w-64 z-40">
-            <div className="rotate-[4deg]">{floatingCalendarCard}</div>
-          </div>
-          <div className="kv-card-float-1 hidden md:block absolute right-[-2rem] bottom-[10%] w-60 lg:w-64 z-40">
-            <div className="rotate-[-3deg]">{floatingHabitsCard}</div>
-          </div>
-
-          {/* Mobile: same four cards, plain 2-up grid below the cluster —
-              no absolute positioning or float, so nothing can cause
-              horizontal scroll on small screens. */}
-          <div className="md:hidden grid grid-cols-2 gap-3 mt-8">
-            {floatingTasksCard}
-            {floatingGoalsCard}
-            {floatingCalendarCard}
-            {floatingHabitsCard}
-          </div>
-        </motion.div>
 
         {/* Synced across devices */}
         <motion.div
