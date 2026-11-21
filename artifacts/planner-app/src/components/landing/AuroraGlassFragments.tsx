@@ -23,15 +23,23 @@ const GLASS = 'bg-white/[.52] backdrop-blur-xl border border-white/70 rounded-[2
 
 type FragmentProps = { lang: AppLang; className?: string; style?: CSSProperties }
 
-export function AiFragment({ lang, className = '', style }: FragmentProps) {
+export function AiFragment({ lang, className = '', style, compact = false }: FragmentProps & { compact?: boolean }) {
+  // `compact` (the mobile chip row) trades the desktop's fixed padding/icon
+  // size and single-line truncation for a tighter card where the title/
+  // subtitle can wrap to a second line instead of being cut off with "…" —
+  // at the desktop size there's room for both lines to fit on one line.
   return (
-    <div aria-hidden="true" className={`${GLASS} flex items-center gap-3 px-[18px] py-[14px] ${className}`} style={style}>
-      <div className="w-[34px] h-[34px] rounded-[10px] flex-shrink-0 bg-gradient-to-br from-[#A78BFA] to-[#6D28D9] flex items-center justify-center text-white">
-        <Sparkles size={16} />
+    <div
+      aria-hidden="true"
+      className={`${GLASS} flex items-center ${compact ? 'gap-2 px-3 py-2.5' : 'gap-3 px-[18px] py-[14px]'} ${className}`}
+      style={style}
+    >
+      <div className={`${compact ? 'w-[26px] h-[26px] rounded-[8px]' : 'w-[34px] h-[34px] rounded-[10px]'} flex-shrink-0 bg-gradient-to-br from-[#A78BFA] to-[#6D28D9] flex items-center justify-center text-white`}>
+        <Sparkles size={compact ? 13 : 16} />
       </div>
       <div className="min-w-0">
-        <div className="text-[13.5px] font-bold text-[#2E1065] leading-tight truncate">{t('nav.assistant', lang)}</div>
-        <div className="text-[11.5px] font-medium text-[#6B5B95] mt-0.5 truncate">{t('landing.aurora.aiSub', lang)}</div>
+        <div className={`${compact ? 'text-[11px] leading-snug' : 'text-[13.5px] leading-tight truncate'} font-bold text-[#2E1065]`}>{t('nav.assistant', lang)}</div>
+        <div className={`${compact ? 'text-[9.5px] leading-snug' : 'text-[11.5px] mt-0.5 truncate'} font-medium text-[#6B5B95]`}>{t('landing.aurora.aiSub', lang)}</div>
       </div>
     </div>
   )
@@ -63,17 +71,17 @@ export function TaskFragment({ lang, className = '', style }: FragmentProps) {
   )
 }
 
-export function GoalFragment({ lang, className = '', style }: FragmentProps) {
+export function GoalFragment({ lang, className = '', style, compact = false }: FragmentProps & { compact?: boolean }) {
   return (
-    <div aria-hidden="true" className={`${GLASS} px-5 py-5 text-center ${className}`} style={style}>
+    <div aria-hidden="true" className={`${GLASS} ${compact ? 'px-3 py-3' : 'px-5 py-5'} text-center ${className}`} style={style}>
       <div
-        className="relative mx-auto w-[88px] h-[88px] rounded-full flex items-center justify-center"
+        className={`relative mx-auto ${compact ? 'w-[64px] h-[64px]' : 'w-[88px] h-[88px]'} rounded-full flex items-center justify-center`}
         style={{ background: 'conic-gradient(#7C3AED 0deg 266deg, rgba(124,58,237,.15) 266deg 360deg)' }}
       >
-        <div className="absolute w-16 h-16 rounded-full bg-white/[.94]" />
-        <span className="relative text-lg font-extrabold text-[#2E1065]">74%</span>
+        <div className={`absolute ${compact ? 'w-12 h-12' : 'w-16 h-16'} rounded-full bg-white/[.94]`} />
+        <span className={`relative ${compact ? 'text-sm' : 'text-lg'} font-extrabold text-[#2E1065]`}>74%</span>
       </div>
-      <div className="mt-2.5 text-xs font-semibold text-[#5B4D86]">{t('landing.aurora.yearGoal', lang)}</div>
+      <div className={`${compact ? 'mt-1.5 text-[10.5px]' : 'mt-2.5 text-xs'} font-semibold text-[#5B4D86]`}>{t('landing.aurora.yearGoal', lang)}</div>
     </div>
   )
 }

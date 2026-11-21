@@ -110,7 +110,7 @@ export function AuroraVisualDesktop({ lang }: { lang: AppLang }) {
  */
 export function AuroraVisualMobile({ lang }: { lang: AppLang }) {
   return (
-    <div className="relative w-full max-w-[420px] mx-auto pt-[18px]">
+    <div className="relative w-full max-w-[420px] mx-auto pt-[10px]">
       <div aria-hidden="true" className="absolute inset-0 z-[1] overflow-hidden pointer-events-none opacity-90">
         <OrganicBlob
           className="kv-aurora-float-b"
@@ -133,12 +133,12 @@ export function AuroraVisualMobile({ lang }: { lang: AppLang }) {
       </div>
 
       <div className="relative z-[2]">
-        <AuroraDashboardPanel lang={lang} />
+        <AuroraDashboardPanel lang={lang} compact />
       </div>
 
-      <div className="relative z-[2] flex gap-[10px] justify-center mt-[14px]">
-        <GoalFragment lang={lang} className="flex-1 max-w-[150px]" />
-        <AiFragment lang={lang} className="flex-1 max-w-[150px]" />
+      <div className="relative z-[2] flex gap-[10px] justify-center mt-[10px]">
+        <GoalFragment lang={lang} className="flex-1 max-w-[150px]" compact />
+        <AiFragment lang={lang} className="flex-1 max-w-[150px]" compact />
       </div>
     </div>
   )

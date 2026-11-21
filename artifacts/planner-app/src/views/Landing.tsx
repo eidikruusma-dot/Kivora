@@ -103,7 +103,7 @@ export default function Landing() {
           layers. Ported from the approved static mockup; see
           AuroraBackground / AuroraVisual / AuroraDashboardPanel /
           AuroraGlassFragments for the piece-by-piece port notes. */}
-      <section className="relative isolate pt-16 sm:pt-20 pb-14 sm:pb-20 overflow-hidden">
+      <section className="relative isolate pt-10 sm:pt-20 pb-8 sm:pb-20 overflow-hidden">
         <AuroraBackground />
 
         <div className="relative z-[2] max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-16">
@@ -117,7 +117,7 @@ export default function Landing() {
             >
               <motion.div
                 variants={fadeUp}
-                className="inline-flex items-center gap-2 text-[13px] font-bold tracking-wide text-[#6D28D9] bg-[#8B5CF6]/10 border border-[#8B5CF6]/[.22] rounded-full pl-3 pr-4 py-[7px] mb-[26px]"
+                className="inline-flex items-center gap-2 text-[13px] font-bold tracking-wide text-[#6D28D9] bg-[#8B5CF6]/10 border border-[#8B5CF6]/[.22] rounded-full pl-3 pr-4 py-[7px] mb-[14px] min-[721px]:mb-[26px]"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-[#8B5CF6] shadow-[0_0_0_4px_rgba(139,92,246,0.18)]" />
                 {t('landing.aurora.eyebrow', lang)}
@@ -125,22 +125,22 @@ export default function Landing() {
 
               <motion.h1
                 variants={fadeUp}
-                className="text-[2.5rem] leading-[1.08] sm:text-5xl lg:text-[60px] font-extrabold tracking-tight text-[#1A1F36] mb-6 max-w-[580px] max-[720px]:max-w-full max-[720px]:mx-auto"
+                className="text-[2.5rem] leading-[1.08] sm:text-5xl lg:text-[60px] font-extrabold tracking-tight text-[#1A1F36] mb-4 min-[721px]:mb-6 max-w-[580px] max-[720px]:max-w-full max-[720px]:mx-auto"
               >
                 {t('landing.hero.title', lang)} {t('landing.hero.titleAccent', lang)}
               </motion.h1>
 
               <motion.p
                 variants={fadeUp}
-                className="text-lg text-[#4A4F6A] leading-relaxed mb-9 max-w-[510px] max-[720px]:max-w-full max-[720px]:mx-auto max-[720px]:text-[15px]"
+                className="text-lg text-[#4A4F6A] leading-relaxed mb-5 min-[721px]:mb-9 max-w-[510px] max-[720px]:max-w-full max-[720px]:mx-auto max-[720px]:text-[15px]"
               >
                 {t('landing.hero.subtitle', lang)}
               </motion.p>
 
-              <motion.div variants={fadeUp} className="flex items-center gap-[18px] mb-[52px] max-[720px]:flex-col max-[720px]:items-stretch max-[720px]:gap-3">
+              <motion.div variants={fadeUp} className="flex items-center gap-[18px] mb-[26px] min-[721px]:mb-[52px] max-[720px]:flex-col max-[720px]:items-stretch max-[720px]:gap-2">
                 <button
                   onClick={() => navigate('/register')}
-                  className="kv-aurora-glow relative overflow-hidden px-[34px] py-4 rounded-full text-[16px] font-bold text-white bg-gradient-to-br from-[#A78BFA] to-[#6D28D9] inline-flex items-center justify-center gap-2 max-[720px]:w-full"
+                  className="kv-aurora-glow relative overflow-hidden px-[34px] py-4 max-[720px]:py-3.5 rounded-full text-[16px] font-bold text-white bg-gradient-to-br from-[#A78BFA] to-[#6D28D9] inline-flex items-center justify-center gap-2 max-[720px]:w-full"
                 >
                   <span aria-hidden="true" className="kv-aurora-shimmer absolute top-[-40%] left-0 w-[38px] h-[180%] bg-gradient-to-r from-white/0 via-white/55 to-white/0 pointer-events-none" />
                   <span className="relative">{t('landing.cta.start', lang)}</span>
@@ -148,17 +148,18 @@ export default function Landing() {
                 </button>
                 <button
                   onClick={() => navigate('/login')}
-                  className="px-8 py-4 rounded-full text-[16px] font-semibold text-[#1A1F36] bg-white/50 backdrop-blur-xl border-[1.6px] border-[#DCD2FB] hover:bg-white/70 transition-colors max-[720px]:w-full"
+                  className="px-8 py-4 max-[720px]:py-3.5 rounded-full text-[16px] font-semibold text-[#1A1F36] bg-white/50 backdrop-blur-xl border-[1.6px] border-[#DCD2FB] hover:bg-white/70 transition-colors max-[720px]:w-full"
                 >
                   {t('landing.cta.login', lang)}
                 </button>
               </motion.div>
 
-              <motion.div variants={fadeUp} className="flex flex-wrap gap-x-7 gap-y-3.5 max-[720px]:justify-center">
+              <motion.div variants={fadeUp} className="flex flex-wrap gap-x-5 max-[720px]:gap-x-5 gap-y-3.5 max-[720px]:gap-y-1.5 max-[720px]:justify-center">
                 {auroraCapabilities.map(({ key, Icon, label }) => (
-                  <div key={key} className="flex items-center gap-[9px] text-sm font-semibold text-[#4A4F6A]">
-                    <span className="w-[30px] h-[30px] rounded-[9px] bg-[#8B5CF6]/10 flex items-center justify-center flex-shrink-0">
-                      <Icon size={15} className="text-[#6D28D9]" />
+                  <div key={key} className="flex items-center gap-[9px] max-[720px]:gap-[6px] text-sm max-[720px]:text-[12.5px] font-semibold text-[#4A4F6A]">
+                    <span className="w-[30px] h-[30px] max-[720px]:w-[25px] max-[720px]:h-[25px] rounded-[9px] bg-[#8B5CF6]/10 flex items-center justify-center flex-shrink-0">
+                      <Icon size={15} className="text-[#6D28D9] max-[720px]:hidden" />
+                      <Icon size={13} className="text-[#6D28D9] hidden max-[720px]:block" />
                     </span>
                     {label}
                   </div>
@@ -192,29 +193,31 @@ export default function Landing() {
           whileInView="visible"
           viewport={{ once: true, amount: 0.4 }}
           variants={fadeUp}
-          className="mt-16 sm:mt-24 text-center max-w-sm mx-auto"
+          className="mt-8 sm:mt-24 text-center max-w-[250px] sm:max-w-sm mx-auto"
         >
-          <DeviceSyncIllustration className="w-full mb-5" />
-          <p className="text-base sm:text-lg font-bold text-[#1A1F36]">{t('landing.hero.syncTitle', lang)}</p>
-          <p className="text-sm text-[#475569] mt-1">{t('landing.hero.syncSubtitle', lang)}</p>
+          <DeviceSyncIllustration className="w-full mb-2 sm:mb-5" />
+          <p className="text-sm sm:text-lg font-bold text-[#1A1F36]">{t('landing.hero.syncTitle', lang)}</p>
+          <p className="text-xs sm:text-sm text-[#475569] mt-0.5 sm:mt-1">{t('landing.hero.syncSubtitle', lang)}</p>
         </motion.div>
 
-        {/* Four benefit chips */}
+        {/* Four benefit chips — kept visually close to the sync block above
+            (small top margin on mobile) so the two read as one compact unit */}
         <motion.div
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, amount: 0.3 }}
           variants={staggerContainer}
-          className="mt-10 sm:mt-14 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-2xl mx-auto"
+          className="mt-4 sm:mt-14 grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-3 max-w-2xl mx-auto"
         >
           {bottomChips.map(({ icon: Icon, labelKey, bg, color }) => (
             <motion.div
               key={labelKey}
               variants={fadeUp}
-              className="flex flex-col items-center text-center gap-2 bg-white/70 backdrop-blur rounded-2xl border border-[#EEE9FB] px-3 py-4"
+              className="flex flex-col items-center text-center gap-1 sm:gap-2 bg-white/70 backdrop-blur rounded-2xl border border-[#EEE9FB] px-3 py-2 sm:py-4"
             >
-              <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center`}>
-                <Icon size={17} className={color} />
+              <div className={`w-7 h-7 sm:w-9 sm:h-9 rounded-xl ${bg} flex items-center justify-center`}>
+                <Icon size={16} className={`${color} sm:hidden`} />
+                <Icon size={17} className={`${color} hidden sm:block`} />
               </div>
               <span className="text-xs font-semibold text-[#1A1F36]">{t(labelKey, lang)}</span>
             </motion.div>
@@ -224,7 +227,7 @@ export default function Landing() {
 
       {/* Features preview — a soft "bento" set: varied tints, one dark-violet
           accent card (AI assistant), never six identical tiles */}
-      <section id="features" className="py-14 sm:py-20 px-4 sm:px-6">
+      <section id="features" className="py-8 sm:py-20 px-4 sm:px-6">
         <motion.div
           initial="hidden"
           whileInView="visible"
@@ -233,20 +236,22 @@ export default function Landing() {
           className="max-w-5xl mx-auto"
         >
           <motion.h2 variants={fadeUp} className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1A1F36] text-center mb-2.5">{t('landing.features.title', lang)}</motion.h2>
-          <motion.p variants={fadeUp} className="text-sm sm:text-base text-[#475569] text-center mb-8 sm:mb-12">{t('landing.features.subtitle', lang)}</motion.p>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5">
+          <motion.p variants={fadeUp} className="text-sm sm:text-base text-[#475569] text-center mb-5 sm:mb-12">{t('landing.features.subtitle', lang)}</motion.p>
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-5">
             {features.map(({ key, Icon, theme, title, desc }) => (
               <motion.div
                 key={key}
                 variants={fadeUp}
-                className={`rounded-2xl sm:rounded-3xl p-4 sm:p-7 ${theme.card} hover:shadow-[0_20px_45px_-28px_rgba(111,90,232,0.35)] hover:-translate-y-0.5 transition-all`}
+                className={`rounded-2xl sm:rounded-3xl p-2.5 sm:p-7 flex items-center sm:block gap-2.5 sm:gap-0 ${theme.card} hover:shadow-[0_20px_45px_-28px_rgba(111,90,232,0.35)] hover:-translate-y-0.5 transition-all`}
               >
-                <div className={`w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl ${theme.iconBg} flex items-center justify-center mb-3 sm:mb-5`}>
-                  <Icon size={17} className={`${theme.iconColor} sm:hidden`} />
+                <div className={`w-8 h-8 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl ${theme.iconBg} flex items-center justify-center flex-shrink-0 sm:mb-5`}>
+                  <Icon size={16} className={`${theme.iconColor} sm:hidden`} />
                   <Icon size={22} className={`${theme.iconColor} hidden sm:block`} />
                 </div>
-                <h3 className={`text-[13px] sm:text-base font-bold mb-1 sm:mb-2 ${theme.title}`}>{title}</h3>
-                <p className={`text-[12px] sm:text-sm leading-snug sm:leading-relaxed ${theme.desc}`}>{desc}</p>
+                <div className="min-w-0">
+                  <h3 className={`text-[12.5px] sm:text-base font-bold mb-0.5 sm:mb-2 ${theme.title}`}>{title}</h3>
+                  <p className={`text-[10.5px] sm:text-sm leading-snug sm:leading-relaxed ${theme.desc}`}>{desc}</p>
+                </div>
               </motion.div>
             ))}
           </div>
@@ -254,7 +259,7 @@ export default function Landing() {
       </section>
 
       {/* How it works — three simple steps */}
-      <section id="how-it-works" className="py-14 sm:py-20 px-4 sm:px-6">
+      <section id="how-it-works" className="py-8 sm:py-20 px-4 sm:px-6">
         <motion.div
           initial="hidden"
           whileInView="visible"
@@ -263,15 +268,15 @@ export default function Landing() {
           className="max-w-3xl mx-auto text-center"
         >
           <motion.h2 variants={fadeUp} className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1A1F36] mb-2.5">{t('landing.how.title', lang)}</motion.h2>
-          <motion.p variants={fadeUp} className="text-sm sm:text-base text-[#475569] mb-8 sm:mb-12">{t('landing.how.subtitle', lang)}</motion.p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8">
+          <motion.p variants={fadeUp} className="text-sm sm:text-base text-[#475569] mb-5 sm:mb-12">{t('landing.how.subtitle', lang)}</motion.p>
+          <div className="grid grid-cols-3 gap-3 sm:gap-8">
             {steps.map(({ step, title, desc }) => (
               <motion.div key={step} variants={fadeUp} className="text-center">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-[#6F5AE8] to-[#8B5CF6] text-white font-bold text-base flex items-center justify-center mx-auto mb-3 shadow-[0_10px_24px_-8px_rgba(111,90,232,0.5)]">
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-[#6F5AE8] to-[#8B5CF6] text-white font-bold text-sm sm:text-base flex items-center justify-center mx-auto mb-2 sm:mb-3 shadow-[0_10px_24px_-8px_rgba(111,90,232,0.5)]">
                   {step}
                 </div>
-                <h3 className="text-sm sm:text-base font-bold text-[#1A1F36] mb-1">{title}</h3>
-                <p className="text-sm text-[#475569]">{desc}</p>
+                <h3 className="text-xs sm:text-base font-bold text-[#1A1F36] mb-1 leading-snug">{title}</h3>
+                <p className="text-[11px] sm:text-sm text-[#475569] leading-snug">{desc}</p>
               </motion.div>
             ))}
           </div>
@@ -279,7 +284,7 @@ export default function Landing() {
       </section>
 
       {/* About — short and to the point */}
-      <section id="about" className="py-14 sm:py-20 px-4 sm:px-6 scroll-mt-20">
+      <section id="about" className="py-6 sm:py-20 px-4 sm:px-6 scroll-mt-20">
         <motion.div
           initial="hidden"
           whileInView="visible"
@@ -288,18 +293,18 @@ export default function Landing() {
           className="max-w-2xl mx-auto text-center"
         >
           <motion.h2 variants={fadeUp} className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1A1F36] mb-2.5">{t('landing.about.title', lang)}</motion.h2>
-          <motion.p variants={fadeUp} className="text-sm font-semibold text-[#6F5AE8] mb-6 sm:mb-7">{t('landing.about.tagline', lang)}</motion.p>
+          <motion.p variants={fadeUp} className="text-sm font-semibold text-[#6F5AE8] mb-3 sm:mb-7">{t('landing.about.tagline', lang)}</motion.p>
 
-          <motion.div variants={fadeUp} className="space-y-3 mb-7">
-            <p className="text-sm sm:text-[15px] text-[#475569] leading-relaxed">{t('landing.about.p1', lang)}</p>
-            <p className="text-sm sm:text-[15px] text-[#475569] leading-relaxed">{t('landing.about.p2', lang)}</p>
+          <motion.div variants={fadeUp} className="space-y-1.5 mb-3 sm:space-y-3 sm:mb-7">
+            <p className="text-sm sm:text-[15px] text-[#475569] leading-snug sm:leading-relaxed">{t('landing.about.p1', lang)}</p>
+            <p className="text-sm sm:text-[15px] text-[#475569] leading-snug sm:leading-relaxed">{t('landing.about.p2', lang)}</p>
           </motion.div>
 
-          <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-center gap-2 mb-8">
+          <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mb-3 sm:mb-8">
             {principles.map((principle) => (
               <span
                 key={principle}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white border border-[#EEE9FB] text-xs font-medium text-[#1A1F36] shadow-sm"
+                className="inline-flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-white border border-[#EEE9FB] text-xs font-medium text-[#1A1F36] shadow-sm"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-gradient-to-br from-[#6F5AE8] to-[#8B5CF6] flex-shrink-0" />
                 {principle}
@@ -314,7 +319,7 @@ export default function Landing() {
       </section>
 
       {/* Final CTA — premium card with a soft glow behind it */}
-      <section className="py-16 sm:py-24 px-4 sm:px-6">
+      <section className="py-6 sm:py-24 px-4 sm:px-6">
         <motion.div
           initial="hidden"
           whileInView="visible"
@@ -325,9 +330,9 @@ export default function Landing() {
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
             <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 h-40 rounded-full bg-[#8B5CF6]/[0.18] blur-3xl" />
           </div>
-          <div className="text-center bg-white/90 backdrop-blur rounded-[28px] sm:rounded-[32px] border border-[#EEE9FB] shadow-[0_30px_70px_-30px_rgba(111,90,232,0.4)] px-6 py-12 sm:px-10 sm:py-16">
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1A1F36] mb-3">{t('landing.cta2.title', lang)}</h2>
-            <p className="text-sm sm:text-base text-[#475569] mb-7">{t('landing.cta2.subtitle', lang)}</p>
+          <div className="text-center bg-white/90 backdrop-blur rounded-[28px] sm:rounded-[32px] border border-[#EEE9FB] shadow-[0_30px_70px_-30px_rgba(111,90,232,0.4)] px-6 py-6 sm:px-10 sm:py-16">
+            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1A1F36] mb-1.5 sm:mb-3">{t('landing.cta2.title', lang)}</h2>
+            <p className="text-sm sm:text-base text-[#475569] mb-3 sm:mb-7">{t('landing.cta2.subtitle', lang)}</p>
             <button
               onClick={() => navigate('/register')}
               className="px-7 py-3.5 rounded-2xl bg-gradient-to-r from-[#6F5AE8] to-[#8B5CF6] text-white text-sm font-bold shadow-[0_14px_32px_-10px_rgba(111,90,232,0.6)] hover:shadow-[0_18px_38px_-8px_rgba(111,90,232,0.7)] hover:-translate-y-0.5 active:scale-[0.98] transition-all inline-flex items-center gap-2"
