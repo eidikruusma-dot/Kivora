@@ -137,23 +137,19 @@ export type TranslationKey =
     | "landing.about.tagline"
     | "landing.about.p1"
     | "landing.about.p2"
-    | "landing.about.p3"
-    | "landing.about.quote"
-    | "landing.about.p4"
-    | "landing.about.p5"
     | "landing.principles.title"
     | "landing.principle.0"
     | "landing.principle.1"
     | "landing.principle.2"
     | "landing.principle.3"
     | "landing.principle.4"
-    | "landing.mission.title"
-    | "landing.mission.text"
-    | "landing.vision.title"
-    | "landing.vision.text"
     | "landing.cta2.title"
     | "landing.cta2.subtitle"
     | "landing.finalTagline"
+    | "landing.preview.caption"
+    | "landing.preview.task1"
+    | "landing.preview.task2"
+    | "landing.preview.task3"
     // ── Login ─────────────────────────────────────────────────────────────────
     | "login.title"
     | "login.subtitle"
@@ -1965,36 +1961,23 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "landing.about.title": "Meist",
         "landing.about.tagline": "Kõik oluline. Ühes kohas.",
         "landing.about.p1":
-            "Kivora sündis soovist muuta igapäevaelu lihtsamaks.",
+            "Kivora sündis soovist koondada kalender, ülesanded, märkmed ja eesmärgid ühte rahulikku kohta — selle asemel, et hüpata kümnete rakenduste vahel.",
         "landing.about.p2":
-            "Me usume, et inimesed ei peaks kasutama kümneid erinevaid rakendusi oma elu korraldamiseks. Kalender ühes kohas, ülesanded teises, märkmed kolmandas ja eesmärgid neljandas muudavad igapäeva killustatuks ning võtavad rohkem aega, kui peaks.",
-        "landing.about.p3":
-            "Kivora eesmärk on tuua kõik oluline kokku ühte kohta.",
-        "landing.about.quote":
-            "Üks rakendus. Üks selge vaade. Üks koht, kus saad planeerida oma päeva, hallata ülesandeid, jälgida harjumusi, pidada märkmeid, seada eesmärke ja hoida oma elu korrastatuna.",
-        "landing.about.p4":
-            "Me usume, et tehnoloogia peaks aitama inimest, mitte muutma tema päeva keerulisemaks. Seetõttu keskendume lihtsale, rahulikule ja läbimõeldud kasutuskogemusele, kus iga funktsioon on loodud päriselt väärtust looma.",
-        "landing.about.p5":
-            "Kivora ei ole lihtsalt kalender ega ülesannete nimekiri. See on isiklik produktiivsuskeskus, mis aitab sul näha tervikpilti, keskenduda olulisele ja liikuda samm-sammult oma eesmärkide poole.",
+            "See on Sinu isiklik produktiivsuskeskus: lihtne ja läbimõeldud, et aidata keskenduda olulisele ja liikuda samm-sammult oma eesmärkide poole.",
         "landing.principles.title": "Meie põhimõtted",
-        "landing.principle.0":
-            "Lihtsus. Kõik peab olema arusaadav ja kiiresti kasutatav.",
-        "landing.principle.1": "Selgus. Oluline info on alati esiplaanil.",
-        "landing.principle.2": "Privaatsus. Sinu andmed kuuluvad sulle.",
-        "landing.principle.3":
-            "Usaldusväärsus. Rakendus peab töötama stabiilselt ja ennustatavalt.",
-        "landing.principle.4":
-            "Pidev areng. Kivora areneb koos oma kasutajatega ning muutub paremaks iga uuendusega.",
-        "landing.mission.title": "Meie missioon",
-        "landing.mission.text":
-            "Aidata inimestel kulutada vähem aega erinevate rakenduste vahel liikumisele ja rohkem aega sellele, mis on päriselt oluline.",
-        "landing.vision.title": "Meie visioon",
-        "landing.vision.text":
-            "Luua usaldusväärne ja terviklik platvorm, kus kõik igapäevaelu olulised tegevused on ühendatud ühte lihtsasse, kaasaegsesse ja kasutajasõbralikku rakendusse.",
+        "landing.principle.0": "Lihtsus",
+        "landing.principle.1": "Selgus",
+        "landing.principle.2": "Privaatsus",
+        "landing.principle.3": "Usaldusväärsus",
+        "landing.principle.4": "Pidev areng",
         "landing.cta2.title": "Alusta oma teekonda täna",
         "landing.cta2.subtitle":
             "Loo konto ja sa oma esimese päeva planeeritud vähem kui minutiga.",
         "landing.finalTagline": "Kivora. Kõik oluline. Ühes kohas.",
+        "landing.preview.caption": "Näidisvaade — Kivora ülesannete loend",
+        "landing.preview.task1": "Esita kvartaliraport",
+        "landing.preview.task2": "Jõusaal kell 18:00",
+        "landing.preview.task3": "Helista hambaarstile",
         // login
         "login.title": "Logi sisse",
         "login.subtitle": "Tere tulemast tagasi.",
@@ -3980,37 +3963,23 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "landing.about.title": "About",
         "landing.about.tagline": "Everything important. In one place.",
         "landing.about.p1":
-            "Kivora was born from a desire to make everyday life simpler.",
+            "Kivora was born to bring your calendar, tasks, notes, and goals into one calm place — instead of jumping between a dozen different apps.",
         "landing.about.p2":
-            "We believe people should not have to use dozens of different apps to organise their life. Calendar in one place, tasks in another, notes in a third, and goals in a fourth makes daily life fragmented and takes more time than it should.",
-        "landing.about.p3":
-            "Kivora's goal is to bring everything important together in one place.",
-        "landing.about.quote":
-            "One app. One clear view. One place where you can plan your day, manage tasks, track habits, keep notes, set goals, and keep your life organised.",
-        "landing.about.p4":
-            "We believe technology should help people, not make their day more complicated. That is why we focus on a simple, calm, and thoughtful user experience, where every feature is designed to create real value.",
-        "landing.about.p5":
-            "Kivora is not just a calendar or a task list. It is a personal productivity hub that helps you see the big picture, focus on what matters, and move step by step toward your goals.",
+            "It's your personal productivity hub: simple and thoughtfully designed, to help you focus on what matters and move step by step toward your goals.",
         "landing.principles.title": "Our values",
-        "landing.principle.0":
-            "Simplicity. Everything must be understandable and quick to use.",
-        "landing.principle.1":
-            "Clarity. Important information is always in the foreground.",
-        "landing.principle.2": "Privacy. Your data belongs to you.",
-        "landing.principle.3":
-            "Reliability. The app must work stably and predictably.",
-        "landing.principle.4":
-            "Continuous improvement. Kivora grows with its users and gets better with every update.",
-        "landing.mission.title": "Our mission",
-        "landing.mission.text":
-            "To help people spend less time switching between different apps and more time on what truly matters.",
-        "landing.vision.title": "Our vision",
-        "landing.vision.text":
-            "To create a reliable and comprehensive platform where all important daily activities are united into one simple, modern, and user-friendly application.",
+        "landing.principle.0": "Simplicity",
+        "landing.principle.1": "Clarity",
+        "landing.principle.2": "Privacy",
+        "landing.principle.3": "Reliability",
+        "landing.principle.4": "Continuous improvement",
         "landing.cta2.title": "Start your journey today",
         "landing.cta2.subtitle":
             "Create an account and have your first day planned in less than a minute.",
         "landing.finalTagline": "Kivora. Everything important. In one place.",
+        "landing.preview.caption": "Sample view — Kivora task list",
+        "landing.preview.task1": "Submit quarterly report",
+        "landing.preview.task2": "Gym at 6 PM",
+        "landing.preview.task3": "Call the dentist",
         // login
         "login.title": "Log in",
         "login.subtitle": "Welcome back.",
