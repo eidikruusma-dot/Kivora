@@ -1,0 +1,111 @@
+name: Kivora encrypted full-account-removal manifest capture (read-only)
+
+# READ-ONLY manifest capture for the Kivora 2.0 full-account-removal
+# tool — see artifacts/api-server/src/scripts/fullAccountRemoval.ts and
+# captureFullAccountRemovalManifestEncrypted.ts for the full contract
+# this implements. This workflow:
+#   - never deletes, writes, or modifies anything in Firestore — it only
+#     ever runs fullAccountRemoval.ts's existing "capture-manifest" mode
+#     (read-only, already tested), via a separate entry point that
+#     encrypts the result instead of printing it, and that additionally
+#     refuses to export anything at all if the structural check finds
+#     anything unexpected (see that file's own doc comment)
+#   - hardcodes the capture mode in the run step below — it is NEVER a
+#     workflow input, so there is no field on the "Run workflow" form
+#     that could change it (there is no form at all: this workflow takes
+#     no inputs whatsoever)
+#   - never defines the delete-confirmation phrase or the backup-id gate
+#     anywhere in this file — those simply do not exist in this
+#     workflow's environment
+#   - writes the captured manifest to disk ONLY as an AES-256-GCM
+#     ciphertext — the plaintext manifest, document ids/paths, and the
+#     passphrase itself are never written to a file, printed to this
+#     workflow's logs, or uploaded in any form
+#   - uploads ONLY the encrypted artifact, with a 1-day retention, and
+#     removes every local file (plaintext or encrypted) from the runner
+#     in a cleanup step that also runs on failure
+#   - never touches Firebase Storage or Firebase Authentication — this
+#     workflow's own CLI entry point never calls either API
+#
+# Deliberately manual-only: no "schedule" trigger exists on this
+# workflow, and it takes no workflow_dispatch inputs at all — starting
+# it needs no typed value from whoever clicks "Run workflow".
+#
+# ── Reuses ONLY existing repository secrets — no new secret is created
+# for this workflow ──────────────────────────────────────────────────
+#   - FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY
+#     — the same Admin SDK credentials every other workflow here uses.
+#   - EXPECTED_PROJECT_ID — the same independent Firebase project id
+#     cross-check capture-manifest-encrypted.yml already uses.
+#   - MANIFEST_OWNER_EMAIL / MANIFEST_EXPECTED_UID — the same account-
+#     identity secrets capture-manifest-encrypted.yml already uses
+#     (masked, never a plaintext workflow_dispatch input).
+#   - MANIFEST_ENCRYPTION_PASSPHRASE — the same passphrase
+#     capture-manifest-encrypted.yml already uses to encrypt its own
+#     manifest export; reused here for this tool's manifest too, since
+#     both are the same class of artifact (document ids + version
+#     timestamps, never field content) under the same threat model.
+
+"on":
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  capture-full-removal-manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies (repo root, for the pnpm workspace)
+        run: pnpm install --frozen-lockfile
+
+      - name: Run the read-only, encrypted full-account-removal manifest capture
+        working-directory: artifacts/api-server
+        run: |
+          npx esbuild --bundle --platform=node --format=esm --packages=external \
+            src/scripts/runCaptureFullAccountRemovalManifestEncryptedCli.ts --outfile=.tmp-runCaptureFullAccountRemovalManifestEncryptedCli.mjs
+          node .tmp-runCaptureFullAccountRemovalManifestEncryptedCli.mjs
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          EXPECTED_PROJECT_ID: ${{ secrets.EXPECTED_PROJECT_ID }}
+          MANIFEST_ENCRYPTION_PASSPHRASE: ${{ secrets.MANIFEST_ENCRYPTION_PASSPHRASE }}
+          OWNER_EMAIL: ${{ secrets.MANIFEST_OWNER_EMAIL }}
+          EXPECTED_UID: ${{ secrets.MANIFEST_EXPECTED_UID }}
+
+      # A failed step above stops the job here (GitHub Actions' default
+      # fail-fast behavior) — the step's own clear, specific error
+      # message is what shows as the failure reason; this workflow adds
+      # no continue-on-error anywhere, and the upload step below never
+      # runs on a failed capture, so a half-finished, unencrypted, or
+      # structurally-incomplete result is never uploaded as if it had
+      # succeeded.
+
+      - name: Upload the encrypted manifest artifact (and ONLY the encrypted file)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kivora-full-removal-manifest-${{ github.run_id }}
+          path: artifacts/api-server/kivora-full-removal-manifest-*.enc
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Clean up local files on the runner
+        if: always()
+        working-directory: artifacts/api-server
+        run: rm -f kivora-full-removal-manifest-*.enc .tmp-runCaptureFullAccountRemovalManifestEncryptedCli.mjs
