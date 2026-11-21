@@ -10,9 +10,17 @@ import { t } from '@/lib/translations'
  * labels it explicitly. Colours match the real CALENDARS palette used
  * across the app (purple "mine", blue "work/school", pink "training").
  *
- * Sized with `cqw` (container-query width units) rather than fixed px
- * so the whole grid stays proportioned whether the tablet renders large
- * or, as one of three devices on mobile, quite small.
+ * Sizes use `clamp(floor, cqw, ceiling)` rather than plain `cqw`: the
+ * tablet is the narrowest device in the composition (as little as
+ * ~90px wide on mobile), where the pure proportional value alone drops
+ * under comfortable reading size — the floor keeps the title, weekday
+ * letters and day numbers legible there.
+ *
+ * `compact` additionally drops the grid from 5 weeks to 4 — needed to
+ * leave room for the bigger day numbers/dots at mobile width without
+ * the fixed-aspect screen clipping the last row. At `sm` and up
+ * `compact` is always false and the full 5-week month (unchanged)
+ * renders as before.
  */
 const WEEKDAYS: Record<AppLang, string[]> = {
   et: ['E', 'T', 'K', 'N', 'R', 'L', 'P'],
@@ -29,27 +37,29 @@ const DAYS: { n: number; muted?: boolean; today?: boolean; events?: string[] }[]
   { n: 27 }, { n: 28 }, { n: 29 }, { n: 30 }, { n: 31, events: ['#F59E0B'] }, { n: 1, muted: true }, { n: 2, muted: true },
 ]
 
-export default function TabletScreenMock({ lang }: { lang: AppLang }) {
+export default function TabletScreenMock({ lang, compact = false }: { lang: AppLang; compact?: boolean }) {
+  const days = compact ? DAYS.slice(0, 28) : DAYS
+
   return (
     <div className="h-full w-full bg-white flex flex-col overflow-hidden [container-type:inline-size]">
       <div className="flex items-center justify-between px-[3.2cqw] py-[2.1cqw] border-b border-[#F1EFFB] flex-shrink-0">
-        <span className="text-[3.2cqw] font-bold text-[#1A1F36] whitespace-nowrap">{t('dash.calendar.title', lang)}</span>
-        <span className="inline-flex items-center px-[1.4cqw] py-[0.7cqw] rounded-full bg-[#2E1065] text-white text-[2.1cqw] font-bold tracking-wide uppercase whitespace-nowrap">
+        <span className="text-[clamp(10px,3.2cqw,16px)] font-bold text-[#1A1F36] whitespace-nowrap">{t('dash.calendar.title', lang)}</span>
+        <span className="inline-flex items-center px-[1.4cqw] py-[0.7cqw] rounded-full bg-[#2E1065] text-white text-[clamp(6px,2.1cqw,10px)] font-bold tracking-wide uppercase whitespace-nowrap">
           {t('landing.preview.sampleBadge', lang)}
         </span>
       </div>
 
       <div className="grid grid-cols-7 border-b border-[#F1EFFB] flex-shrink-0">
         {WEEKDAYS[lang].map((d, i) => (
-          <div key={i} className="text-center text-[2.3cqw] font-semibold text-[#94A3B8] py-[1.1cqw]">{d}</div>
+          <div key={i} className="text-center text-[clamp(8px,2.3cqw,12px)] font-semibold text-[#475569] py-[1.1cqw]">{d}</div>
         ))}
       </div>
 
       <div className="grid grid-cols-7 flex-1 min-h-0">
-        {DAYS.map((day, i) => (
+        {days.map((day, i) => (
           <div key={i} className="border-b border-r border-[#F6F4FC] flex flex-col items-center justify-start pt-[1.1cqw] gap-[0.5cqw]">
             <span
-              className={`text-[2.3cqw] w-[6.4cqw] h-[6.4cqw] flex items-center justify-center rounded-full ${
+              className={`text-[clamp(8px,2.3cqw,12px)] w-[clamp(15px,6.4cqw,24px)] h-[clamp(15px,6.4cqw,24px)] flex items-center justify-center rounded-full ${
                 day.today ? 'bg-[#6F5AE8] text-white font-bold' : day.muted ? 'text-[#D1D5DB]' : 'text-[#1A1F36]'
               }`}
             >
@@ -58,7 +68,7 @@ export default function TabletScreenMock({ lang }: { lang: AppLang }) {
             {day.events && (
               <div className="flex items-center gap-[0.9cqw]">
                 {day.events.map((c, j) => (
-                  <span key={j} className="w-[1.1cqw] h-[1.1cqw] rounded-full" style={{ backgroundColor: c }} />
+                  <span key={j} className="w-[clamp(2.5px,1.1cqw,4px)] h-[clamp(2.5px,1.1cqw,4px)] rounded-full" style={{ backgroundColor: c }} />
                 ))}
               </div>
             )}

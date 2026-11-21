@@ -115,7 +115,7 @@ describe('Privacy/Terms/Contact routes and link labels/hover styles remain intac
       /<Link to="\/" className="inline-flex items-center hover:opacity-80 transition-opacity">/,
     )
     expect(SRC).toMatch(
-      /<p className="text-xs text-\[#94A3B8\]">© \{new Date\(\)\.getFullYear\(\)\} Kivora\. \{t\('footer\.copyright', lang\)\}<\/p>/,
+      /<p className="text-xs text-\[#475569\]">© \{new Date\(\)\.getFullYear\(\)\} Kivora\. \{t\('footer\.copyright', lang\)\}<\/p>/,
     )
   })
 })

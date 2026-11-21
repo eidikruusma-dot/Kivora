@@ -124,7 +124,7 @@ export default function AppPreviewMock({
       <div className="px-4 pt-5 pb-2 flex items-start justify-between flex-shrink-0">
         <div className="min-w-0">
           <p className="text-[13px] font-bold text-[#1A1F36] leading-tight">{t('landing.preview.greeting', lang)}</p>
-          <p className="text-[10px] text-[#94A3B8] mt-0.5">{t('landing.preview.greetingSubtitle', lang)}</p>
+          <p className="text-[10px] text-[#475569] mt-0.5">{t('landing.preview.greetingSubtitle', lang)}</p>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0 pl-2">
           {!shouldReduceMotion && (
@@ -148,7 +148,7 @@ export default function AppPreviewMock({
         {NAV_ITEMS.map((item, i) => (
           <div
             key={item.labelKey}
-            className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded-xl ${i === 0 ? 'bg-[#6F5AE8] text-white' : 'text-[#94A3B8]'}`}
+            className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded-xl ${i === 0 ? 'bg-[#6F5AE8] text-white' : 'text-[#475569]'}`}
           >
             <item.icon size={13} />
             <span className="text-[6.5px] font-semibold truncate max-w-full px-0.5">{t(item.labelKey, lang)}</span>
@@ -184,7 +184,7 @@ export default function AppPreviewMock({
         <div className="flex items-center justify-between mb-2.5">
           <div className="min-w-0">
             <p className="text-[11px] font-bold text-[#1A1F36]">{t('landing.preview.todayFocus', lang)}</p>
-            <p className="text-[9px] text-[#94A3B8] mt-0.5 truncate">
+            <p className="text-[9px] text-[#475569] mt-0.5 truncate">
               {taskRows.length} {t('landing.preview.tasksCountLabel', lang)} · {eventRows.length} {t('landing.preview.eventsCountLabel', lang)}
             </p>
           </div>
@@ -213,7 +213,7 @@ export default function AppPreviewMock({
                     </svg>
                   )}
                 </div>
-                <span className={`flex-1 text-[11px] leading-tight truncate transition-colors duration-300 ${row.done ? 'text-[#94A3B8] line-through' : 'text-[#1A1F36]'}`}>
+                <span className={`flex-1 text-[11px] leading-tight truncate transition-colors duration-300 ${row.done ? 'text-[#475569] line-through' : 'text-[#1A1F36]'}`}>
                   {t(row.key, lang)}
                 </span>
                 {!row.done && <span className={`text-[9px] font-semibold flex-shrink-0 ${PRIORITY_COLOR[row.priority]}`}>{t(`tasks.priority.${row.priority}`, lang)}</span>}
@@ -244,7 +244,7 @@ export default function AppPreviewMock({
                 className="flex items-center gap-2 rounded-lg bg-[#FAF9FF] px-2.5 py-1.5 overflow-hidden"
               >
                 <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: ev.color }} />
-                <span className="text-[9px] text-[#94A3B8] flex-shrink-0">{ev.time}</span>
+                <span className="text-[9px] text-[#475569] flex-shrink-0">{ev.time}</span>
                 <span className="text-[10.5px] text-[#1A1F36] font-medium truncate">{t(ev.key, lang)}</span>
               </motion.div>
             ))}
@@ -261,7 +261,7 @@ export default function AppPreviewMock({
             <div className={`w-6 h-6 rounded-lg ${iconBg} flex items-center justify-center`}>
               <Icon size={12} className={iconColor} />
             </div>
-            <span className="text-[8px] font-medium text-[#64748B] text-center leading-tight px-0.5">{t(labelKey, lang)}</span>
+            <span className="text-[8px] font-medium text-[#475569] text-center leading-tight px-0.5">{t(labelKey, lang)}</span>
           </div>
         ))}
       </div>
@@ -310,7 +310,7 @@ export default function AppPreviewMock({
               <CheckCircle2 size={24} className="text-white" />
             </motion.div>
             <p className="text-sm font-bold text-[#1A1F36]">{t('landing.preview.summaryTitle', lang)}</p>
-            <p className="text-xs text-[#94A3B8] mt-1">{t('landing.preview.summarySubtitle', lang)}</p>
+            <p className="text-xs text-[#475569] mt-1">{t('landing.preview.summarySubtitle', lang)}</p>
           </motion.div>
         )}
       </AnimatePresence>

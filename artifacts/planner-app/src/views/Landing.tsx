@@ -39,11 +39,11 @@ const FEATURE_KEYS: FeatureKey[] = ['tasks', 'calendar', 'notes', 'habits', 'goa
 // set rather than six identical cards. "ai" gets the one dark-violet
 // accent card — the single place real dark colour appears on the page.
 const FEATURE_THEME: Record<FeatureKey, { card: string; iconBg: string; iconColor: string; title: string; desc: string }> = {
-  tasks:    { card: 'bg-white border border-[#EEE9FB]',    iconBg: 'bg-blue-50',    iconColor: 'text-blue-600',    title: 'text-[#1A1F36]', desc: 'text-[#64748B]' },
-  calendar: { card: 'bg-white border border-[#EEE9FB]',    iconBg: 'bg-sky-50',     iconColor: 'text-sky-600',     title: 'text-[#1A1F36]', desc: 'text-[#64748B]' },
-  notes:    { card: 'bg-white border border-[#EEE9FB]',    iconBg: 'bg-amber-50',   iconColor: 'text-amber-600',   title: 'text-[#1A1F36]', desc: 'text-[#64748B]' },
-  habits:   { card: 'bg-white border border-[#EEE9FB]',    iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600', title: 'text-[#1A1F36]', desc: 'text-[#64748B]' },
-  goals:    { card: 'bg-white border border-[#EEE9FB]',    iconBg: 'bg-orange-50',  iconColor: 'text-orange-600',  title: 'text-[#1A1F36]', desc: 'text-[#64748B]' },
+  tasks:    { card: 'bg-white border border-[#EEE9FB]',    iconBg: 'bg-blue-50',    iconColor: 'text-blue-600',    title: 'text-[#1A1F36]', desc: 'text-[#475569]' },
+  calendar: { card: 'bg-white border border-[#EEE9FB]',    iconBg: 'bg-sky-50',     iconColor: 'text-sky-600',     title: 'text-[#1A1F36]', desc: 'text-[#475569]' },
+  notes:    { card: 'bg-white border border-[#EEE9FB]',    iconBg: 'bg-amber-50',   iconColor: 'text-amber-600',   title: 'text-[#1A1F36]', desc: 'text-[#475569]' },
+  habits:   { card: 'bg-white border border-[#EEE9FB]',    iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600', title: 'text-[#1A1F36]', desc: 'text-[#475569]' },
+  goals:    { card: 'bg-white border border-[#EEE9FB]',    iconBg: 'bg-orange-50',  iconColor: 'text-orange-600',  title: 'text-[#1A1F36]', desc: 'text-[#475569]' },
   ai:       { card: 'bg-gradient-to-br from-[#2E1065] to-[#5B21B6] border border-[#4C1D95]', iconBg: 'bg-white/15', iconColor: 'text-white', title: 'text-white', desc: 'text-white/75' },
 }
 
@@ -144,7 +144,7 @@ export default function Landing() {
         {calendarEvents.map((ev) => (
           <div key={ev.key} className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: ev.color }} />
-            <span className="text-[10px] text-[#94A3B8] flex-shrink-0">{ev.time}</span>
+            <span className="text-[10px] text-[#475569] flex-shrink-0">{ev.time}</span>
             <span className="text-xs text-[#1A1F36] font-medium truncate">{ev.label}</span>
           </div>
         ))}
@@ -214,7 +214,7 @@ export default function Landing() {
               {t('landing.hero.titleAccent', lang)}
             </span>
           </motion.h1>
-          <motion.p variants={fadeUp} className="text-base sm:text-lg text-[#64748B] leading-relaxed mb-5 sm:mb-6 max-w-xl mx-auto">
+          <motion.p variants={fadeUp} className="text-base sm:text-lg text-[#475569] leading-relaxed mb-5 sm:mb-6 max-w-xl mx-auto">
             {t('landing.hero.subtitle', lang)}
           </motion.p>
           <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -232,7 +232,7 @@ export default function Landing() {
               {t('landing.cta.login', lang)}
             </button>
           </motion.div>
-          <motion.p variants={fadeUp} className="text-xs text-[#94A3B8] mt-3">{t('landing.cta.free', lang)}</motion.p>
+          <motion.p variants={fadeUp} className="text-xs text-[#475569] mt-3">{t('landing.cta.free', lang)}</motion.p>
         </motion.div>
 
         {/* Three-device composition — a dominant central laptop (the real
@@ -258,14 +258,14 @@ export default function Landing() {
                 formula that leaves dead space at small sizes. */}
             <div className="kv-card-float-2 absolute right-0 top-0 w-[32%] sm:w-[28%] z-10 opacity-95">
               <TabletFrame>
-                <TabletScreenMock lang={lang} />
+                <TabletScreenMock lang={lang} compact={isCompactHero} />
               </TabletFrame>
             </div>
 
             {/* laptop — dominant, centered */}
             <div className="absolute left-1/2 -translate-x-1/2 top-[6%] sm:top-[2%] w-[60%] sm:w-[58%] z-20">
               <LaptopFrame>
-                <DesktopScreenMock lang={lang} />
+                <DesktopScreenMock lang={lang} compact={isCompactHero} />
               </LaptopFrame>
             </div>
 
@@ -329,7 +329,7 @@ export default function Landing() {
         >
           <DeviceSyncIllustration className="w-full mb-5" />
           <p className="text-base sm:text-lg font-bold text-[#1A1F36]">{t('landing.hero.syncTitle', lang)}</p>
-          <p className="text-sm text-[#64748B] mt-1">{t('landing.hero.syncSubtitle', lang)}</p>
+          <p className="text-sm text-[#475569] mt-1">{t('landing.hero.syncSubtitle', lang)}</p>
         </motion.div>
 
         {/* Four benefit chips */}
@@ -366,7 +366,7 @@ export default function Landing() {
           className="max-w-5xl mx-auto"
         >
           <motion.h2 variants={fadeUp} className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1A1F36] text-center mb-2.5">{t('landing.features.title', lang)}</motion.h2>
-          <motion.p variants={fadeUp} className="text-sm sm:text-base text-[#64748B] text-center mb-8 sm:mb-12">{t('landing.features.subtitle', lang)}</motion.p>
+          <motion.p variants={fadeUp} className="text-sm sm:text-base text-[#475569] text-center mb-8 sm:mb-12">{t('landing.features.subtitle', lang)}</motion.p>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5">
             {features.map(({ key, Icon, theme, title, desc }) => (
               <motion.div
@@ -396,7 +396,7 @@ export default function Landing() {
           className="max-w-3xl mx-auto text-center"
         >
           <motion.h2 variants={fadeUp} className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1A1F36] mb-2.5">{t('landing.how.title', lang)}</motion.h2>
-          <motion.p variants={fadeUp} className="text-sm sm:text-base text-[#64748B] mb-8 sm:mb-12">{t('landing.how.subtitle', lang)}</motion.p>
+          <motion.p variants={fadeUp} className="text-sm sm:text-base text-[#475569] mb-8 sm:mb-12">{t('landing.how.subtitle', lang)}</motion.p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8">
             {steps.map(({ step, title, desc }) => (
               <motion.div key={step} variants={fadeUp} className="text-center">
@@ -404,7 +404,7 @@ export default function Landing() {
                   {step}
                 </div>
                 <h3 className="text-sm sm:text-base font-bold text-[#1A1F36] mb-1">{title}</h3>
-                <p className="text-sm text-[#64748B]">{desc}</p>
+                <p className="text-sm text-[#475569]">{desc}</p>
               </motion.div>
             ))}
           </div>
@@ -424,8 +424,8 @@ export default function Landing() {
           <motion.p variants={fadeUp} className="text-sm font-semibold text-[#6F5AE8] mb-6 sm:mb-7">{t('landing.about.tagline', lang)}</motion.p>
 
           <motion.div variants={fadeUp} className="space-y-3 mb-7">
-            <p className="text-sm sm:text-[15px] text-[#64748B] leading-relaxed">{t('landing.about.p1', lang)}</p>
-            <p className="text-sm sm:text-[15px] text-[#64748B] leading-relaxed">{t('landing.about.p2', lang)}</p>
+            <p className="text-sm sm:text-[15px] text-[#475569] leading-relaxed">{t('landing.about.p1', lang)}</p>
+            <p className="text-sm sm:text-[15px] text-[#475569] leading-relaxed">{t('landing.about.p2', lang)}</p>
           </motion.div>
 
           <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-center gap-2 mb-8">
@@ -460,7 +460,7 @@ export default function Landing() {
           </div>
           <div className="text-center bg-white/90 backdrop-blur rounded-[28px] sm:rounded-[32px] border border-[#EEE9FB] shadow-[0_30px_70px_-30px_rgba(111,90,232,0.4)] px-6 py-12 sm:px-10 sm:py-16">
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1A1F36] mb-3">{t('landing.cta2.title', lang)}</h2>
-            <p className="text-sm sm:text-base text-[#64748B] mb-7">{t('landing.cta2.subtitle', lang)}</p>
+            <p className="text-sm sm:text-base text-[#475569] mb-7">{t('landing.cta2.subtitle', lang)}</p>
             <button
               onClick={() => navigate('/register')}
               className="px-7 py-3.5 rounded-2xl bg-gradient-to-r from-[#6F5AE8] to-[#8B5CF6] text-white text-sm font-bold shadow-[0_14px_32px_-10px_rgba(111,90,232,0.6)] hover:shadow-[0_18px_38px_-8px_rgba(111,90,232,0.7)] hover:-translate-y-0.5 active:scale-[0.98] transition-all inline-flex items-center gap-2"

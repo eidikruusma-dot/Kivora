@@ -36,7 +36,7 @@ export default function PublicFooter() {
             <Link to="/terms"   className="hover:text-[#1A1F36] transition-colors">{t('footer.terms',   lang)}</Link>
             <Link to="/contact" className="hover:text-[#1A1F36] transition-colors">{t('footer.contact', lang)}</Link>
           </div>
-          <p className="text-xs text-[#94A3B8]">© {new Date().getFullYear()} Kivora. {t('footer.copyright', lang)}</p>
+          <p className="text-xs text-[#475569]">© {new Date().getFullYear()} Kivora. {t('footer.copyright', lang)}</p>
         </div>
       </div>
     </footer>
