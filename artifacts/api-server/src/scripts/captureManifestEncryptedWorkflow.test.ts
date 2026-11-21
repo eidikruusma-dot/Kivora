@@ -102,5 +102,21 @@ await group("8. New secrets this workflow depends on are each referenced exactly
   );
 });
 
+await group("9. Verbose Firebase/gRPC/Google-SDK debug logging is never enabled — the SDK's own internal logs could otherwise bypass this project's own sanitized error reporting entirely", () => {
+  const verboseLoggingVars = [
+    "GRPC_VERBOSITY",
+    "GRPC_TRACE",
+    "GOOGLE_SDK_NODE_LOGGING",
+    "FIRESTORE_ENABLE_LOGGING",
+    "DEBUG",
+    "NODE_DEBUG",
+    "ACTIONS_STEP_DEBUG",
+    "ACTIONS_RUNNER_DEBUG",
+  ];
+  for (const varName of verboseLoggingVars) {
+    assert(!src.includes(varName), `${varName} is never set anywhere in this workflow`);
+  }
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

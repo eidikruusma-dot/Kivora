@@ -22,7 +22,14 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { main, buildSafeManifestExport, printSafeSummary, type CaptureManifestEncryptedSummary } from "./captureManifestEncrypted.js";
+import {
+  main,
+  buildSafeManifestExport,
+  printSafeSummary,
+  formatSafeError,
+  ErrorCode,
+  type CaptureManifestEncryptedSummary,
+} from "./captureManifestEncrypted.js";
 import { runCleanup, type FirestoreLike, type DocRefLike, type CollRefLike, type TimestampLike } from "./testDataCleanup.js";
 import { encryptBackup, decryptBackup, BackupDecryptionError } from "./backupEncryption.js";
 
@@ -135,6 +142,7 @@ await group("2. main() requires EXPECTED_UID before any Admin call", async () =>
     const code = await main(["someone@example.com"], {});
     assert(code === 1, "returns exit code 1 when EXPECTED_UID is missing");
     assert(messages.some((m) => m.includes("EXPECTED_UID")), "the specific, named error mentions EXPECTED_UID");
+    assert(messages.some((m) => m.includes(ErrorCode.MISSING_EXPECTED_UID)), "the sanitized error carries the predefined error code, not a raw exception message");
   } finally {
     console.error = originalError;
   }
@@ -150,6 +158,10 @@ await group("3. main() requires EXPECTED_PROJECT_ID before any Admin call", asyn
     const code = await main(["someone@example.com"], { EXPECTED_UID: "u1" });
     assert(code === 1, "returns exit code 1 when EXPECTED_PROJECT_ID is missing");
     assert(messages.some((m) => m.includes("EXPECTED_PROJECT_ID")), "the specific, named error mentions EXPECTED_PROJECT_ID");
+    assert(
+      messages.some((m) => m.includes(ErrorCode.MISSING_EXPECTED_PROJECT_ID)),
+      "the sanitized error carries the predefined error code, not a raw exception message",
+    );
   } finally {
     console.error = originalError;
   }
@@ -168,7 +180,11 @@ await group("4. main() rejects a FIREBASE_PROJECT_ID/EXPECTED_PROJECT_ID mismatc
       FIREBASE_PROJECT_ID: "some-other-project",
     });
     assert(code === 1, "returns exit code 1 on a project id mismatch");
-    assert(messages.some((m) => m.includes("Projekti ID lahknevus")), "the mismatch is named specifically");
+    assert(messages.some((m) => m.includes(ErrorCode.PROJECT_ID_MISMATCH)), "the mismatch is named by its predefined error code");
+    assert(
+      !messages.some((m) => m.includes("expected-project") || m.includes("some-other-project")),
+      "neither actual project id VALUE is echoed into the log — only the fact that they differ",
+    );
   } finally {
     console.error = originalError;
   }
@@ -188,19 +204,38 @@ await group("5. main() requires MANIFEST_ENCRYPTION_PASSPHRASE before any Admin 
     });
     assert(code === 1, "returns exit code 1 when the passphrase is missing");
     assert(messages.some((m) => m.includes("MANIFEST_ENCRYPTION_PASSPHRASE")), "the specific, named error mentions the passphrase variable");
+    assert(
+      messages.some((m) => m.includes(ErrorCode.MISSING_PASSPHRASE)),
+      "the sanitized error carries the predefined error code, not a raw exception message",
+    );
   } finally {
     console.error = originalError;
   }
 });
 
 await group("6. main() fails safely when Admin credentials are absent, once every prior gate has passed", async () => {
-  const code = await main(["someone@example.com"], {
-    EXPECTED_UID: "u1",
-    EXPECTED_PROJECT_ID: "p1",
-    FIREBASE_PROJECT_ID: "p1",
-    MANIFEST_ENCRYPTION_PASSPHRASE: "a-passphrase",
-  });
+  const originalError = console.error;
+  const messages: string[] = [];
+  console.error = (msg: unknown) => {
+    messages.push(String(msg));
+  };
+  let code: number;
+  try {
+    code = await main(["someone@example.com"], {
+      EXPECTED_UID: "u1",
+      EXPECTED_PROJECT_ID: "p1",
+      FIREBASE_PROJECT_ID: "p1",
+      MANIFEST_ENCRYPTION_PASSPHRASE: "a-passphrase",
+    });
+  } finally {
+    console.error = originalError;
+  }
   assert(code === 1, "returns exit code 1 when Admin is unavailable, without contacting Firebase");
+  assert(messages.some((m) => m.includes(ErrorCode.ADMIN_INIT_FAILED)), "the sanitized error carries the predefined ADMIN_INIT_FAILED code");
+  assert(
+    !messages.some((m) => /missing required environment variable|FIREBASE_PRIVATE_KEY|FIREBASE_CLIENT_EMAIL/.test(m)),
+    "the real firebaseAdmin.ts exception text (env var names, config detail) is never echoed into this file's own log output — only the predefined code and category are",
+  );
 });
 
 // ── 7. Structural proof: this file cannot enter execute mode, cannot
@@ -240,6 +275,115 @@ await group("9. captureManifestEncrypted.ts never logs the passphrase or raw man
     assert(!call.includes("passphrase"), `a console call never embeds the passphrase variable: ${call.slice(0, 40)}...`);
     assert(!call.includes("capturedManifest"), `a console call never embeds the raw captured manifest: ${call.slice(0, 40)}...`);
     assert(!call.includes("safeExport.manifest"), `a console call never embeds the safe-export's manifest field directly: ${call.slice(0, 40)}...`);
+  }
+});
+
+await group("9b. captureManifestEncrypted.ts no longer logs a raw exception's .message or String(err) anywhere", () => {
+  const src = readFileSync(resolve(process.cwd(), "src/scripts/captureManifestEncrypted.ts"), "utf8");
+  assert(!src.includes("err.message"), "err.message is never read anywhere in this file — see formatSafeError()'s own doc comment");
+  assert(!src.includes("String(err)"), "String(err) is never used as a fallback anywhere in this file either");
+  assert(!src.includes("err.stack"), "err.stack is never read");
+  assert(!src.includes("err.code"), "err.code (a Firebase-SDK-controlled string) is never read");
+  assert(src.includes("formatSafeError("), "every error path routes through the single, sanitized formatter instead");
+});
+
+await group("9c. runCaptureManifestEncryptedCli.ts's own catch-all backstop is sanitized the same way", () => {
+  const src = readFileSync(resolve(process.cwd(), "src/scripts/runCaptureManifestEncryptedCli.ts"), "utf8");
+  assert(!src.includes("err.message"), "the CLI entry point's own .catch() never reads err.message either");
+  assert(!src.includes("String(err)"), "nor does it fall back to String(err)");
+  assert(src.includes("formatSafeError(ErrorCode.UNEXPECTED_CLI_FAILURE"), "it reports any unexpected async failure through the same sanitized formatter, with its own predefined code");
+});
+
+await group(
+  "9d. formatSafeError NEVER echoes deliberately sensitive, fabricated error content — fake emails, Firestore paths, document ids, and credential-shaped strings — for ANY defined error code",
+  () => {
+    const maliciousMessages = [
+      "There is no user record corresponding to the identifier: evil.user@example.com",
+      "Permission denied on resource: projects/kivora-f1281/databases/(default)/documents/users/REAL_UID_98765/aiConversations/SECRET_CONV_ID/messages/SECRET_MSG_ID",
+      "Invalid API key: AIzaSyFAKEKEY1234567890ABCDEFGHIJKLMNOPQ",
+      "Failed to parse private key: -----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj\n-----END PRIVATE KEY-----",
+      "client_email mismatch for firebase-adminsdk-abc123@kivora-f1281.iam.gserviceaccount.com",
+    ];
+
+    class FakeErrorWithSensitiveStackAndCode extends Error {
+      code = "auth/user-not-found: evil.user@example.com";
+      constructor(message: string) {
+        super(message);
+        // A fabricated stack deliberately containing a Firestore path and
+        // an email, standing in for whatever a real third-party SDK or
+        // Node's own runtime might someday put there.
+        this.stack = `${this.name}: ${message}\n    at users/REAL_UID_12345/tasks/SECRET_TASK_ID (leaked.stack:1:1)\n    for account leaked@example.com`;
+      }
+    }
+
+    const sensitiveFragments = [
+      "evil.user@example.com",
+      "REAL_UID_98765",
+      "SECRET_CONV_ID",
+      "SECRET_MSG_ID",
+      "AIzaSyFAKEKEY1234567890ABCDEFGHIJKLMNOPQ",
+      "BEGIN PRIVATE KEY",
+      "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj",
+      "firebase-adminsdk-abc123@kivora-f1281.iam.gserviceaccount.com",
+      "REAL_UID_12345",
+      "SECRET_TASK_ID",
+      "leaked@example.com",
+      "auth/user-not-found",
+    ];
+
+    for (const code of Object.values(ErrorCode)) {
+      for (const maliciousMessage of maliciousMessages) {
+        const formatted = formatSafeError(code, new Error(maliciousMessage));
+        for (const fragment of sensitiveFragments.filter((f) => maliciousMessage.includes(f))) {
+          assert(!formatted.includes(fragment), `formatSafeError(${code}) never echoes "${fragment}" from a plain Error's message`);
+        }
+      }
+
+      const fakeErr = new FakeErrorWithSensitiveStackAndCode("Lookup failed for leaked@example.com");
+      const formattedFromFakeErr = formatSafeError(code, fakeErr);
+      for (const fragment of sensitiveFragments) {
+        assert(
+          !formattedFromFakeErr.includes(fragment),
+          `formatSafeError(${code}) never echoes "${fragment}" even from an exception whose .code and .stack are deliberately poisoned with sensitive content`,
+        );
+      }
+      assert(
+        !formattedFromFakeErr.includes("auth/user-not-found: evil.user@example.com"),
+        `formatSafeError(${code}) never reads the exception's .code property at all`,
+      );
+    }
+
+    // No err argument at all (the plain validation-gate call sites) is
+    // just as safe, trivially — confirmed for completeness.
+    for (const code of Object.values(ErrorCode)) {
+      const formatted = formatSafeError(code);
+      for (const fragment of sensitiveFragments) {
+        assert(!formatted.includes(fragment), `formatSafeError(${code}) with no exception argument still never contains "${fragment}"`);
+      }
+    }
+  },
+);
+
+await group("9e. formatSafeError's output is fully predictable: fixed code, fixed category, and only an allowlisted exception-class name", () => {
+  for (const code of Object.values(ErrorCode)) {
+    const withoutErr = formatSafeError(code);
+    assert(withoutErr.startsWith(`VIGA [${code}] [`), `formatSafeError(${code}) always starts with the code itself, verbatim`);
+
+    const withPlainError = formatSafeError(code, new Error("anything"));
+    assert(withPlainError.includes("(erindi liik: Error)"), `a plain Error's allowlisted constructor name ("Error") is surfaced for ${code}`);
+
+    class SomeExoticUnrecognizedErrorClass extends Error {}
+    const withExoticError = formatSafeError(code, new SomeExoticUnrecognizedErrorClass("anything"));
+    assert(
+      withExoticError.includes("(erindi liik: Unknown)") && !withExoticError.includes("SomeExoticUnrecognizedErrorClass"),
+      `an exception class NOT on the safe allowlist is reported as "Unknown" for ${code}, never by its real (unreviewed) class name`,
+    );
+
+    const withNonErrorThrow = formatSafeError(code, "a plain string throw, not even an Error instance");
+    assert(
+      withNonErrorThrow.includes("(erindi liik: Unknown)") && !withNonErrorThrow.includes("a plain string throw"),
+      `a non-Error thrown value is also reported as "Unknown" for ${code}, never by its own content`,
+    );
   }
 });
 

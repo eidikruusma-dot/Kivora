@@ -22,13 +22,17 @@
  * captureManifestEncrypted.ts's own doc comment.
  */
 
-import { main } from "./captureManifestEncrypted.js";
+import { main, formatSafeError, ErrorCode } from "./captureManifestEncrypted.js";
 
 main(process.argv.slice(2), process.env)
   .then((exitCode) => {
     process.exit(exitCode);
   })
   .catch((err: unknown) => {
-    console.error(err instanceof Error ? err.message : String(err));
+    // Same sanitized reporting as every error path inside main() itself —
+    // this is the backstop for anything main() did not already catch, so
+    // it must never fall back to printing the raw exception. See
+    // captureManifestEncrypted.ts's own doc comment on formatSafeError().
+    console.error(formatSafeError(ErrorCode.UNEXPECTED_CLI_FAILURE, err));
     process.exit(1);
   });

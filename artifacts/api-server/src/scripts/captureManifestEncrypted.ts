@@ -63,6 +63,102 @@ function generateManifestExportId(): string {
   return `mf_${Date.now()}_${randomBytes(4).toString("hex")}`;
 }
 
+// ── Sanitized error reporting ────────────────────────────────────────────
+//
+// Nothing below this point ever logs an exception's own `.message`,
+// `.stack`, `.code`, or any other field — a Firebase Admin SDK error (or
+// any other third-party library error reachable from this file) is
+// written and worded by code this project does not control, and cannot
+// be relied on to never embed an account email, a Firestore path, a
+// document id, or similar into that text. Every error this file reports
+// instead uses ONE of the fixed, predefined codes below, each mapped to
+// a fully static, hand-written Estonian sentence — the diagnostic value
+// comes from WHICH code fired (that alone already says which operation
+// failed) and its CATEGORY, never from inspecting the real exception's
+// content.
+export const ErrorCode = {
+  TARGET_NOT_RESOLVED: "TARGET_NOT_RESOLVED",
+  MISSING_EXPECTED_UID: "MISSING_EXPECTED_UID",
+  MISSING_EXPECTED_PROJECT_ID: "MISSING_EXPECTED_PROJECT_ID",
+  PROJECT_ID_MISMATCH: "PROJECT_ID_MISMATCH",
+  MISSING_PASSPHRASE: "MISSING_PASSPHRASE",
+  ADMIN_INIT_FAILED: "ADMIN_INIT_FAILED",
+  USER_LOOKUP_FAILED: "USER_LOOKUP_FAILED",
+  UID_MISMATCH: "UID_MISMATCH",
+  MANIFEST_CAPTURE_FAILED: "MANIFEST_CAPTURE_FAILED",
+  ENCRYPTION_FAILED: "ENCRYPTION_FAILED",
+  ARTIFACT_WRITE_FAILED: "ARTIFACT_WRITE_FAILED",
+  UNEXPECTED_CLI_FAILURE: "UNEXPECTED_CLI_FAILURE",
+} as const;
+export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
+
+export type ErrorCategory = "configuration" | "authentication" | "data_access" | "cryptography" | "io" | "unknown";
+
+const SAFE_ERROR_INFO: Record<ErrorCode, { category: ErrorCategory; safeMessage: string }> = {
+  TARGET_NOT_RESOLVED: {
+    category: "configuration",
+    safeMessage:
+      "Sihtkontot ei määratud. Üks järgnevast on vajalik: CLI argument, OWNER_EMAIL keskkonnamuutuja, " +
+      "või OWNER_UID keskkonnamuutuja. Vaikekontot ei ole.",
+  },
+  MISSING_EXPECTED_UID: { category: "configuration", safeMessage: "Keskkonnamuutuja EXPECTED_UID on kohustuslik ja puudub." },
+  MISSING_EXPECTED_PROJECT_ID: { category: "configuration", safeMessage: "Keskkonnamuutuja EXPECTED_PROJECT_ID on kohustuslik ja puudub." },
+  PROJECT_ID_MISMATCH: { category: "configuration", safeMessage: "FIREBASE_PROJECT_ID ei vasta EXPECTED_PROJECT_ID väärtusele. Katkestan." },
+  MISSING_PASSPHRASE: { category: "configuration", safeMessage: "Keskkonnamuutuja MANIFEST_ENCRYPTION_PASSPHRASE on kohustuslik ja puudub." },
+  ADMIN_INIT_FAILED: { category: "authentication", safeMessage: "Firebase Admin SDK initsialiseerimine ebaõnnestus." },
+  USER_LOOKUP_FAILED: { category: "authentication", safeMessage: "Sihtkasutaja otsimine Firebase Authenticationist ebaõnnestus." },
+  UID_MISMATCH: { category: "authentication", safeMessage: "Lahendatud kasutaja UID ei vasta EXPECTED_UID väärtusele. Katkestan." },
+  MANIFEST_CAPTURE_FAILED: { category: "data_access", safeMessage: "Manifesti hõivamine Firestore'ist ebaõnnestus." },
+  ENCRYPTION_FAILED: { category: "cryptography", safeMessage: "Manifesti krüpteerimine ebaõnnestus — faili EI kirjutatud." },
+  ARTIFACT_WRITE_FAILED: { category: "io", safeMessage: "Krüpteeritud faili kirjutamine kettale ebaõnnestus." },
+  UNEXPECTED_CLI_FAILURE: { category: "unknown", safeMessage: "Ootamatu, käsitlemata viga CLI käivituse juures." },
+};
+
+/**
+ * A small, explicit allowlist of exception CONSTRUCTOR NAMES safe to
+ * surface alongside a code — this is the only thing this file ever reads
+ * off a real exception. It adds a little diagnostic texture (was this a
+ * plain bug in this code, or something the Firebase/Google SDK itself
+ * raised?) without ever touching the exception's own message, stack, or
+ * any other field, which this file does not control and cannot assume
+ * is free of an email, a Firestore path, or similar. A constructor name
+ * not on this list is never surfaced — it becomes "Unknown" instead, so
+ * an unanticipated future error class can never introduce a new,
+ * unreviewed string into this output.
+ */
+const SAFE_ERROR_NAMES: ReadonlySet<string> = new Set([
+  "Error",
+  "TypeError",
+  "RangeError",
+  "SyntaxError",
+  "FirebaseAppError",
+  "FirebaseAuthError",
+  "BackupDecryptionError",
+]);
+
+function safeErrorName(err: unknown): string {
+  if (!(err instanceof Error)) return "Unknown";
+  const name = err.constructor?.name ?? err.name;
+  return name && SAFE_ERROR_NAMES.has(name) ? name : "Unknown";
+}
+
+/**
+ * Formats one safe, fully-predictable log line for a failed operation.
+ * The message text is ALWAYS one of SAFE_ERROR_INFO's own static
+ * strings; the only exception-derived fragment is safeErrorName()'s
+ * allowlisted constructor name. See captureManifestEncrypted.test.ts's
+ * regression tests, which feed this function deliberately fabricated,
+ * sensitive-looking error messages (fake emails, Firestore paths,
+ * document ids, credential-shaped strings) and assert that none of that
+ * fabricated content ever appears in the formatted result, for every
+ * code this file defines.
+ */
+export function formatSafeError(code: ErrorCode, err?: unknown): string {
+  const info = SAFE_ERROR_INFO[code];
+  const suffix = err !== undefined ? ` (erindi liik: ${safeErrorName(err)})` : "";
+  return `VIGA [${code}] [${info.category}]: ${info.safeMessage}${suffix}`;
+}
+
 /**
  * The exact shape written into the encrypted artifact. Every manifest
  * entry's `updateTime` (a TimestampLike, not JSON-serializable on its
@@ -151,39 +247,29 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<numb
   // ── Fail fast on configuration problems, before touching Firebase at all ──
   const target = resolveTargetIdentifier(argv, env);
   if (!target) {
-    console.error(
-      "Sihtkontot ei määratud. Üks järgnevast on vajalik:\n" +
-        "  - CLI argument: node runCaptureManifestEncrypted.mjs <e-post-või-uid>\n" +
-        "  - OWNER_EMAIL keskkonnamuutuja\n" +
-        "  - OWNER_UID keskkonnamuutuja\n" +
-        "Ei arva vaikimisi kontot ära — vaikekontot ei ole.",
-    );
+    console.error(formatSafeError(ErrorCode.TARGET_NOT_RESOLVED));
     return 1;
   }
 
   const expectedUid = env["EXPECTED_UID"];
   if (!expectedUid) {
-    console.error("Keskkonnamuutuja EXPECTED_UID on kohustuslik — täpne, selgesõnaline UID kontroll on vajalik enne mistahes toimingut.");
+    console.error(formatSafeError(ErrorCode.MISSING_EXPECTED_UID));
     return 1;
   }
 
   const expectedProjectId = env["EXPECTED_PROJECT_ID"];
   if (!expectedProjectId) {
-    console.error("Keskkonnamuutuja EXPECTED_PROJECT_ID on kohustuslik — täpne projekti ID kontroll on vajalik enne mistahes toimingut.");
+    console.error(formatSafeError(ErrorCode.MISSING_EXPECTED_PROJECT_ID));
     return 1;
   }
   if (env["FIREBASE_PROJECT_ID"] !== expectedProjectId) {
-    console.error(`Projekti ID lahknevus: FIREBASE_PROJECT_ID ei vasta EXPECTED_PROJECT_ID-le ("${expectedProjectId}"). Katkestan.`);
+    console.error(formatSafeError(ErrorCode.PROJECT_ID_MISMATCH));
     return 1;
   }
 
   const passphrase = env["MANIFEST_ENCRYPTION_PASSPHRASE"];
   if (!passphrase) {
-    console.error(
-      "Keskkonnamuutuja MANIFEST_ENCRYPTION_PASSPHRASE on vajalik — see on konto omaniku enda valitud " +
-        "parool, mida see skript ei genereeri ega salvesta. Ilma selleta ei krüpteerita midagi, nii et " +
-        "manifesti hõivamist ei käivitata üldse.",
-    );
+    console.error(formatSafeError(ErrorCode.MISSING_PASSPHRASE));
     return 1;
   }
 
@@ -193,7 +279,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<numb
     auth = getFirebaseAdminAuth();
     firestore = getFirebaseAdminFirestore();
   } catch (err) {
-    console.error(`Firebase Admin ei ole kättesaadav: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(formatSafeError(ErrorCode.ADMIN_INIT_FAILED, err));
     return 1;
   }
 
@@ -202,12 +288,12 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<numb
     const user = target.mode === "email" ? await auth.getUserByEmail(target.value) : await auth.getUser(target.value);
     uid = user.uid;
   } catch (err) {
-    console.error(`Kasutajat ei leitud (${target.mode}="${target.value}"): ${err instanceof Error ? err.message : String(err)}`);
+    console.error(formatSafeError(ErrorCode.USER_LOOKUP_FAILED, err));
     return 1;
   }
 
   if (uid !== expectedUid) {
-    console.error("UID lahknevus: lahendatud kasutaja ei vasta EXPECTED_UID-le. Katkestan enne mistahes toimingut.");
+    console.error(formatSafeError(ErrorCode.UID_MISMATCH));
     return 1;
   }
 
@@ -217,7 +303,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<numb
   try {
     result = await runCleanup(firestore, uid, { mode: "capture-manifest", log: (msg) => console.log(msg) });
   } catch (err) {
-    console.error(`Manifesti hõivamine ebaõnnestus: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(formatSafeError(ErrorCode.MANIFEST_CAPTURE_FAILED, err));
     return 1;
   }
 
@@ -232,7 +318,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<numb
     const plaintext = Buffer.from(JSON.stringify(safeExport), "utf8");
     encryptedBuffer = encryptBackup(plaintext, passphrase);
   } catch (err) {
-    console.error(`Manifesti krüpteerimine ebaõnnestus — faili EI kirjutata: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(formatSafeError(ErrorCode.ENCRYPTION_FAILED, err));
     return 1;
   }
 
@@ -240,7 +326,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<numb
   try {
     writeFileSync(artifactPath, encryptedBuffer);
   } catch (err) {
-    console.error(`Krüpteeritud faili kirjutamine ebaõnnestus: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(formatSafeError(ErrorCode.ARTIFACT_WRITE_FAILED, err));
     return 1;
   }
 

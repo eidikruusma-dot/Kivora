@@ -33,11 +33,20 @@ async function group(name: string, fn: () => void | Promise<void>): Promise<void
 
 await group("1. runCaptureManifestEncryptedCli.ts actually calls main() at module scope, not just imports it", () => {
   const src = readFileSync(resolve(process.cwd(), "src/scripts/runCaptureManifestEncryptedCli.ts"), "utf8");
-  assert(src.includes('import { main } from "./captureManifestEncrypted.js"'), "imports main from the pure core module");
+  assert(/import \{[^}]*\bmain\b[^}]*\} from "\.\/captureManifestEncrypted\.js"/.test(src), "imports main from the pure core module");
   assert(/main\(process\.argv\.slice\(2\), process\.env\)/.test(src), "calls main() with the standard (argv, env) signature");
   assert(src.includes(".then("), "the main() call is chained to .then(...) so a resolved exit code is actually used");
   assert(/\.then\(\s*\(exitCode\)\s*=>\s*\{\s*process\.exit\(exitCode\)/.test(src), "the success path calls process.exit() with main()'s own exit code");
   assert(src.includes(".catch("), "an unexpected rejection also exits non-zero");
+});
+
+await group("1b. runCaptureManifestEncryptedCli.ts's catch-all backstop is sanitized, not a raw exception dump", () => {
+  const src = readFileSync(resolve(process.cwd(), "src/scripts/runCaptureManifestEncryptedCli.ts"), "utf8");
+  assert(/import \{[^}]*\bformatSafeError\b[^}]*\bErrorCode\b[^}]*\} from "\.\/captureManifestEncrypted\.js"/.test(src), "imports the shared sanitized-error formatter and its codes from the core module");
+  assert(!src.includes("err.message"), "the CLI's own .catch() never reads err.message");
+  assert(!src.includes("String(err)"), "nor does it fall back to String(err)");
+  assert(src.includes("formatSafeError(ErrorCode.UNEXPECTED_CLI_FAILURE"), "any error this backstop reports uses the predefined UNEXPECTED_CLI_FAILURE code");
+  assert(/\.catch\(\s*\(err[^)]*\)\s*=>\s*\{[\s\S]*process\.exit\(1\)/.test(src), "the backstop still exits with a nonzero code, so GitHub Actions reports the failure correctly");
 });
 
 await group("2. captureManifestEncrypted.ts (the core) stays side-effect-free — it must NOT self-invoke", () => {
