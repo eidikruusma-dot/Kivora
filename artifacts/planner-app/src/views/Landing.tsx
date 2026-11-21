@@ -7,7 +7,15 @@ import { t } from '@/lib/translations'
 import PublicHeader from '@/components/layout/PublicHeader'
 import PublicFooter from '@/components/layout/PublicFooter'
 import AppPreviewMock from '@/components/landing/AppPreviewMock'
-import { CheckSquare, Calendar, StickyNote, Activity, Target, Sparkles, ArrowRight } from 'lucide-react'
+import PhoneFrame from '@/components/landing/PhoneFrame'
+import FloatingFeatureCard from '@/components/landing/FloatingFeatureCard'
+import KivoraSymbolNew from '@/components/landing/KivoraSymbolNew'
+import HeroWaves from '@/components/landing/HeroWaves'
+import PlantIllustration from '@/components/landing/PlantIllustration'
+import CoffeeCupIllustration from '@/components/landing/CoffeeCupIllustration'
+import DeviceSyncIllustration from '@/components/landing/DeviceSyncIllustration'
+import { useHeroDemoSequence } from '@/components/landing/useHeroDemoSequence'
+import { CheckSquare, Calendar, StickyNote, Activity, Target, Sparkles, ArrowRight, Zap, RefreshCw } from 'lucide-react'
 
 type FeatureKey = 'tasks' | 'calendar' | 'notes' | 'habits' | 'goals' | 'ai'
 
@@ -72,19 +80,97 @@ export default function Landing() {
     t(`landing.principle.${i}` as Parameters<typeof t>[0], lang)
   )
 
+  // Single scripted demo sequence shared by the phone screen and the
+  // floating feature cards around it, so they animate on the same beat.
+  const demo = useHeroDemoSequence()
+  const { step } = demo
+  const tasksTotal = 8
+  const tasksDone = step >= 2 ? 6 : 5
+  const goalPct = step >= 5 ? 78 : 65
+  const calendarEvents = [
+    { key: 'event1', label: t('landing.preview.event1', lang), time: '10:00', color: '#6F5AE8' },
+    { key: 'event2', label: t('landing.preview.event2', lang), time: '18:30', color: '#EC4899' },
+    ...(step >= 4 ? [{ key: 'event3', label: t('landing.preview.event3', lang), time: '15:00', color: '#10B981' }] : []),
+  ]
+
+  const floatingTasksCard = (
+    <FloatingFeatureCard icon={CheckSquare} iconColor="text-blue-600" iconBg="bg-blue-50" title={t('dash.tasks.title', lang)}>
+      <p className="text-sm font-bold text-[#1A1F36] mb-1.5">
+        {tasksDone}/{tasksTotal} {t('landing.hero.doneSuffix', lang)}
+      </p>
+      <div className="h-1.5 rounded-full bg-[#F1EFFB] overflow-hidden">
+        <div className="h-full rounded-full bg-blue-500 transition-[width] duration-700 ease-out" style={{ width: `${(tasksDone / tasksTotal) * 100}%` }} />
+      </div>
+    </FloatingFeatureCard>
+  )
+
+  const floatingGoalsCard = (
+    <FloatingFeatureCard icon={Target} iconColor="text-orange-600" iconBg="bg-orange-50" title={t('dash.goals.title', lang)}>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs text-[#1A1F36] truncate pr-1">{t('landing.preview.goal1', lang)}</span>
+        <span className="text-xs font-bold text-orange-600 flex-shrink-0">{goalPct}%</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-[#F1EFFB] overflow-hidden">
+        <div className="h-full rounded-full bg-orange-500 transition-[width] duration-700 ease-out" style={{ width: `${goalPct}%` }} />
+      </div>
+    </FloatingFeatureCard>
+  )
+
+  const floatingCalendarCard = (
+    <FloatingFeatureCard icon={Calendar} iconColor="text-sky-600" iconBg="bg-sky-50" title={t('dash.calendar.title', lang)}>
+      <div className="space-y-1.5">
+        {calendarEvents.map((ev) => (
+          <div key={ev.key} className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: ev.color }} />
+            <span className="text-[10px] text-[#94A3B8] flex-shrink-0">{ev.time}</span>
+            <span className="text-xs text-[#1A1F36] font-medium truncate">{ev.label}</span>
+          </div>
+        ))}
+      </div>
+    </FloatingFeatureCard>
+  )
+
+  const floatingHabitsCard = (
+    <FloatingFeatureCard icon={Activity} iconColor="text-emerald-600" iconBg="bg-emerald-50" title={t('dash.habits.title', lang)}>
+      <p className="text-sm font-bold text-[#1A1F36] mb-1.5">
+        4/5 {t('dash.habits.done', lang)}
+      </p>
+      <div className="flex items-center gap-1.5">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <span
+            key={i}
+            className={`w-5 h-5 rounded-full flex items-center justify-center ${i < 4 ? 'bg-emerald-500' : 'bg-[#F1EFFB]'}`}
+          >
+            {i < 4 && (
+              <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </span>
+        ))}
+      </div>
+    </FloatingFeatureCard>
+  )
+
+  const bottomChips = [
+    { icon: Zap, labelKey: 'landing.hero.chip1' as const, bg: 'bg-blue-50', color: 'text-blue-600' },
+    { icon: Target, labelKey: 'landing.hero.chip2' as const, bg: 'bg-orange-50', color: 'text-orange-600' },
+    { icon: Sparkles, labelKey: 'landing.hero.chip3' as const, bg: 'bg-[#EDE9FB]', color: 'text-[#6F5AE8]' },
+    { icon: RefreshCw, labelKey: 'landing.hero.chip4' as const, bg: 'bg-emerald-50', color: 'text-emerald-600' },
+  ]
+
   return (
     <div className="min-h-[100dvh] bg-gradient-to-b from-[#FBFAFF] via-[#F8F6FD] to-[#F4F1FB] overflow-x-hidden">
       <PublicHeader />
 
       {/* Hero — the one "effective and modern" section; everything below stays minimal */}
-      <section className="relative pt-24 pb-14 px-4 sm:px-6 sm:pt-32 sm:pb-20 overflow-hidden">
-        {/* Decorative background — pure CSS, no images, no layout impact.
-            Soft lavender/white glow blobs with a slow, cheap transform-only
-            float; disabled entirely under prefers-reduced-motion. */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
-          <div className="kv-landing-float-1 absolute -top-28 left-1/2 -translate-x-1/2 w-[36rem] h-[36rem] rounded-full bg-[#8B5CF6]/[0.14] blur-3xl" />
-          <div className="kv-landing-float-2 absolute top-24 right-[-8rem] w-80 h-80 rounded-full bg-[#6F5AE8]/[0.12] blur-3xl" />
-          <div className="absolute bottom-0 left-[-6rem] w-72 h-72 rounded-full bg-[#C4B5FD]/[0.18] blur-3xl" />
+      <section className="relative isolate pt-16 pb-14 px-4 sm:px-6 sm:pt-20 sm:pb-20 overflow-hidden">
+        {/* Decorative background — pure CSS/SVG, no raster images, no layout
+            impact. Soft lavender glow blobs + flowing wave ribbons, with a
+            slow, cheap transform-only float; disabled entirely under
+            prefers-reduced-motion. */}
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+          <HeroWaves className="absolute inset-0 w-full h-full" />
         </div>
 
         <motion.div
@@ -93,23 +179,20 @@ export default function Landing() {
           variants={staggerContainer}
           className="max-w-3xl mx-auto text-center"
         >
-          <motion.div
-            variants={fadeUp}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/80 backdrop-blur border border-[#EDE6FB] text-[#6F5AE8] text-xs font-semibold mb-4 sm:mb-6 shadow-sm"
-          >
-            <Sparkles size={14} />
-            {t('landing.badge', lang)}
+          <motion.div variants={fadeUp} className="flex items-center justify-center gap-2 mb-5">
+            <KivoraSymbolNew size={34} />
+            <span className="text-xl font-extrabold tracking-tight text-[#1A1F36]">Kivora</span>
           </motion.div>
           <motion.h1
             variants={fadeUp}
-            className="text-[2.75rem] leading-[1.05] sm:text-6xl lg:text-7xl font-extrabold tracking-tight mb-3 sm:mb-5"
+            className="text-[2.5rem] leading-[1.08] sm:text-5xl lg:text-6xl font-extrabold tracking-tight mb-3 sm:mb-5"
           >
             <span className="block text-[#1A1F36]">{t('landing.hero.title', lang)}</span>
             <span className="block bg-gradient-to-r from-[#6F5AE8] via-[#8B5CF6] to-[#6F5AE8] bg-clip-text text-transparent">
               {t('landing.hero.titleAccent', lang)}
             </span>
           </motion.h1>
-          <motion.p variants={fadeUp} className="text-base sm:text-lg text-[#64748B] leading-relaxed mb-6 sm:mb-8 max-w-xl mx-auto">
+          <motion.p variants={fadeUp} className="text-base sm:text-lg text-[#64748B] leading-relaxed mb-5 sm:mb-6 max-w-xl mx-auto">
             {t('landing.hero.subtitle', lang)}
           </motion.p>
           <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -128,10 +211,87 @@ export default function Landing() {
             </button>
           </motion.div>
           <motion.p variants={fadeUp} className="text-xs text-[#94A3B8] mt-3">{t('landing.cta.free', lang)}</motion.p>
+        </motion.div>
 
-          <motion.div variants={fadeUp} className="mt-6 sm:mt-16">
-            <AppPreviewMock lang={lang} />
-          </motion.div>
+        {/* Phone + floating feature cards */}
+        <motion.div
+          ref={demo.containerRef}
+          variants={fadeUp}
+          initial="hidden"
+          animate="visible"
+          className="relative mt-6 sm:mt-8 mx-auto max-w-4xl"
+        >
+          <PlantIllustration className="hidden lg:block absolute left-[-5rem] bottom-[-2rem] w-48 pointer-events-none" />
+          <CoffeeCupIllustration className="hidden lg:block absolute right-[-2rem] bottom-[0.5rem] w-32 pointer-events-none" />
+
+          <PhoneFrame>
+            <AppPreviewMock
+              lang={lang}
+              step={demo.step}
+              playing={demo.playing}
+              onTogglePlay={demo.togglePlaying}
+              shouldReduceMotion={demo.shouldReduceMotion}
+            />
+          </PhoneFrame>
+
+          {/* Desktop: cards float absolutely around the phone */}
+          <div className="kv-card-float-1 hidden md:block absolute left-[-1.5rem] top-10 w-56 lg:w-60">
+            <div className="rotate-[-4deg]">{floatingTasksCard}</div>
+          </div>
+          <div className="kv-card-float-2 hidden md:block absolute left-[-1rem] bottom-20 w-56 lg:w-60">
+            <div className="rotate-[3deg]">{floatingGoalsCard}</div>
+          </div>
+          <div className="kv-card-float-2 hidden md:block absolute right-[-1.5rem] top-16 w-56 lg:w-60">
+            <div className="rotate-[4deg]">{floatingCalendarCard}</div>
+          </div>
+          <div className="kv-card-float-1 hidden md:block absolute right-[-1rem] bottom-28 w-56 lg:w-60">
+            <div className="rotate-[-3deg]">{floatingHabitsCard}</div>
+          </div>
+
+          {/* Mobile: same four cards, plain 2-up grid below the phone — no
+              absolute positioning or float, so nothing can cause
+              horizontal scroll on small screens. */}
+          <div className="md:hidden grid grid-cols-2 gap-3 mt-6">
+            {floatingTasksCard}
+            {floatingGoalsCard}
+            {floatingCalendarCard}
+            {floatingHabitsCard}
+          </div>
+        </motion.div>
+
+        {/* Synced across devices */}
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.4 }}
+          variants={fadeUp}
+          className="mt-16 sm:mt-24 text-center max-w-sm mx-auto"
+        >
+          <DeviceSyncIllustration className="w-full mb-5" />
+          <p className="text-base sm:text-lg font-bold text-[#1A1F36]">{t('landing.hero.syncTitle', lang)}</p>
+          <p className="text-sm text-[#64748B] mt-1">{t('landing.hero.syncSubtitle', lang)}</p>
+        </motion.div>
+
+        {/* Four benefit chips */}
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.3 }}
+          variants={staggerContainer}
+          className="mt-10 sm:mt-14 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-2xl mx-auto"
+        >
+          {bottomChips.map(({ icon: Icon, labelKey, bg, color }) => (
+            <motion.div
+              key={labelKey}
+              variants={fadeUp}
+              className="flex flex-col items-center text-center gap-2 bg-white/70 backdrop-blur rounded-2xl border border-[#EEE9FB] px-3 py-4"
+            >
+              <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center`}>
+                <Icon size={17} className={color} />
+              </div>
+              <span className="text-xs font-semibold text-[#1A1F36]">{t(labelKey, lang)}</span>
+            </motion.div>
+          ))}
         </motion.div>
       </section>
 

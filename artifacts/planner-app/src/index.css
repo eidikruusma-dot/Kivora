@@ -526,6 +526,23 @@ html, body, #root {
   animation: kvLandingFloat2 13s ease-in-out infinite;
 }
 
+/* Smaller-amplitude variant for the floating feature cards around the
+   hero phone mockup — same transform-only technique, gentler motion. */
+@keyframes kvCardFloat1 {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+.kv-card-float-1 {
+  animation: kvCardFloat1 7s ease-in-out infinite;
+}
+@keyframes kvCardFloat2 {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(8px); }
+}
+.kv-card-float-2 {
+  animation: kvCardFloat2 8s ease-in-out infinite;
+}
+
 /* ── Task/habit completion flash ─────────────────────────────────────── */
 @keyframes kvFlashComplete {
   0%   { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); }
@@ -640,7 +657,9 @@ html, body, #root {
     animation: none;
   }
   .kv-landing-float-1,
-  .kv-landing-float-2 {
+  .kv-landing-float-2,
+  .kv-card-float-1,
+  .kv-card-float-2 {
     animation: none;
   }
   .kv-card {

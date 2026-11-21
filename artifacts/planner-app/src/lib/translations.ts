@@ -163,6 +163,22 @@ export type TranslationKey =
     | "landing.preview.summarySubtitle"
     | "landing.preview.playLabel"
     | "landing.preview.pauseLabel"
+    | "landing.preview.greeting"
+    | "landing.preview.greetingSubtitle"
+    | "landing.preview.aiBannerSubtitle"
+    | "landing.preview.aiBannerPlanning"
+    | "landing.preview.aiBannerPlanned"
+    | "landing.preview.welcomeTitle"
+    | "landing.preview.todayFocus"
+    | "landing.preview.tasksCountLabel"
+    | "landing.preview.eventsCountLabel"
+    | "landing.hero.syncTitle"
+    | "landing.hero.syncSubtitle"
+    | "landing.hero.chip1"
+    | "landing.hero.chip2"
+    | "landing.hero.chip3"
+    | "landing.hero.chip4"
+    | "landing.hero.doneSuffix"
     // ── Login ─────────────────────────────────────────────────────────────────
     | "login.title"
     | "login.subtitle"
@@ -1936,10 +1952,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "social.loading": "Laadib…",
         // landing
         "landing.badge": "Sinu isiklik tootlikkuse keskkond",
-        "landing.hero.title": "Sinu elu,",
-        "landing.hero.titleAccent": "lõpuks selge.",
+        "landing.hero.title": "Sinu nutikas",
+        "landing.hero.titleAccent": "elujuhtimise keskkond",
         "landing.hero.subtitle":
-            "Ülesanded, kalender, harjumused ja eesmärgid — kõik ühes kohas, ilma kaoseta.",
+            "Ülesanded, kalender, eesmärgid, harjumused ja AI-assistent — ühes kohas, kõigil sinu seadmetel.",
         "landing.cta.start": "Alusta tasuta",
         "landing.cta.login": "Logi sisse",
         "landing.cta.free": "Tasuta kasutamiseks. Krediitkaarti pole vaja.",
@@ -2004,6 +2020,22 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "landing.preview.summarySubtitle": "Kõik on kontrolli all.",
         "landing.preview.playLabel": "Esita demo",
         "landing.preview.pauseLabel": "Peata demo",
+        "landing.preview.greeting": "Tere, Kivora! 👋",
+        "landing.preview.greetingSubtitle": "Planeerime sinu päeva.",
+        "landing.preview.aiBannerSubtitle": "Küsi, planeeri, loo ja saa ideid.",
+        "landing.preview.aiBannerPlanning": "Planeerin sinu päeva…",
+        "landing.preview.aiBannerPlanned": "Sinu päev on planeeritud!",
+        "landing.preview.welcomeTitle": "Tere tulemast Kivorasse!",
+        "landing.preview.todayFocus": "Tänane fookus",
+        "landing.preview.tasksCountLabel": "ülesannet",
+        "landing.preview.eventsCountLabel": "sündmust",
+        "landing.hero.syncTitle": "Sünkroonselt kõigil seadmetel",
+        "landing.hero.syncSubtitle": "Telefonis, tahvlis ja arvutis.",
+        "landing.hero.chip1": "Rohkem korda",
+        "landing.hero.chip2": "Selged eesmärgid",
+        "landing.hero.chip3": "AI abi igal sammul",
+        "landing.hero.chip4": "Sünkroonne elu",
+        "landing.hero.doneSuffix": "tehtud",
         // login
         "login.title": "Logi sisse",
         "login.subtitle": "Tere tulemast tagasi.",
@@ -3951,10 +3983,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "social.loading": "Loading…",
         // landing
         "landing.badge": "Your personal productivity environment",
-        "landing.hero.title": "Your life,",
-        "landing.hero.titleAccent": "finally clear.",
+        "landing.hero.title": "Your smart",
+        "landing.hero.titleAccent": "life-management hub",
         "landing.hero.subtitle":
-            "Tasks, calendar, habits, and goals — all in one place, without the chaos.",
+            "Tasks, calendar, goals, habits, and an AI assistant — all in one place, on every device.",
         "landing.cta.start": "Start for free",
         "landing.cta.login": "Log in",
         "landing.cta.free": "Free to use. No credit card needed.",
@@ -4019,6 +4051,22 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "landing.preview.summarySubtitle": "Everything's under control.",
         "landing.preview.playLabel": "Play demo",
         "landing.preview.pauseLabel": "Pause demo",
+        "landing.preview.greeting": "Hi, Kivora! 👋",
+        "landing.preview.greetingSubtitle": "Planning your day.",
+        "landing.preview.aiBannerSubtitle": "Ask, plan, create, and get ideas.",
+        "landing.preview.aiBannerPlanning": "Planning your day…",
+        "landing.preview.aiBannerPlanned": "Your day is planned!",
+        "landing.preview.welcomeTitle": "Welcome to Kivora!",
+        "landing.preview.todayFocus": "Today's focus",
+        "landing.preview.tasksCountLabel": "tasks",
+        "landing.preview.eventsCountLabel": "events",
+        "landing.hero.syncTitle": "Synced across all your devices",
+        "landing.hero.syncSubtitle": "On your phone, tablet, and computer.",
+        "landing.hero.chip1": "Get more done",
+        "landing.hero.chip2": "Clear goals",
+        "landing.hero.chip3": "AI help at every step",
+        "landing.hero.chip4": "A synced life",
+        "landing.hero.doneSuffix": "done",
         // login
         "login.title": "Log in",
         "login.subtitle": "Welcome back.",
