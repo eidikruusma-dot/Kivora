@@ -73,6 +73,9 @@ export type TranslationKey =
     | "pub.nav.about"
     | "pub.nav.login"
     | "pub.nav.start"
+    | "pub.nav.openMenu"
+    | "pub.nav.closeMenu"
+    | "pub.nav.menuLabel"
     // ── PWA install button ────────────────────────────────────────────────────
     | "pub.install.btn"
     | "pub.install.open"
@@ -1935,6 +1938,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "pub.nav.about": "Meist",
         "pub.nav.login": "Logi sisse",
         "pub.nav.start": "Alusta tasuta",
+        "pub.nav.openMenu": "Ava menüü",
+        "pub.nav.closeMenu": "Sulge menüü",
+        "pub.nav.menuLabel": "Menüü",
         "pub.install.btn": "Installi Kivora",
         "pub.install.open": "Ava Kivora",
         "pub.install.ios.title": "Lisa avakuvale",
@@ -3981,6 +3987,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "pub.nav.about": "About",
         "pub.nav.login": "Log in",
         "pub.nav.start": "Start for free",
+        "pub.nav.openMenu": "Open menu",
+        "pub.nav.closeMenu": "Close menu",
+        "pub.nav.menuLabel": "Menu",
         "pub.install.btn": "Install Kivora",
         "pub.install.open": "Open Kivora",
         "pub.install.ios.title": "Add to Home Screen",
