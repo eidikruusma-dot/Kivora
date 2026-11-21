@@ -157,6 +157,12 @@ export type TranslationKey =
     | "landing.preview.goal2"
     | "landing.preview.event1"
     | "landing.preview.event2"
+    | "landing.preview.event3"
+    | "landing.preview.newTask"
+    | "landing.preview.summaryTitle"
+    | "landing.preview.summarySubtitle"
+    | "landing.preview.playLabel"
+    | "landing.preview.pauseLabel"
     // ── Login ─────────────────────────────────────────────────────────────────
     | "login.title"
     | "login.subtitle"
@@ -1992,6 +1998,12 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "landing.preview.goal2": "Lugeda 12 raamatut",
         "landing.preview.event1": "Meeskonna koosolek",
         "landing.preview.event2": "Jooga",
+        "landing.preview.event3": "Kohvipaus",
+        "landing.preview.newTask": "Vasta kliendi e-kirjale",
+        "landing.preview.summaryTitle": "Suurepärane päev!",
+        "landing.preview.summarySubtitle": "Kõik on kontrolli all.",
+        "landing.preview.playLabel": "Esita demo",
+        "landing.preview.pauseLabel": "Peata demo",
         // login
         "login.title": "Logi sisse",
         "login.subtitle": "Tere tulemast tagasi.",
@@ -4001,6 +4013,12 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "landing.preview.goal2": "Read 12 books",
         "landing.preview.event1": "Team meeting",
         "landing.preview.event2": "Yoga",
+        "landing.preview.event3": "Coffee break",
+        "landing.preview.newTask": "Reply to client email",
+        "landing.preview.summaryTitle": "Great day!",
+        "landing.preview.summarySubtitle": "Everything's under control.",
+        "landing.preview.playLabel": "Play demo",
+        "landing.preview.pauseLabel": "Pause demo",
         // login
         "login.title": "Log in",
         "login.subtitle": "Welcome back.",

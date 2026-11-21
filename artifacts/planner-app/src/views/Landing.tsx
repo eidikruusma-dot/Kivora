@@ -77,7 +77,7 @@ export default function Landing() {
       <PublicHeader />
 
       {/* Hero — the one "effective and modern" section; everything below stays minimal */}
-      <section className="relative pt-28 pb-14 px-4 sm:px-6 sm:pt-32 sm:pb-20 overflow-hidden">
+      <section className="relative pt-24 pb-14 px-4 sm:px-6 sm:pt-32 sm:pb-20 overflow-hidden">
         {/* Decorative background — pure CSS, no images, no layout impact.
             Soft lavender/white glow blobs with a slow, cheap transform-only
             float; disabled entirely under prefers-reduced-motion. */}
@@ -95,21 +95,21 @@ export default function Landing() {
         >
           <motion.div
             variants={fadeUp}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/80 backdrop-blur border border-[#EDE6FB] text-[#6F5AE8] text-xs font-semibold mb-6 shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/80 backdrop-blur border border-[#EDE6FB] text-[#6F5AE8] text-xs font-semibold mb-4 sm:mb-6 shadow-sm"
           >
             <Sparkles size={14} />
             {t('landing.badge', lang)}
           </motion.div>
           <motion.h1
             variants={fadeUp}
-            className="text-[2.75rem] leading-[1.05] sm:text-6xl lg:text-7xl font-extrabold tracking-tight mb-5"
+            className="text-[2.75rem] leading-[1.05] sm:text-6xl lg:text-7xl font-extrabold tracking-tight mb-3 sm:mb-5"
           >
             <span className="block text-[#1A1F36]">{t('landing.hero.title', lang)}</span>
             <span className="block bg-gradient-to-r from-[#6F5AE8] via-[#8B5CF6] to-[#6F5AE8] bg-clip-text text-transparent">
               {t('landing.hero.titleAccent', lang)}
             </span>
           </motion.h1>
-          <motion.p variants={fadeUp} className="text-base sm:text-lg text-[#64748B] leading-relaxed mb-8 max-w-xl mx-auto">
+          <motion.p variants={fadeUp} className="text-base sm:text-lg text-[#64748B] leading-relaxed mb-6 sm:mb-8 max-w-xl mx-auto">
             {t('landing.hero.subtitle', lang)}
           </motion.p>
           <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -129,7 +129,7 @@ export default function Landing() {
           </motion.div>
           <motion.p variants={fadeUp} className="text-xs text-[#94A3B8] mt-3">{t('landing.cta.free', lang)}</motion.p>
 
-          <motion.div variants={fadeUp} className="mt-12 sm:mt-16">
+          <motion.div variants={fadeUp} className="mt-6 sm:mt-16">
             <AppPreviewMock lang={lang} />
           </motion.div>
         </motion.div>
