@@ -107,6 +107,7 @@ export type TranslationKey =
     // ── Landing page ─────────────────────────────────────────────────────────
     | "landing.badge"
     | "landing.hero.title"
+    | "landing.hero.titleAccent"
     | "landing.hero.subtitle"
     | "landing.cta.start"
     | "landing.cta.login"
@@ -146,10 +147,16 @@ export type TranslationKey =
     | "landing.cta2.title"
     | "landing.cta2.subtitle"
     | "landing.finalTagline"
+    | "landing.preview.today"
     | "landing.preview.caption"
+    | "landing.preview.sampleBadge"
     | "landing.preview.task1"
     | "landing.preview.task2"
     | "landing.preview.task3"
+    | "landing.preview.goal1"
+    | "landing.preview.goal2"
+    | "landing.preview.event1"
+    | "landing.preview.event2"
     // ── Login ─────────────────────────────────────────────────────────────────
     | "login.title"
     | "login.subtitle"
@@ -1923,9 +1930,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "social.loading": "Laadib…",
         // landing
         "landing.badge": "Sinu isiklik tootlikkuse keskkond",
-        "landing.hero.title": "Korralda oma päev\nüks lihtne vaade korraga",
+        "landing.hero.title": "Sinu elu,",
+        "landing.hero.titleAccent": "lõpuks selge.",
         "landing.hero.subtitle":
-            "Kivora ühendab ülesanded, kalendri, märkmed, harjumused ja eesmärgid ühte rahulikku ja õhulisse keskkonda — nii saad keskenduda sellele, mis loeb.",
+            "Ülesanded, kalender, harjumused ja eesmärgid — kõik ühes kohas, ilma kaoseta.",
         "landing.cta.start": "Alusta tasuta",
         "landing.cta.login": "Logi sisse",
         "landing.cta.free": "Tasuta kasutamiseks. Krediitkaarti pole vaja.",
@@ -1974,10 +1982,16 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "landing.cta2.subtitle":
             "Loo konto ja sa oma esimese päeva planeeritud vähem kui minutiga.",
         "landing.finalTagline": "Kivora. Kõik oluline. Ühes kohas.",
-        "landing.preview.caption": "Näidisvaade — Kivora ülesannete loend",
+        "landing.preview.today": "Sinu päev Kivoras",
+        "landing.preview.caption": "Näidisvaade — nii näeb välja sinu päev Kivoras",
+        "landing.preview.sampleBadge": "Näidis",
         "landing.preview.task1": "Esita kvartaliraport",
         "landing.preview.task2": "Jõusaal kell 18:00",
         "landing.preview.task3": "Helista hambaarstile",
+        "landing.preview.goal1": "Jooksuharjumus",
+        "landing.preview.goal2": "Lugeda 12 raamatut",
+        "landing.preview.event1": "Meeskonna koosolek",
+        "landing.preview.event2": "Jooga",
         // login
         "login.title": "Logi sisse",
         "login.subtitle": "Tere tulemast tagasi.",
@@ -3925,9 +3939,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "social.loading": "Loading…",
         // landing
         "landing.badge": "Your personal productivity environment",
-        "landing.hero.title": "Organise your day\none simple view at a time",
+        "landing.hero.title": "Your life,",
+        "landing.hero.titleAccent": "finally clear.",
         "landing.hero.subtitle":
-            "Kivora brings together tasks, calendar, notes, habits, and goals into one calm and airy environment — so you can focus on what matters.",
+            "Tasks, calendar, habits, and goals — all in one place, without the chaos.",
         "landing.cta.start": "Start for free",
         "landing.cta.login": "Log in",
         "landing.cta.free": "Free to use. No credit card needed.",
@@ -3976,10 +3991,16 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "landing.cta2.subtitle":
             "Create an account and have your first day planned in less than a minute.",
         "landing.finalTagline": "Kivora. Everything important. In one place.",
-        "landing.preview.caption": "Sample view — Kivora task list",
+        "landing.preview.today": "Your day in Kivora",
+        "landing.preview.caption": "Sample view — this is what your day looks like in Kivora",
+        "landing.preview.sampleBadge": "Sample",
         "landing.preview.task1": "Submit quarterly report",
         "landing.preview.task2": "Gym at 6 PM",
         "landing.preview.task3": "Call the dentist",
+        "landing.preview.goal1": "Running habit",
+        "landing.preview.goal2": "Read 12 books",
+        "landing.preview.event1": "Team meeting",
+        "landing.preview.event2": "Yoga",
         // login
         "login.title": "Log in",
         "login.subtitle": "Welcome back.",
