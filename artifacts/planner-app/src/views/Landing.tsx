@@ -8,6 +8,11 @@ import PublicHeader from '@/components/layout/PublicHeader'
 import PublicFooter from '@/components/layout/PublicFooter'
 import AppPreviewMock from '@/components/landing/AppPreviewMock'
 import PhoneFrame from '@/components/landing/PhoneFrame'
+import LaptopFrame from '@/components/landing/LaptopFrame'
+import TabletFrame from '@/components/landing/TabletFrame'
+import DesktopScreenMock from '@/components/landing/DesktopScreenMock'
+import TabletScreenMock from '@/components/landing/TabletScreenMock'
+import PhoneScreenMockCompact from '@/components/landing/PhoneScreenMockCompact'
 import FloatingFeatureCard from '@/components/landing/FloatingFeatureCard'
 import KivoraSymbolNew from '@/components/landing/KivoraSymbolNew'
 import HeroWaves from '@/components/landing/HeroWaves'
@@ -46,6 +51,23 @@ export default function Landing() {
   const navigate = useNavigate()
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
+
+  // The hero's three-device composition switches layout at the same
+  // breakpoint Tailwind's `sm:` prefix uses (640px). Below it, the phone
+  // renders far too small for the full interactive demo (tab row, AI
+  // banner, animated list) to stay legible, so it shows a simplified
+  // static screen instead — tracked here (rather than pure CSS
+  // show/hide) so the heavy demo never mounts on small screens.
+  const [isCompactHero, setIsCompactHero] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 640,
+  )
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 639px)')
+    const onChange = () => setIsCompactHero(mql.matches)
+    onChange()
+    mql.addEventListener('change', onChange)
+    return () => mql.removeEventListener('change', onChange)
+  }, [])
 
   const shouldReduceMotion = useReducedMotion()
 
@@ -213,45 +235,83 @@ export default function Landing() {
           <motion.p variants={fadeUp} className="text-xs text-[#94A3B8] mt-3">{t('landing.cta.free', lang)}</motion.p>
         </motion.div>
 
-        {/* Phone + floating feature cards */}
+        {/* Three-device composition — a dominant central laptop (the real
+            dashboard), a smaller tablet tucked behind-right (the real
+            calendar), and the existing live-demo phone in front-left.
+            Every device's position/size is a percentage of this one
+            aspect-ratio box, so the whole cluster scales fluidly at any
+            width — the same arrangement renders correctly from a narrow
+            phone up to a wide desktop with no separate mobile layout. */}
         <motion.div
-          ref={demo.containerRef}
           variants={fadeUp}
           initial="hidden"
           animate="visible"
-          className="relative mt-6 sm:mt-8 mx-auto max-w-4xl"
+          className="relative mt-8 sm:mt-10 mx-auto max-w-5xl px-2"
         >
-          <PlantIllustration className="hidden lg:block absolute left-[-5rem] bottom-[-2rem] w-48 pointer-events-none" />
-          <CoffeeCupIllustration className="hidden lg:block absolute right-[-2rem] bottom-[0.5rem] w-32 pointer-events-none" />
+          <PlantIllustration className="hidden lg:block absolute left-[-3rem] bottom-[-1rem] w-44 pointer-events-none z-0" />
+          <CoffeeCupIllustration className="hidden lg:block absolute right-[-1rem] bottom-[2rem] w-28 pointer-events-none z-0" />
 
-          <PhoneFrame>
-            <AppPreviewMock
-              lang={lang}
-              step={demo.step}
-              playing={demo.playing}
-              onTogglePlay={demo.togglePlaying}
-              shouldReduceMotion={demo.shouldReduceMotion}
-            />
-          </PhoneFrame>
+          <div ref={demo.containerRef} className="relative w-full aspect-[6/5] sm:aspect-[16/11]">
+            {/* tablet — behind, top-right. Mobile sizing/position is tuned
+                separately from sm+ so the cluster stays tight and
+                overlapping on small screens rather than reusing one
+                formula that leaves dead space at small sizes. */}
+            <div className="kv-card-float-2 absolute right-0 top-0 w-[32%] sm:w-[28%] z-10 opacity-95">
+              <TabletFrame>
+                <TabletScreenMock lang={lang} />
+              </TabletFrame>
+            </div>
 
-          {/* Desktop: cards float absolutely around the phone */}
-          <div className="kv-card-float-1 hidden md:block absolute left-[-1.5rem] top-10 w-56 lg:w-60">
+            {/* laptop — dominant, centered */}
+            <div className="absolute left-1/2 -translate-x-1/2 top-[6%] sm:top-[2%] w-[60%] sm:w-[58%] z-20">
+              <LaptopFrame>
+                <DesktopScreenMock lang={lang} />
+              </LaptopFrame>
+            </div>
+
+            {/* phone — front, overlapping the laptop's bottom-left corner
+                on mobile (rather than pinned to the box's bottom edge,
+                which left it stranded far below with a dead gap), tucked
+                further down-left at sm+ as before. Below the hero's `sm`
+                breakpoint it shows a simplified static screen instead of
+                the full interactive demo, which is too small to stay
+                legible at that size — the full demo (pause/play included)
+                is untouched and still used at sm+ and on its own. */}
+            <div className="absolute left-0 top-[38%] sm:top-auto sm:bottom-0 sm:left-[2%] w-[27%] sm:w-[21%] z-30">
+              <PhoneFrame>
+                {isCompactHero ? (
+                  <PhoneScreenMockCompact lang={lang} />
+                ) : (
+                  <AppPreviewMock
+                    lang={lang}
+                    step={demo.step}
+                    playing={demo.playing}
+                    onTogglePlay={demo.togglePlaying}
+                    shouldReduceMotion={demo.shouldReduceMotion}
+                  />
+                )}
+              </PhoneFrame>
+            </div>
+          </div>
+
+          {/* Desktop: cards float absolutely around the cluster */}
+          <div className="kv-card-float-1 hidden md:block absolute left-[-2rem] top-[8%] w-60 lg:w-64 z-40">
             <div className="rotate-[-4deg]">{floatingTasksCard}</div>
           </div>
-          <div className="kv-card-float-2 hidden md:block absolute left-[-1rem] bottom-20 w-56 lg:w-60">
+          <div className="kv-card-float-2 hidden md:block absolute left-[18%] bottom-[-14%] w-60 lg:w-64 z-40">
             <div className="rotate-[3deg]">{floatingGoalsCard}</div>
           </div>
-          <div className="kv-card-float-2 hidden md:block absolute right-[-1.5rem] top-16 w-56 lg:w-60">
+          <div className="kv-card-float-2 hidden md:block absolute right-[-1.5rem] top-[-2%] w-60 lg:w-64 z-40">
             <div className="rotate-[4deg]">{floatingCalendarCard}</div>
           </div>
-          <div className="kv-card-float-1 hidden md:block absolute right-[-1rem] bottom-28 w-56 lg:w-60">
+          <div className="kv-card-float-1 hidden md:block absolute right-[-2rem] bottom-[10%] w-60 lg:w-64 z-40">
             <div className="rotate-[-3deg]">{floatingHabitsCard}</div>
           </div>
 
-          {/* Mobile: same four cards, plain 2-up grid below the phone — no
-              absolute positioning or float, so nothing can cause
+          {/* Mobile: same four cards, plain 2-up grid below the cluster —
+              no absolute positioning or float, so nothing can cause
               horizontal scroll on small screens. */}
-          <div className="md:hidden grid grid-cols-2 gap-3 mt-6">
+          <div className="md:hidden grid grid-cols-2 gap-3 mt-8">
             {floatingTasksCard}
             {floatingGoalsCard}
             {floatingCalendarCard}
