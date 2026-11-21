@@ -48,14 +48,19 @@ await group("1. Manually triggered only — no schedule, no push, no other autom
 });
 
 await group("2. The capture mode is hardcoded in the run step, never exposed as a workflow input", () => {
-  const inputsBlock = src.match(/inputs:\s*\n([\s\S]*?)\n\s*permissions:/)?.[1] ?? "";
-  assert(inputsBlock.length > 0, "sanity check: the workflow_dispatch inputs block is found");
-  assert(!inputsBlock.toLowerCase().includes("mode"), 'no input field named/related to "mode" exists on the trigger form');
   assert(!src.includes("github.event.inputs.mode"), "no step reads a mode value from the trigger inputs");
   assert(
     src.includes("runCaptureManifestEncryptedCli.ts"),
     "the run step invokes the dedicated, mode-hardcoded entry point (see that file's own source-scan tests) rather than the general-purpose CLI",
   );
+});
+
+await group("2b. The target account (email + expected uid) is no longer a workflow_dispatch input at all — it comes from secrets instead", () => {
+  assert(/workflow_dispatch:\s*\{\s*\}/.test(src), "workflow_dispatch declares no inputs — the trigger form has no fields to fill in");
+  assert(!/^\s*inputs:/m.test(src), "no 'inputs:' key exists anywhere in this file");
+  assert(!src.includes("github.event.inputs"), "no step reads anything from github.event.inputs — that whole mechanism is unused now");
+  assert(!src.includes("owner_email:"), "the old owner_email input field definition is gone");
+  assert(!src.includes("expected_uid:"), "the old expected_uid input field definition is gone");
 });
 
 await group("3. Deletion-related variables are entirely absent from this workflow's environment", () => {
@@ -88,9 +93,12 @@ await group("6. Local files are always removed from the runner, including on fai
 });
 
 await group("7. No step ever echoes a secret or the passphrase into the log", () => {
-  assert(!/echo\s+.*secrets\./.test(src), "no step echoes a GitHub Actions secret value directly");
+  assert(!/echo\s+.*secrets\./.test(src), "no step echoes a GitHub Actions secret value directly — this generic check covers every secret this workflow uses, including MANIFEST_OWNER_EMAIL and MANIFEST_EXPECTED_UID");
   assert(!/echo\s+.*passphrase/i.test(src), "no step echoes anything resembling the passphrase");
   assert(!/cat\s+.*\.enc/.test(src), "no step prints the encrypted artifact's bytes to the log either");
+  assert(!/echo\s+.*MANIFEST_OWNER_EMAIL/.test(src), "no step echoes the MANIFEST_OWNER_EMAIL secret by name either");
+  assert(!/echo\s+.*MANIFEST_EXPECTED_UID/.test(src), "no step echoes the MANIFEST_EXPECTED_UID secret by name either");
+  assert(!src.includes("outputs:"), "this workflow never defines a job/step output — the account identity and uid can never leak through that channel");
 });
 
 await group("8. New secrets this workflow depends on are each referenced exactly where expected", () => {
@@ -99,6 +107,26 @@ await group("8. New secrets this workflow depends on are each referenced exactly
   assert(
     !new RegExp(`EXPECTED_PROJECT_ID:\\s*\\$\\{\\{\\s*secrets\\.FIREBASE_PROJECT_ID`).test(src),
     "EXPECTED_PROJECT_ID is NOT wired to the same secret as FIREBASE_PROJECT_ID — comparing a secret to itself would validate nothing",
+  );
+});
+
+await group("8b. The target account's email and expected uid come from their OWN new secrets, passed through as environment variables", () => {
+  assert(
+    /OWNER_EMAIL:\s*\$\{\{\s*secrets\.MANIFEST_OWNER_EMAIL\s*\}\}/.test(src),
+    "the OWNER_EMAIL environment variable the CLI reads is sourced from the MANIFEST_OWNER_EMAIL secret",
+  );
+  assert(
+    /EXPECTED_UID:\s*\$\{\{\s*secrets\.MANIFEST_EXPECTED_UID\s*\}\}/.test(src),
+    "the EXPECTED_UID environment variable the CLI reads is sourced from the MANIFEST_EXPECTED_UID secret",
+  );
+  assert(
+    !/OWNER_EMAIL:\s*\$\{\{\s*github\.event/.test(src) && !/EXPECTED_UID:\s*\$\{\{\s*github\.event/.test(src),
+    "neither environment variable is sourced from a workflow_dispatch input anymore",
+  );
+  assert(
+    !new RegExp(`MANIFEST_OWNER_EMAIL:\\s*\\$\\{\\{\\s*secrets\\.MANIFEST_EXPECTED_UID`).test(src) &&
+      !new RegExp(`MANIFEST_EXPECTED_UID:\\s*\\$\\{\\{\\s*secrets\\.MANIFEST_OWNER_EMAIL`).test(src),
+    "sanity check: the two new secrets are not accidentally cross-wired to each other",
   );
 });
 

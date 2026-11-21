@@ -213,6 +213,7 @@ export function buildSafeManifestExport(uid: string, result: CleanupResult): Saf
 }
 
 export interface CaptureManifestEncryptedSummary {
+  /** Kept on this type for callers that need it; deliberately NEVER printed by printSafeSummary() below — see that function's own comment. */
   uid: string;
   exportId: string;
   collectionsCaptured: number;
@@ -227,7 +228,14 @@ export function printSafeSummary(summary: CaptureManifestEncryptedSummary): void
   console.log("KIVORA MANIFESTI HÕIVAMINE (krüpteeritud, AINULT lugemine)");
   console.log("═".repeat(72));
   console.log(`Ekspordi ID:            ${summary.exportId}`);
-  console.log(`Konto uid:              ${summary.uid}`);
+  // Deliberately NOT summary.uid — a GitHub Actions log is a more
+  // persistent, more widely readable surface than this process's own
+  // encrypted artifact, so even the account's own uid (not just document
+  // ids/paths/emails) stays out of it. A generic, fixed confirmation is
+  // all a human reviewer needs here: the uid check already happened in
+  // main() before this function was ever reached — see its own EXPECTED_UID
+  // comparison — so reaching this line already proves a match.
+  console.log("Sihtkonto:              kontrollitud ja EXPECTED_UID-le vastavaks kinnitatud");
   console.log(`Kogusid hõivatud:       ${summary.collectionsCaptured}`);
   console.log(`Dokumente kokku:        ${summary.totalDocumentsCaptured}`);
   console.log(`Struktuur OK:           ${summary.structureOk ? "JAH" : "EI (vt Firestore otse — vt auditi aruanne)"}`);

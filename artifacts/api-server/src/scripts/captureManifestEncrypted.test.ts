@@ -126,23 +126,56 @@ function makeFakeFirestore(initial: Record<string, Record<string, unknown>> = {}
 }
 
 // ── 1. main() fail-fast gates — no real Firebase credentials needed ────────
+//
+// argv is ALWAYS [] in every test below, and the target account always
+// comes from the OWNER_EMAIL environment variable instead — this matches
+// EXACTLY how the real workflow invokes this file today: the run step is
+// `node .tmp-runCaptureManifestEncryptedCli.mjs` with no CLI arguments at
+// all, and OWNER_EMAIL / EXPECTED_UID arrive as environment variables
+// sourced from the MANIFEST_OWNER_EMAIL / MANIFEST_EXPECTED_UID GitHub
+// Actions secrets (see capture-manifest-encrypted.yml). A missing or
+// empty secret is indistinguishable, from this file's point of view,
+// from the corresponding environment variable simply being absent —
+// which is exactly what each "missing ___" test below already
+// constructs, so each one doubles as a "the secret was never configured,
+// or was left empty" regression test.
 
-await group("1. main() fails safely with no target account and no Admin calls", async () => {
+await group("1. main() fails safely with no MANIFEST_OWNER_EMAIL (no target account resolvable) and no Admin calls", async () => {
   const code = await main([], { MANIFEST_ENCRYPTION_PASSPHRASE: "irrelevant-here" });
-  assert(code === 1, "returns exit code 1 when no account is resolvable");
+  assert(code === 1, "returns exit code 1 when no account is resolvable — same failure as an empty/missing MANIFEST_OWNER_EMAIL secret");
 });
 
-await group("2. main() requires EXPECTED_UID before any Admin call", async () => {
+await group("2. main() requires MANIFEST_EXPECTED_UID (via EXPECTED_UID) before any Admin call", async () => {
   const originalError = console.error;
   const messages: string[] = [];
   console.error = (msg: unknown) => {
     messages.push(String(msg));
   };
   try {
-    const code = await main(["someone@example.com"], {});
-    assert(code === 1, "returns exit code 1 when EXPECTED_UID is missing");
+    const code = await main([], { OWNER_EMAIL: "someone@example.com" });
+    assert(code === 1, "returns exit code 1 when EXPECTED_UID is missing — same failure as an empty/missing MANIFEST_EXPECTED_UID secret");
     assert(messages.some((m) => m.includes("EXPECTED_UID")), "the specific, named error mentions EXPECTED_UID");
     assert(messages.some((m) => m.includes(ErrorCode.MISSING_EXPECTED_UID)), "the sanitized error carries the predefined error code, not a raw exception message");
+  } finally {
+    console.error = originalError;
+  }
+});
+
+await group("2b. main() fails closed on an EMPTY STRING secret value, not just a missing one (requirement: missing, empty, or invalid)", async () => {
+  const originalError = console.error;
+  const messages: string[] = [];
+  console.error = (msg: unknown) => {
+    messages.push(String(msg));
+  };
+  try {
+    const emptyEmailCode = await main([], { OWNER_EMAIL: "", EXPECTED_UID: "u1" });
+    assert(emptyEmailCode === 1, "an empty-string MANIFEST_OWNER_EMAIL secret (env OWNER_EMAIL=\"\") fails closed exactly like a missing one");
+    assert(messages.some((m) => m.includes(ErrorCode.TARGET_NOT_RESOLVED)), "reported with the same TARGET_NOT_RESOLVED code as a missing secret — an empty string is never silently accepted");
+
+    messages.length = 0;
+    const emptyUidCode = await main([], { OWNER_EMAIL: "someone@example.com", EXPECTED_UID: "" });
+    assert(emptyUidCode === 1, "an empty-string MANIFEST_EXPECTED_UID secret (env EXPECTED_UID=\"\") fails closed exactly like a missing one");
+    assert(messages.some((m) => m.includes(ErrorCode.MISSING_EXPECTED_UID)), "reported with the same MISSING_EXPECTED_UID code as a missing secret");
   } finally {
     console.error = originalError;
   }
@@ -155,7 +188,7 @@ await group("3. main() requires EXPECTED_PROJECT_ID before any Admin call", asyn
     messages.push(String(msg));
   };
   try {
-    const code = await main(["someone@example.com"], { EXPECTED_UID: "u1" });
+    const code = await main([], { OWNER_EMAIL: "someone@example.com", EXPECTED_UID: "u1" });
     assert(code === 1, "returns exit code 1 when EXPECTED_PROJECT_ID is missing");
     assert(messages.some((m) => m.includes("EXPECTED_PROJECT_ID")), "the specific, named error mentions EXPECTED_PROJECT_ID");
     assert(
@@ -174,7 +207,8 @@ await group("4. main() rejects a FIREBASE_PROJECT_ID/EXPECTED_PROJECT_ID mismatc
     messages.push(String(msg));
   };
   try {
-    const code = await main(["someone@example.com"], {
+    const code = await main([], {
+      OWNER_EMAIL: "someone@example.com",
       EXPECTED_UID: "u1",
       EXPECTED_PROJECT_ID: "expected-project",
       FIREBASE_PROJECT_ID: "some-other-project",
@@ -197,7 +231,8 @@ await group("5. main() requires MANIFEST_ENCRYPTION_PASSPHRASE before any Admin 
     messages.push(String(msg));
   };
   try {
-    const code = await main(["someone@example.com"], {
+    const code = await main([], {
+      OWNER_EMAIL: "someone@example.com",
       EXPECTED_UID: "u1",
       EXPECTED_PROJECT_ID: "p1",
       FIREBASE_PROJECT_ID: "p1",
@@ -221,7 +256,8 @@ await group("6. main() fails safely when Admin credentials are absent, once ever
   };
   let code: number;
   try {
-    code = await main(["someone@example.com"], {
+    code = await main([], {
+      OWNER_EMAIL: "someone@example.com",
       EXPECTED_UID: "u1",
       EXPECTED_PROJECT_ID: "p1",
       FIREBASE_PROJECT_ID: "p1",
@@ -490,14 +526,14 @@ await group("11. Full round trip: the encrypted artifact is genuinely ciphertext
   assert(wrongPassphraseThrew, "decrypting with the WRONG passphrase throws BackupDecryptionError — the passphrase is genuinely required, not decorative");
 });
 
-await group("12. printSafeSummary never logs anything beyond its own aggregate fields — no document id can reach it even if one were smuggled in", () => {
+await group("12. printSafeSummary never logs anything beyond its own aggregate fields — no document id, and NOT EVEN the account's own uid, can reach it", () => {
   const originalLog = console.log;
   const lines: string[] = [];
   console.log = (msg: unknown) => {
     lines.push(String(msg));
   };
   const summary: CaptureManifestEncryptedSummary = {
-    uid: "u1",
+    uid: "REAL_ACCOUNT_UID_abcdef123456",
     exportId: "mf_test_1",
     collectionsCaptured: 3,
     totalDocumentsCaptured: 7,
@@ -512,7 +548,14 @@ await group("12. printSafeSummary never logs anything beyond its own aggregate f
   }
   const joined = lines.join("\n");
   assert(joined.includes("mf_test_1"), "the export id (not sensitive — a local file-naming id, not a document id) is printed");
-  assert(joined.includes("u1"), "the account uid itself is printed, consistent with every other tool in this project");
+  assert(
+    !joined.includes("REAL_ACCOUNT_UID_abcdef123456"),
+    "the account's own uid is NEVER printed, even though it is a field on the summary object passed in — a GitHub Actions log is a more persistent, more widely readable surface than the encrypted artifact, so even the account's own uid stays out of it",
+  );
+  assert(
+    joined.includes("kontrollitud ja EXPECTED_UID-le vastavaks kinnitatud"),
+    "a generic, fixed confirmation that the target account was verified is printed instead of the real uid",
+  );
   assert(
     !/SECRET_|updateTimeMillis|updateTime/.test(joined),
     "nothing resembling a captured document id or a raw manifest timestamp field ever appears in the printed summary — the summary type structurally cannot carry them",

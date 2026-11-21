@@ -27,7 +27,10 @@ name: Kivora encrypted manifest capture (read-only)
 #
 # Deliberately manual-only: no "schedule" trigger exists on this
 # workflow. It only ever runs when a human explicitly starts it from the
-# Actions tab (or the GitHub mobile app) via "Run workflow".
+# Actions tab (or the GitHub mobile app) via "Run workflow" — there are
+# no form fields to fill in at all: the target account is no longer a
+# workflow_dispatch input (see below for why), so starting this workflow
+# needs no typed value from whoever clicks "Run workflow".
 #
 # ── New repository secrets this workflow needs (see the implementation
 # report for exactly why each one is separate from an existing secret) ──
@@ -38,18 +41,23 @@ name: Kivora encrypted manifest capture (read-only)
 #   - MANIFEST_ENCRYPTION_PASSPHRASE — a passphrase the account owner
 #     chooses, kept separate from BACKUP_ENCRYPTION_PASSPHRASE so a leak
 #     of one never also exposes the other.
+#   - MANIFEST_OWNER_EMAIL / MANIFEST_EXPECTED_UID — the target account's
+#     email and its own expected Firebase Auth UID. These used to be
+#     typed into the "Run workflow" form on every run
+#     (workflow_dispatch inputs), but a plain workflow_dispatch input is
+#     NOT masked and is displayed in plaintext in this workflow's own
+#     run metadata/trigger summary in the Actions UI, visible to anyone
+#     with read access to this repository's Actions. Secrets ARE masked
+#     the same way every other value below is, so moving the account
+#     identity here closes that exposure. main()'s own Firebase-Auth
+#     cross-check (look the email up, verify the UID it returns matches)
+#     is unchanged — these two secrets just replace where the two values
+#     this check compares against now come from.
 # Reuses the SAME FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL /
 # FIREBASE_PRIVATE_KEY secrets every other workflow in this project uses.
 
 "on":
-  workflow_dispatch:
-    inputs:
-      owner_email:
-        description: "Konto e-post, mille manifest hõivatakse (AINULT lugemine, midagi ei kustutata ega muudetata)"
-        required: true
-      expected_uid:
-        description: "Sama konto oodatav Firebase Auth UID — peab vastama ülal antud e-postile, muidu katkestatakse"
-        required: true
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -87,8 +95,8 @@ jobs:
           FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
           EXPECTED_PROJECT_ID: ${{ secrets.EXPECTED_PROJECT_ID }}
           MANIFEST_ENCRYPTION_PASSPHRASE: ${{ secrets.MANIFEST_ENCRYPTION_PASSPHRASE }}
-          OWNER_EMAIL: ${{ github.event.inputs.owner_email }}
-          EXPECTED_UID: ${{ github.event.inputs.expected_uid }}
+          OWNER_EMAIL: ${{ secrets.MANIFEST_OWNER_EMAIL }}
+          EXPECTED_UID: ${{ secrets.MANIFEST_EXPECTED_UID }}
 
       # A failed step above stops the job here (GitHub Actions' default
       # fail-fast behavior) — the step's own clear, specific error message
