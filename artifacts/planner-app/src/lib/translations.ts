@@ -237,6 +237,10 @@ export type TranslationKey =
     | "reg.namePlaceholder"
     | "reg.email"
     | "reg.password"
+    | "reg.showPassword"
+    | "reg.hidePassword"
+    | "reg.passwordHint"
+    | "reg.passwordMatch"
     | "reg.confirmPassword"
     | "reg.agree"
     | "reg.terms"
@@ -2113,6 +2117,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "reg.namePlaceholder": "Mari Kask",
         "reg.email": "E-post",
         "reg.password": "Parool",
+        "reg.showPassword": "Näita parooli",
+        "reg.hidePassword": "Peida parool",
+        "reg.passwordHint": "Vähemalt 8 tähemärki",
+        "reg.passwordMatch": "Paroolid ühtivad",
         "reg.confirmPassword": "Parooli kinnitus",
         "reg.agree": "Nõustun ",
         "reg.terms": "kasutustingimustega",
@@ -4162,6 +4170,10 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "reg.namePlaceholder": "Your name",
         "reg.email": "Email",
         "reg.password": "Password",
+        "reg.showPassword": "Show password",
+        "reg.hidePassword": "Hide password",
+        "reg.passwordHint": "At least 8 characters",
+        "reg.passwordMatch": "Passwords match",
         "reg.confirmPassword": "Confirm password",
         "reg.agree": "I agree to the ",
         "reg.terms": "terms of use",
