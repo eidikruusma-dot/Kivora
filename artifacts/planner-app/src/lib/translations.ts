@@ -338,6 +338,8 @@ export type TranslationKey =
     // ── Privacy ───────────────────────────────────────────────────────────────
     | "privacy.title"
     | "privacy.updated"
+    | "privacy.draftBadge"
+    | "privacy.toc.label"
     // ── Dashboard / HeroCard ─────────────────────────────────────────────────
     | "hero.morning"
     | "hero.afternoon"
@@ -2239,7 +2241,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "terms.title": "Kasutustingimused",
         "terms.updated": "Viimati uuendatud: 27.07.2026",
         "privacy.title": "Privaatsuspoliitika",
-        "privacy.updated": "Viimati uuendatud: 27.07.2026",
+        "privacy.updated": "Viimati uuendatud: 22.11.2026",
+        "privacy.draftBadge": "Avaldamata mustand",
+        "privacy.toc.label": "Sisukord",
         // hero
         "hero.morning": "Tere hommikust",
         "hero.afternoon": "Tere päevast",
@@ -4300,7 +4304,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "terms.title": "Terms of Use",
         "terms.updated": "Last updated: 27.07.2026",
         "privacy.title": "Privacy Policy",
-        "privacy.updated": "Last updated: 27.07.2026",
+        "privacy.updated": "Last updated: 22.11.2026",
+        "privacy.draftBadge": "Unpublished draft",
+        "privacy.toc.label": "Contents",
         // hero
         "hero.morning": "Good morning",
         "hero.afternoon": "Good afternoon",
