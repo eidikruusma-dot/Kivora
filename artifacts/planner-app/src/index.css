@@ -609,6 +609,22 @@ html, body, #root {
   background-color: #142236 !important;
 }
 
+/* ── Maintenance page: soft light wash + floating blob shapes ─────────── */
+@keyframes kvMaintBreathe {
+  0%, 100% { opacity: .5; transform: scale(1); }
+  50%      { opacity: .7; transform: scale(1.06); }
+}
+.kv-maint-breathe {
+  animation: kvMaintBreathe 9s ease-in-out infinite;
+}
+@keyframes kvMaintFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-14px); }
+}
+.kv-maint-float {
+  animation: kvMaintFloat 8s ease-in-out infinite;
+}
+
 /* ── Reduced-motion overrides ────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .kv-page-enter {
@@ -625,6 +641,10 @@ html, body, #root {
   }
   .kv-card:hover {
     transform: none;
+  }
+  .kv-maint-breathe,
+  .kv-maint-float {
+    animation: none;
   }
 }
 
