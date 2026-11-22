@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
+  LifeBuoy,
 } from "lucide-react";
 import { deleteUser } from "firebase/auth";
 import { subscribeToLanguage, getLocalLanguage } from "@/lib/languageStore";
@@ -30,6 +31,7 @@ import {
   MFARequiredError,
   sendMFAPhoneCode,
   completeMFAChallenge,
+  checkAutomaticDeletionAvailability,
 } from "@/lib/accountDeletionService";
 
 // ── Inline bilingual helpers (reauth/error strings not in translations.ts) ──
@@ -39,6 +41,67 @@ function msg(lang: AppLang, et: string, en: string): string {
 }
 
 // ── Shared sub-components ──────────────────────────────────────────────────
+
+/**
+ * Replaces the entire destructive "delete my account" flow (type-to-
+ * confirm, reauthentication, MFA challenge) whenever
+ * checkAutomaticDeletionAvailability() reports it unavailable — see that
+ * function's doc comment in accountDeletionService.ts for exactly why.
+ *
+ * Deliberately shown BEFORE the user would otherwise go through
+ * reauthentication/MFA, not after a failed attempt — making them clear a
+ * security challenge only to then learn deletion isn't available would be
+ * poor, and arguably misleading, UX.
+ *
+ * Points at the existing, already-working "Abi ja tugi" / help page
+ * (/app/help) rather than inventing a new submission mechanism: that
+ * page's form already persists the message to Firestore AND attempts an
+ * email relay (see AbiJaTugiPage.tsx), so a request sent through it
+ * genuinely reaches an administrator today — it is not a dead end.
+ */
+function AccountDeletionUnavailableNotice({ lang }: { lang: AppLang }) {
+  const navigate = useNavigate();
+  return (
+    <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl bg-amber-50 border border-amber-200">
+      <AlertCircle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+      <div className="space-y-3">
+        <div>
+          <p className="text-sm font-semibold text-amber-800">
+            {msg(
+              lang,
+              "Automaatne täielik kustutamine pole praegu saadaval",
+              "Automatic full deletion is not available right now",
+            )}
+          </p>
+          <p className="text-sm text-amber-700 leading-relaxed mt-1">
+            {msg(
+              lang,
+              "Et vältida olukorda, kus osa sinu andmetest (näiteks üleslaaditud dokumendid, profiilipilt, kalendrid või varasemad tagasiside-/toekirjad) jääks kogemata alles, ei kustuta me praegu sinu kontot automaatselt.",
+              "To avoid a situation where some of your data (for example uploaded documents, your profile photo, calendars, or earlier feedback/support messages) could accidentally be left behind, we do not automatically delete your account right now.",
+            )}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm text-amber-700 leading-relaxed">
+            {msg(
+              lang,
+              "Kui soovid oma konto ja kõigi andmete kustutamist taotleda, kirjuta meile \"Abi ja tugi\" lehe kaudu ning maini sõnumis selgelt, et soovid oma konto ja kõigi andmete täielikku kustutamist.",
+              'If you would like to request deletion of your account and all your data, please write to us via the "Help and support" page and clearly state in your message that you want your account and all your data fully deleted.',
+            )}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate("/app/help")}
+          className="inline-flex items-center gap-2 h-9 px-4 rounded-xl bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 transition-colors"
+        >
+          <LifeBuoy size={15} strokeWidth={2} />
+          {msg(lang, "Ava Abi ja tugi", "Open Help and support")}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function SectionCard({
   icon,
@@ -269,6 +332,12 @@ export default function AndmeteKustutaminePage({ onBack }: Props) {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  // Purely flag-based (no network calls), so it never changes during a
+  // session — computed once per render is sufficient. See
+  // accountDeletionService.ts's checkAutomaticDeletionAvailability() doc
+  // comment for exactly what each blocked reason means.
+  const automaticDeletionAvailable = checkAutomaticDeletionAvailability().available;
+
   // ── Per-item state ────────────────────────────────────────────────────────
   const [confirmingItem, setConfirmingItem] = useState<DataItemKey | null>(null);
   const [deletingItem, setDeletingItem] = useState<DataItemKey | null>(null);
@@ -352,6 +421,24 @@ export default function AndmeteKustutaminePage({ onBack }: Props) {
   /** Shared deletion sequence — called after reauth OR MFA succeeds */
   async function performDeletion() {
     if (!user) return;
+
+    // Defensive re-check: the UI below never renders a path to
+    // handleConfirmAccount() while automatic deletion is unavailable, but
+    // this guard makes the invariant hold regardless of how this function
+    // ends up called — the Firebase Auth account must never be removed,
+    // and no partial Firestore deletion must happen either, while any
+    // known category of personal data cannot be fully removed.
+    if (!checkAutomaticDeletionAvailability().available) {
+      setAccountDeleting(false);
+      setAccountError(
+        msg(
+          lang,
+          "Automaatne täielik kustutamine ei ole praegu saadaval. Konto ega andmeid ei kustutatud.",
+          "Automatic full deletion is not available right now. Your account and data were not deleted.",
+        ),
+      );
+      return;
+    }
 
     // Delete all Firestore data
     try {
@@ -589,6 +676,10 @@ export default function AndmeteKustutaminePage({ onBack }: Props) {
           danger
         >
           <div className="space-y-4">
+            {!automaticDeletionAvailable ? (
+              <AccountDeletionUnavailableNotice lang={lang} />
+            ) : (
+              <>
             {/* Warning banner */}
             <div className="delete-warn-panel flex items-start gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200">
               <AlertTriangle
@@ -835,6 +926,8 @@ export default function AndmeteKustutaminePage({ onBack }: Props) {
                   </div>
                 )}
               </div>
+            )}
+              </>
             )}
           </div>
         </SectionCard>

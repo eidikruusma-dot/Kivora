@@ -9,15 +9,55 @@
  *                        Throws on the first failure. Does NOT call deleteUser() — the caller
  *                        must do that only after this function resolves successfully.
  * reauthenticate()     — provider-aware re-authentication before sensitive operations.
+ *
+ * ── What this does NOT delete, and why ───────────────────────────────────
+ *
+ * "calendars" and "documents" (+ its Storage files, + the profile photo
+ * Storage file) are each gated behind a featureFlags.ts flag
+ * (ACCOUNT_DELETION_CALENDARS_ENABLED / ACCOUNT_DELETION_STORAGE_ENABLED),
+ * both currently false — see those flags' own doc comments for exactly
+ * what is missing (a Firestore rule for each collection, and for Storage,
+ * the project's still-pending Blaze plan upgrade) and what must be
+ * verified before flipping them. Turning either on before its
+ * prerequisites are met would make EVERY account deletion fail outright
+ * (not silently skip) at that step, which is deliberate: this file must
+ * never report a deletion as successful while real data was left behind.
+ *
+ * "feedbackSubmissions" and "supportMessages" are NEVER touched here, by
+ * design, not oversight: both collections' Firestore rules deny read and
+ * delete to every client unconditionally (`allow read, delete: if false`),
+ * including to the document's own author — there is no client-side
+ * credential that could ever satisfy that rule, so no amount of extra
+ * code here would help. Removing a deleted user's entries from these two
+ * collections requires an administrator to run the existing, separate
+ * server-side tool — artifacts/api-server/src/scripts/runFullAccountRemovalCli.ts
+ * (via fullAccountRemoval.ts, Admin SDK, bypasses client rules by design)
+ * — for that uid, as its own manual step. This is NOT triggered
+ * automatically by a user deleting their own account; nothing in this
+ * file calls it, schedules it, or notifies anyone that it is needed.
+ *
+ * "contactSubmissions" is out of scope entirely: every document in it has
+ * `uid: null` unconditionally (Contact.tsx never sets it, and the
+ * collection's own create rule requires that) — it is never attributable
+ * to any Firebase Auth account, so there is no "this user's rows" to
+ * find or delete. Its retention is a separate, time-based data-retention
+ * policy question, not an account-deletion one.
+ *
+ * "users/{uid}/_fullBackups" (written only by the separate, admin-run
+ * full-account-backup tool) and the GitHub Actions encrypted backup
+ * artifact are both deliberately left untouched here — their retention
+ * policy is still an open decision, not a bug.
  */
 
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   deleteDoc,
   writeBatch,
 } from 'firebase/firestore'
+import { ref, deleteObject } from 'firebase/storage'
 import {
   type User,
   type MultiFactorError,
@@ -33,8 +73,14 @@ import {
   PhoneAuthProvider,
   RecaptchaVerifier,
 } from 'firebase/auth'
-import { db, auth } from '@/lib/firebase'
+import { db, auth, storage } from '@/lib/firebase'
 import { deleteBackup } from '@/lib/backupService'
+import { extractStoragePathFromUrl } from '@/lib/profilePhoto'
+import {
+  ACCOUNT_DELETION_CALENDARS_ENABLED,
+  ACCOUNT_DELETION_STORAGE_ENABLED,
+  ACCOUNT_DELETION_FEEDBACK_SUPPORT_ENABLED,
+} from '@/lib/featureFlags'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -105,6 +151,113 @@ async function deleteAllBackups(uid: string): Promise<void> {
   }
 }
 
+// ── Storage-aware deletion helpers ──────────────────────────────────────────
+
+/**
+ * Delete one Storage object by path, treating "it's already gone" as
+ * success and any other failure as a real failure that must propagate.
+ *
+ * "storage/object-not-found" is the ONLY tolerated error code — it means
+ * the file was already removed (e.g. a previous, partially-completed
+ * deletion attempt), not that anything is wrong. Every other error
+ * (permission-denied, network failure, the project not being on a plan
+ * that serves Storage at all, ...) is rethrown so the caller aborts
+ * instead of silently treating a real failure as a no-op.
+ */
+async function deleteStorageObjectTolerateMissing(storagePath: string): Promise<void> {
+  try {
+    await deleteObject(ref(storage, storagePath))
+  } catch (err) {
+    if ((err as { code?: string }).code !== 'storage/object-not-found') throw err
+  }
+}
+
+/**
+ * Delete every document in users/{uid}/documents, pairing each one with
+ * its own Storage file.
+ *
+ * Each pair is handled sequentially, Storage file first, Firestore
+ * metadata second, and NEVER the other way around: if a file's Storage
+ * delete fails for a real reason (not "already gone"), this throws
+ * immediately and that document's Firestore record is deliberately left
+ * in place — losing the record would lose the only remaining pointer to
+ * that orphaned file, making it permanently undeletable. Documents
+ * already fully processed before the failure stay deleted; this is not
+ * rolled back.
+ *
+ * Gated by ACCOUNT_DELETION_STORAGE_ENABLED — see that flag's doc comment.
+ */
+async function deleteDocumentsWithStorage(uid: string): Promise<void> {
+  const snap = await getDocs(collection(db, 'users', uid, 'documents'))
+  for (const d of snap.docs) {
+    const data = d.data() as { storagePath?: unknown }
+    if (typeof data.storagePath === 'string' && data.storagePath) {
+      await deleteStorageObjectTolerateMissing(data.storagePath)
+    }
+    await deleteDoc(d.ref)
+  }
+}
+
+/**
+ * Delete the user's profile photo from Storage, if one is set.
+ * Does NOT touch the users/{uid} document itself — the caller deletes
+ * that separately, after this resolves.
+ *
+ * Gated by ACCOUNT_DELETION_STORAGE_ENABLED — see that flag's doc comment.
+ */
+async function deleteProfilePhotoStorageFile(uid: string): Promise<void> {
+  const profileSnap = await getDoc(doc(db, 'users', uid))
+  const photoURL = (profileSnap.data() as { photoURL?: unknown } | undefined)?.photoURL
+  if (typeof photoURL !== 'string' || !photoURL) return
+  const storagePath = extractStoragePathFromUrl(photoURL)
+  if (!storagePath) return
+  await deleteStorageObjectTolerateMissing(storagePath)
+}
+
+// ── Pre-flight availability check ───────────────────────────────────────────
+
+export type AutomaticDeletionBlockedReason =
+  | 'calendars'
+  | 'documents-and-profile-photo'
+  | 'feedback-and-support-messages'
+
+export interface AutomaticDeletionAvailability {
+  /** True only if deleteAllUserData() + deleteUser() together would leave NO known category of this user's personal data behind. */
+  available: boolean
+  /** Which gated categories are currently blocking full automatic deletion — empty when available is true. */
+  blockedReasons: AutomaticDeletionBlockedReason[]
+}
+
+/**
+ * Checks whether a FULL, automatic, self-service account deletion is
+ * currently possible — i.e. whether deleteAllUserData() followed by
+ * deleteUser() would remove every category of personal data this
+ * codebase knows about, with nothing left behind anywhere.
+ *
+ * This must be called, and its result checked, BEFORE any deletion step
+ * is attempted (see AndmeteKustutaminePage.tsx) — not just relied on to
+ * explain a failure after the fact. The three flags it reads are each
+ * documented in featureFlags.ts: two are temporary (pending a Firestore
+ * rule deploy and/or the Blaze plan), one is structural (feedbackSubmissions/
+ * supportMessages can never be opened to client-side deletion by design,
+ * and need an administrator — or a not-yet-built server endpoint — instead).
+ *
+ * While ANY reason is present, the UI must not offer, and this service
+ * must not perform, automatic deletion — the user is instead directed to
+ * request deletion manually (see the help/support page link in
+ * AndmeteKustutaminePage.tsx). This function performs no network calls;
+ * it only reads the three flags, so it is safe to call synchronously and
+ * as often as needed (e.g. once at render time AND again, defensively,
+ * right before performDeletion() acts on it).
+ */
+export function checkAutomaticDeletionAvailability(): AutomaticDeletionAvailability {
+  const blockedReasons: AutomaticDeletionBlockedReason[] = []
+  if (!ACCOUNT_DELETION_CALENDARS_ENABLED) blockedReasons.push('calendars')
+  if (!ACCOUNT_DELETION_STORAGE_ENABLED) blockedReasons.push('documents-and-profile-photo')
+  if (!ACCOUNT_DELETION_FEEDBACK_SUPPORT_ENABLED) blockedReasons.push('feedback-and-support-messages')
+  return { available: blockedReasons.length === 0, blockedReasons }
+}
+
 // ── Full user data deletion ────────────────────────────────────────────────
 
 /**
@@ -125,12 +278,28 @@ export async function deleteAllUserData(uid: string): Promise<void> {
   await deleteCollection(uid, 'habits')
   await deleteCollection(uid, 'goals')
   await deleteCollection(uid, 'schoolItems')
+  await deleteCollection(uid, 'plans')
+  await deleteCollection(uid, 'transactions')
+  await deleteCollection(uid, 'bills')
+  await deleteCollection(uid, 'monthlyBudgets')
   await deleteAIConversations(uid)               // handles nested messages
   await deleteCollection(uid, 'notifications')
   await deleteCollection(uid, 'settings')
   await deleteCollection(uid, 'entityLinks')
   await deleteCollection(uid, 'pushSubscriptions')
   await deleteAllBackups(uid)                    // handles nested chunks
+
+  // See this file's own top-of-file doc comment and each flag's doc
+  // comment in featureFlags.ts for exactly why these two are gated rather
+  // than unconditional, and what must be true before enabling them.
+  if (ACCOUNT_DELETION_CALENDARS_ENABLED) {
+    await deleteCollection(uid, 'calendars')
+  }
+  if (ACCOUNT_DELETION_STORAGE_ENABLED) {
+    await deleteDocumentsWithStorage(uid)        // Firestore + Storage, paired
+    await deleteProfilePhotoStorageFile(uid)      // before the profile doc itself is gone
+  }
+
   await deleteDoc(doc(db, 'users', uid))         // profile root — last
 }
 

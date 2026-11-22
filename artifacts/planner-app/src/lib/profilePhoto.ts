@@ -3,7 +3,7 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { storage, db } from '@/lib/firebase'
 import { processImage } from '@/lib/processImage'
 
-function extractStoragePathFromUrl(url: string): string | null {
+export function extractStoragePathFromUrl(url: string): string | null {
   try {
     const decoded = decodeURIComponent(url)
     const match = decoded.match(/\/o\/(.+)$/)
