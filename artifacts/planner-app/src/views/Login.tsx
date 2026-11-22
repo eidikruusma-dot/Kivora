@@ -8,6 +8,7 @@ import SocialButtons from '@/components/auth/SocialButtons'
 import { useAuth } from '@/context/AuthContext'
 import { mapFirebaseError } from '@/lib/firebaseErrors'
 import { auth } from '@/lib/firebase'
+import { resendVerificationEmail } from '@/lib/verificationResend'
 import {
   signOut,
   getMultiFactorResolver,
@@ -63,6 +64,17 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // ── Resend verification email (shown under the "not verified" error) ───
+  // Reached from all 3 unverified-email branches below (regular submit,
+  // TOTP verify, SMS verify) — each resets mfaMode to null and sets the
+  // same `error` string, so a single resend UI under the error banner
+  // covers every entry point.
+  const [resendState, setResendState] = useState<
+    'idle' | 'sending' | 'sent' | 'already-verified' | 'mfa-required' | 'error'
+  >('idle')
+  const [resendError, setResendError] = useState('')
+  const [resendCooldown, setResendCooldown] = useState(0)
+
   // ── MFA step state ─────────────────────────────────────────────────────
   const [mfaResolver, setMfaResolver] = useState<MultiFactorResolver | null>(null)
   const [mfaMode, setMfaMode] = useState<MfaMode>(null)
@@ -74,6 +86,39 @@ export default function Login() {
   const loginRecaptchaRef = useRef<RecaptchaVerifier | null>(null)
 
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
+
+  // Countdown tick for the resend cooldown — self-cleaning: each tick's
+  // cleanup clears the previous timeout, and unmounting clears the last one.
+  useEffect(() => {
+    if (resendCooldown === 0) return
+    const timer = setTimeout(() => setResendCooldown((c) => Math.max(0, c - 1)), 1000)
+    return () => clearTimeout(timer)
+  }, [resendCooldown])
+
+  // ── Resend verification email ─────────────────────────────────────────
+  // Re-authenticates on an isolated secondary Firebase instance (see
+  // verificationResend.ts) using the email/password already entered on
+  // this screen — never a new sign-in on the app's main `auth`, so this
+  // can never grant even momentary access to a protected view.
+  const handleResend = async () => {
+    if (resendState === 'sending' || resendCooldown > 0) return
+    setResendState('sending')
+    setResendError('')
+    try {
+      const result = await resendVerificationEmail(email, password)
+      setResendState(result === 'already-verified' ? 'already-verified' : 'sent')
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code
+      if (code === 'auth/multi-factor-auth-required') {
+        setResendState('mfa-required')
+      } else {
+        setResendState('error')
+        setResendError(mapFirebaseError(err))
+      }
+    } finally {
+      setResendCooldown(30)
+    }
+  }
 
   // Clean up RecaptchaVerifier on unmount
   useEffect(() => {
@@ -88,6 +133,8 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setResendState('idle')
+    setResendError('')
     setLoading(true)
     try {
       const fbUser = await signIn(email, password, remember)
@@ -206,6 +253,8 @@ export default function Login() {
         setMfaMode(null)
         setMfaResolver(null)
         setError(t('login.emailNotVerified', lang))
+        setResendState('idle')
+        setResendError('')
         return
       }
       navigate('/app')
@@ -240,6 +289,8 @@ export default function Login() {
         setMfaMode(null)
         setMfaResolver(null)
         setError(t('login.emailNotVerified', lang))
+        setResendState('idle')
+        setResendError('')
         return
       }
       navigate('/app')
@@ -445,9 +496,47 @@ export default function Login() {
           {/* ── Regular login form ── */}
           {!mfaMode && (
             <>
-              {error && (
+              {error && error === t('login.emailNotVerified', lang) && resendState === 'already-verified' && (
+                // The live resend check just found the email IS verified now (e.g. the
+                // user clicked the link in another tab after the error above appeared).
+                // Showing "not verified" and "already verified" in the same banner would
+                // read as contradictory, so this state fully replaces the stale error
+                // instead of appending to it.
+                <div className="mb-4 px-4 py-3 rounded-2xl bg-green-50/90 border border-green-100 text-sm text-[#15803D]">
+                  {t('login.resend.alreadyVerified', lang)}
+                </div>
+              )}
+
+              {error && !(error === t('login.emailNotVerified', lang) && resendState === 'already-verified') && (
                 <div className="mb-4 px-4 py-3 rounded-2xl bg-red-50/90 border border-red-100 text-sm text-red-600">
-                  {error}
+                  <p>{error}</p>
+                  {error === t('login.emailNotVerified', lang) && (
+                    <div className="mt-2 space-y-1.5">
+                      {resendState === 'sent' && (
+                        <p className="text-[#15803D]">{t('login.resend.sent', lang)}</p>
+                      )}
+                      {resendState === 'mfa-required' && (
+                        <p className="text-[#1A1F36]">{t('login.resend.mfaRequired', lang)}</p>
+                      )}
+                      {resendState === 'error' && resendError && (
+                        <p className="text-red-600">{resendError}</p>
+                      )}
+                      {resendState !== 'mfa-required' && (
+                        <button
+                          type="button"
+                          onClick={handleResend}
+                          disabled={resendState === 'sending' || resendCooldown > 0}
+                          className="font-semibold text-[#6D28D9] hover:underline disabled:text-[#B7AEDB] disabled:no-underline disabled:cursor-not-allowed"
+                        >
+                          {resendState === 'sending'
+                            ? t('verify.resending', lang)
+                            : resendCooldown > 0
+                              ? t('login.resend.cooldown', lang).replace('{n}', String(resendCooldown))
+                              : t('verify.resend', lang)}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

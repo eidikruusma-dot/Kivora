@@ -212,6 +212,10 @@ export type TranslationKey =
     | "login.hidePassword"
     | "login.showPassword"
     | "login.emailNotVerified"
+    | "login.resend.sent"
+    | "login.resend.alreadyVerified"
+    | "login.resend.mfaRequired"
+    | "login.resend.cooldown"
     | "login.mfa.title"
     | "login.mfa.desc"
     | "login.mfa.codeLabel"
@@ -301,6 +305,8 @@ export type TranslationKey =
     | "verify.logout"
     | "verify.backToLogin"
     | "verify.login"
+    | "verify.noSession.title"
+    | "verify.noSession.body"
     // ── Contact ───────────────────────────────────────────────────────────────
     | "contact.title"
     | "contact.subtitle"
@@ -2092,6 +2098,12 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "login.showPassword": "Näita parooli",
         "login.emailNotVerified":
             "Sinu e-posti aadress pole veel kinnitatud. Palun kinnita see enne sisselogimist.",
+        "login.resend.sent": "Uus kinnituskiri on saadetud. Palun kontrolli oma postkasti.",
+        "login.resend.alreadyVerified":
+            "Sinu e-post on juba kinnitatud. Palun logi uuesti sisse.",
+        "login.resend.mfaRequired":
+            "See konto kasutab kaheastmelist autentimist. Palun logi tavapäraselt sisse, et oma e-post kinnitada.",
+        "login.resend.cooldown": "Saad uue kirja küsida {n} sekundi pärast.",
         "login.mfa.title": "Kaheastmeline tuvastus",
         "login.mfa.desc": "Sisesta kood oma autentikaatorirakendusest.",
         "login.mfa.codeLabel": "Autentimiskood",
@@ -2190,6 +2202,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "verify.logout": "Logi välja",
         "verify.backToLogin": "Tagasi sisselogimisse",
         "verify.login": "Logi sisse",
+        "verify.noSession.title": "Sa ei ole praegu sisse logitud",
+        "verify.noSession.body":
+            "E-posti kinnitamiseks logi esmalt sisse. Sisselogimise vaates saad vajadusel küsida uue kinnituskirja.",
         // contact
         "contact.title": "Kontakt",
         "contact.subtitle": "Võta meiega ühendust",
@@ -4145,6 +4160,12 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "login.showPassword": "Show password",
         "login.emailNotVerified":
             "Your email address has not been verified yet. Please verify it before logging in.",
+        "login.resend.sent": "A new confirmation email has been sent. Please check your inbox.",
+        "login.resend.alreadyVerified":
+            "Your email is already verified. Please log in again.",
+        "login.resend.mfaRequired":
+            "This account uses two-factor authentication. Please sign in normally to verify your email.",
+        "login.resend.cooldown": "You can request a new email in {n} seconds.",
         "login.mfa.title": "Two-factor authentication",
         "login.mfa.desc": "Enter the code from your authenticator app.",
         "login.mfa.codeLabel": "Authentication code",
@@ -4242,6 +4263,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "verify.logout": "Log out",
         "verify.backToLogin": "Back to login",
         "verify.login": "Log in",
+        "verify.noSession.title": "You're not currently signed in",
+        "verify.noSession.body":
+            "Please log in first to verify your email. From the login page you can request a new confirmation email if needed.",
         // contact
         "contact.title": "Contact",
         "contact.subtitle": "Get in touch with us",
