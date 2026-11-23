@@ -67,6 +67,7 @@ group("2. all current AI routers are mounted on the same boundary as requireFire
 
   assert(boundaryBody.includes("aiRouter"), "aiRouter (chat, plan preview) is inside the protected boundary");
   assert(boundaryBody.includes("aiUploadRouter"), "aiUploadRouter (upload, bank-import, bank-import/revalidate, upload-direct-test) is inside the protected boundary");
+  assert(boundaryBody.includes("aiOnboardingRouter"), "aiOnboardingRouter (onboarding/chat, onboarding/summary) is inside the protected boundary");
 });
 
 group("3. non-AI routers are mounted directly on the top-level router — never behind requireFirebaseAuth", () => {

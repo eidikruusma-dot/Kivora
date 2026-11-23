@@ -1735,6 +1735,36 @@ export type TranslationKey =
     | "modules.desc.assistant"
     | "modules.name.plans"
     | "modules.desc.plans"
+    // ── Onboarding AI chat ───────────────────────────────────────────────────
+    | "onboarding.chat.pageTitle"
+    | "onboarding.chat.subtitle"
+    | "onboarding.chat.greeting"
+    | "onboarding.chat.inputPlaceholder"
+    | "onboarding.chat.send"
+    | "onboarding.chat.skip"
+    | "onboarding.chat.finish"
+    | "onboarding.chat.resumedNotice"
+    | "onboarding.chat.privacyNotice"
+    | "onboarding.chat.deleteConversation"
+    | "onboarding.chat.deletedNotice"
+    | "onboarding.chat.timeLabel"
+    | "onboarding.chat.nineMinuteNudgeTitle"
+    | "onboarding.chat.nineMinuteNudgeAction"
+    | "onboarding.chat.timeUpTitle"
+    | "onboarding.chat.timeUpBody"
+    | "onboarding.chat.quotaExceededTitle"
+    | "onboarding.chat.quotaExceededBody"
+    | "onboarding.chat.continueLater"
+    | "onboarding.chat.manualSetup"
+    | "onboarding.chat.streamErrorTitle"
+    | "onboarding.chat.streamErrorBody"
+    | "onboarding.chat.retry"
+    | "onboarding.chat.summaryLoading"
+    | "onboarding.chat.summaryErrorTitle"
+    | "onboarding.chat.summaryErrorBody"
+    | "onboarding.chat.summaryRetry"
+    | "onboarding.summary.title"
+    | "onboarding.summary.editNote"
     // ── Plans module ──────────────────────────────────────────────────────────
     | "plans.title"
     | "plans.subtitle"
@@ -3798,6 +3828,36 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "modules.desc.assistant": "AI-põhine abi plaanimiseks ja küsimustele vastamiseks",
         "modules.name.plans": "Plaanid",
         "modules.desc.plans": "Loo plaane oma nädala, treeningute või õppimise jaoks",
+        // onboarding AI chat
+        "onboarding.chat.pageTitle": "Tutvume natuke",
+        "onboarding.chat.subtitle": "Räägi endast, et saaksime Kivora sulle sobivaks seadistada.",
+        "onboarding.chat.greeting": "Tere tulemast Kivorasse! Enne kui alustame, tahaksin sind veidi tundma õppida. Mis sinu elus praegu kõige rohkem korraldamist vajab?",
+        "onboarding.chat.inputPlaceholder": "Kirjuta oma vastus...",
+        "onboarding.chat.send": "Saada",
+        "onboarding.chat.skip": "Jäta vahele",
+        "onboarding.chat.finish": "Olen valmis",
+        "onboarding.chat.resumedNotice": "Jätkame sealt, kus pooleli jäid.",
+        "onboarding.chat.privacyNotice": "See vestlus salvestatakse ajutiselt ainult sinu brauserisse (mitte meie serverisse) ja kustutatakse automaatselt, kui seadistamine on tehtud.",
+        "onboarding.chat.deleteConversation": "Kustuta vestlus",
+        "onboarding.chat.deletedNotice": "Vestlus kustutatud.",
+        "onboarding.chat.timeLabel": "Aega jäänud",
+        "onboarding.chat.nineMinuteNudgeTitle": "Vestluse aeg hakkab täis saama.",
+        "onboarding.chat.nineMinuteNudgeAction": "Näita soovitusi kohe",
+        "onboarding.chat.timeUpTitle": "Tutvumisaeg sai täis",
+        "onboarding.chat.timeUpBody": "10 minutit on täis. Vaatame, mida seni rääkitu põhjal soovitada saan.",
+        "onboarding.chat.quotaExceededTitle": "Tänane AI-kasutuse piir on täis",
+        "onboarding.chat.quotaExceededBody": "Sinu vestlus ja senine edenemine on salvestatud — saad homme samast kohast jätkata, või vali moodulid praegu käsitsi.",
+        "onboarding.chat.continueLater": "Jätka hiljem",
+        "onboarding.chat.manualSetup": "Vali moodulid käsitsi",
+        "onboarding.chat.streamErrorTitle": "Ühendus katkes",
+        "onboarding.chat.streamErrorBody": "Vastust ei õnnestunud lõpuni tuua. Sinu vestlus on alles.",
+        "onboarding.chat.retry": "Proovi uuesti",
+        "onboarding.chat.summaryLoading": "Koostan sinu jaoks kokkuvõtet...",
+        "onboarding.chat.summaryErrorTitle": "Kokkuvõtte loomine ebaõnnestus",
+        "onboarding.chat.summaryErrorBody": "Midagi läks valesti. Võid proovida uuesti või valida moodulid käsitsi.",
+        "onboarding.chat.summaryRetry": "Proovi uuesti",
+        "onboarding.summary.title": "Sinu vestluse põhjal",
+        "onboarding.summary.editNote": "Vaata soovitused üle ja muuda neid enne jätkamist, kui soovid.",
         // Plans module
         "plans.title": "Plaanid",
         "plans.subtitle": "Loo endale sobiv plaan ja vii see samm-sammult ellu.",
@@ -5853,6 +5913,36 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "modules.desc.assistant": "AI-powered help for planning and questions",
         "modules.name.plans": "Plans",
         "modules.desc.plans": "Create plans for your week, workouts or studying",
+        // onboarding AI chat
+        "onboarding.chat.pageTitle": "Let's get to know you",
+        "onboarding.chat.subtitle": "Tell us about yourself so we can set Kivora up for you.",
+        "onboarding.chat.greeting": "Welcome to Kivora! Before we dive in, I'd love to get to know you a bit. What's taking up the most mental space in your life right now?",
+        "onboarding.chat.inputPlaceholder": "Type your answer...",
+        "onboarding.chat.send": "Send",
+        "onboarding.chat.skip": "Skip for now",
+        "onboarding.chat.finish": "I'm ready",
+        "onboarding.chat.resumedNotice": "Picking up where you left off.",
+        "onboarding.chat.privacyNotice": "This conversation is saved temporarily in your browser only (not on our servers) and is deleted automatically once setup is complete.",
+        "onboarding.chat.deleteConversation": "Delete conversation",
+        "onboarding.chat.deletedNotice": "Conversation deleted.",
+        "onboarding.chat.timeLabel": "Time left",
+        "onboarding.chat.nineMinuteNudgeTitle": "We're almost out of time for this chat.",
+        "onboarding.chat.nineMinuteNudgeAction": "Show suggestions now",
+        "onboarding.chat.timeUpTitle": "Time's up",
+        "onboarding.chat.timeUpBody": "10 minutes are up. Let's see what I can suggest based on what you've shared so far.",
+        "onboarding.chat.quotaExceededTitle": "Today's AI usage limit is reached",
+        "onboarding.chat.quotaExceededBody": "Your conversation and progress are saved — you can continue tomorrow from the same point, or set up modules manually right now.",
+        "onboarding.chat.continueLater": "Continue later",
+        "onboarding.chat.manualSetup": "Set up modules manually",
+        "onboarding.chat.streamErrorTitle": "Connection interrupted",
+        "onboarding.chat.streamErrorBody": "The reply couldn't be completed. Your conversation is still here.",
+        "onboarding.chat.retry": "Try again",
+        "onboarding.chat.summaryLoading": "Putting together your summary...",
+        "onboarding.chat.summaryErrorTitle": "Couldn't generate a summary",
+        "onboarding.chat.summaryErrorBody": "Something went wrong. You can try again or set up modules manually.",
+        "onboarding.chat.summaryRetry": "Try again",
+        "onboarding.summary.title": "Based on your conversation",
+        "onboarding.summary.editNote": "Review the suggestions and change them before continuing, if you'd like.",
         // Plans module
         "plans.title": "Plans",
         "plans.subtitle": "Create a plan that fits you and follow it step by step.",

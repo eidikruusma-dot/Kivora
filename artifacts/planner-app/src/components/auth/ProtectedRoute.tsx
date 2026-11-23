@@ -18,13 +18,17 @@ export function ProtectedRoute({
   if (!user) return <Navigate to="/login" replace />
   if (!user.emailVerified) return <Navigate to="/verify-email" replace />
 
-  // Redirect new users to onboarding (only once, never from /onboarding itself)
+  // Redirect new users to the AI onboarding chat (never from either
+  // onboarding route itself: /onboarding/chat is the entry point, and
+  // /onboarding is reachable directly via its "Skip" link or as the
+  // AI-recommendation confirmation screen the chat hands off to).
   if (
     !skipOnboarding &&
     !modules.onboardingComplete &&
-    location.pathname !== '/onboarding'
+    location.pathname !== '/onboarding' &&
+    location.pathname !== '/onboarding/chat'
   ) {
-    return <Navigate to="/onboarding" replace />
+    return <Navigate to="/onboarding/chat" replace />
   }
 
   return <>{children}</>

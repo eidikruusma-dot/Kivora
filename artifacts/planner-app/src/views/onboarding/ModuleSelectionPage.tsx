@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Calendar, CheckSquare, StickyNote, Activity, Flag,
   Wallet, GraduationCap, Sparkles, ClipboardList,
@@ -27,6 +27,13 @@ import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
 import KivoraLogo from '@/components/brand/KivoraLogo'
+import { clearOnboardingConversation } from '@/lib/onboardingConversationStore'
+
+/** Hand-off shape from OnboardingChatPage's summary call (see router state). */
+interface OnboardingHandoffState {
+  recommendedModules?: ModuleId[]
+  profileSummary?: string
+}
 
 // ── Purpose → module mapping ─────────────────────────────────────────────────
 
@@ -79,11 +86,23 @@ export const SELECTABLE_MODULE_IDS: ModuleId[] = ALL_MODULE_IDS.filter(
 export default function ModuleSelectionPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
 
+  // Present only when arriving from OnboardingChatPage's "I'm ready"/time-up
+  // summary call — absent for a direct visit or the "Skip" link, in which
+  // case this page behaves exactly as it always has.
+  const handoff = (location.state ?? null) as OnboardingHandoffState | null
+  const recommendedModules = handoff?.recommendedModules?.filter(
+    (id): id is ModuleId => SELECTABLE_MODULE_IDS.includes(id),
+  )
+  const profileSummary = handoff?.profileSummary?.trim()
+
   const [selectedPurposes, setSelectedPurposes] = useState<Set<string>>(new Set())
-  const [enabledModules, setEnabledModules] = useState<Set<ModuleId>>(
-    () => new Set(SELECTABLE_MODULE_IDS),
+  const [enabledModules, setEnabledModules] = useState<Set<ModuleId>>(() =>
+    recommendedModules && recommendedModules.length > 0
+      ? new Set(recommendedModules)
+      : new Set(SELECTABLE_MODULE_IDS),
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -154,6 +173,10 @@ export default function ModuleSelectionPage() {
       }
       // Preserve any other fields that may have been stored
       await saveModuleSettings(user.uid, { ...current, ...settings })
+      // Setup succeeded — the onboarding chat's locally-saved transcript
+      // (if any) has done its job and is deleted now, not merely once the
+      // AI summary call succeeded (see onboardingConversationStore.ts).
+      clearOnboardingConversation(user.uid)
       navigate('/app', { replace: true })
     } catch {
       setError(lang === 'et' ? 'Salvestamine ebaõnnestus. Proovi uuesti.' : 'Failed to save. Please try again.')
@@ -190,6 +213,20 @@ export default function ModuleSelectionPage() {
               {t('modules.subHeading', lang)}
             </p>
           </div>
+
+          {/* AI conversation hand-off: shown only when arriving from
+              OnboardingChatPage's summary call. The module grid below is
+              already pre-selected from recommendedModules — this is purely
+              informational plus the explicit "you can change this" note. */}
+          {profileSummary && (
+            <div className="mb-6 rounded-xl bg-[#EDE9FB] border border-[#DCD2FB] px-4 py-3.5">
+              <p className="text-xs font-semibold text-[#6D28D9] uppercase tracking-wide mb-1.5">
+                {t('onboarding.summary.title', lang)}
+              </p>
+              <p className="text-sm text-[#1A1F36] leading-relaxed mb-1.5">{profileSummary}</p>
+              <p className="text-xs text-[#6B6485]">{t('onboarding.summary.editNote', lang)}</p>
+            </div>
+          )}
 
           {/* Purpose chips */}
           <div className="mb-6">

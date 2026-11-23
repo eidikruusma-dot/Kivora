@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import healthRouter from "./health";
 import aiRouter from "./ai";
 import aiUploadRouter from "./aiUpload";
+import aiOnboardingRouter from "./aiOnboarding";
 import contactRouter from "./contact";
 import supportRouter from "./support";
 import feedbackRouter from "./feedback";
@@ -14,12 +15,13 @@ router.use(healthRouter);
 
 // ── /api/ai boundary ────────────────────────────────────────────────────────
 // Every route under /api/ai (chat, upload, bank-import, bank-import/revalidate,
-// upload-direct-test) calls OpenAI or processes an uploaded file, so all of
-// them require a valid Firebase ID token. requireFirebaseAuth is mounted
-// exactly once, here, ahead of both AI routers — including ahead of
-// aiUploadRouter's multer (multipart/upload) parsing, since that parsing
-// happens inside each individual route handler, which only runs after this
-// middleware calls next(). No individual route inside ai.ts/aiUpload.ts
+// upload-direct-test, onboarding/chat, onboarding/summary) calls OpenAI or
+// processes an uploaded file, so all of them require a valid Firebase ID
+// token. requireFirebaseAuth is mounted exactly once, here, ahead of all
+// three AI routers — including ahead of aiUploadRouter's multer
+// (multipart/upload) parsing, since that parsing happens inside each
+// individual route handler, which only runs after this middleware calls
+// next(). No individual route inside ai.ts/aiUpload.ts/aiOnboarding.ts
 // duplicates this check.
 //
 // requireFirebaseAuth is mounted with the explicit "/ai" path so it only
@@ -33,6 +35,7 @@ const aiBoundary: IRouter = Router();
 aiBoundary.use("/ai", requireFirebaseAuth);
 aiBoundary.use(aiRouter);
 aiBoundary.use(aiUploadRouter);
+aiBoundary.use(aiOnboardingRouter);
 router.use(aiBoundary);
 
 // Non-AI routes stay exactly as before — no authentication requirement added.

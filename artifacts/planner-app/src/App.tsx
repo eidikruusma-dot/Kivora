@@ -31,6 +31,7 @@ import SettingsPage from '@/views/SettingsPage'
 import HelpPage from '@/views/HelpPage'
 import NotificationsPage from '@/views/NotificationsPage'
 import ModuleSelectionPage from '@/views/onboarding/ModuleSelectionPage'
+import OnboardingChatPage from '@/views/onboarding/OnboardingChatPage'
 import { useNotificationGenerators } from '@/lib/notificationGenerators'
 import { CheckSquare, Calendar, StickyNote, Repeat, Target, Sparkles, Settings } from 'lucide-react'
 
@@ -79,6 +80,7 @@ export default function App() {
           <Route path="/app/notifications" element={<ProtectedRoute><AppLayout><NotificationsPage /></AppLayout></ProtectedRoute>} />
           <Route path="/app/profile" element={<ProtectedRoute><AppLayout><ProfilePage /></AppLayout></ProtectedRoute>} />
           <Route path="/onboarding" element={<ProtectedRoute skipOnboarding><ModuleSelectionPage /></ProtectedRoute>} />
+          <Route path="/onboarding/chat" element={<ProtectedRoute skipOnboarding><OnboardingChatPage /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
