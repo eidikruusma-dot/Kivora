@@ -335,6 +335,8 @@ export type TranslationKey =
     // ── Terms ─────────────────────────────────────────────────────────────────
     | "terms.title"
     | "terms.updated"
+    | "terms.draftBadge"
+    | "terms.toc.label"
     // ── Privacy ───────────────────────────────────────────────────────────────
     | "privacy.title"
     | "privacy.updated"
@@ -2239,7 +2241,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "contact.thanks": "Aitäh, et aitad Kivorat paremaks muuta.",
         // terms / privacy
         "terms.title": "Kasutustingimused",
-        "terms.updated": "Viimati uuendatud: 27.07.2026",
+        "terms.updated": "Viimati uuendatud: 23.11.2026",
+        "terms.draftBadge": "Avaldamata mustand",
+        "terms.toc.label": "Sisukord",
         "privacy.title": "Privaatsuspoliitika",
         "privacy.updated": "Viimati uuendatud: 22.11.2026",
         "privacy.draftBadge": "Avaldamata mustand",
@@ -4302,7 +4306,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "contact.thanks": "Thank you for helping make Kivora better.",
         // terms / privacy
         "terms.title": "Terms of Use",
-        "terms.updated": "Last updated: 27.07.2026",
+        "terms.updated": "Last updated: 23.11.2026",
+        "terms.draftBadge": "Unpublished draft",
+        "terms.toc.label": "Contents",
         "privacy.title": "Privacy Policy",
         "privacy.updated": "Last updated: 22.11.2026",
         "privacy.draftBadge": "Unpublished draft",
