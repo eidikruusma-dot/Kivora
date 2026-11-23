@@ -310,9 +310,7 @@ export type TranslationKey =
     // ── Contact ───────────────────────────────────────────────────────────────
     | "contact.title"
     | "contact.subtitle"
-    | "contact.desc1"
-    | "contact.desc2"
-    | "contact.desc3"
+    | "contact.desc"
     | "contact.form.name"
     | "contact.form.namePlaceholder"
     | "contact.form.email"
@@ -327,9 +325,8 @@ export type TranslationKey =
     | "contact.saved"
     | "contact.error"
     | "contact.info.title"
-    | "contact.info.website"
-    | "contact.info.email"
-    | "contact.privacy.title"
+    | "contact.info.generalLabel"
+    | "contact.info.supportLabel"
     | "contact.privacy.text"
     | "contact.thanks"
     // ── Terms ─────────────────────────────────────────────────────────────────
@@ -2212,11 +2209,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         // contact
         "contact.title": "Kontakt",
         "contact.subtitle": "Võta meiega ühendust",
-        "contact.desc1": "Kas sul on küsimusi, ettepanekuid või vajad abi?",
-        "contact.desc2":
-            "Meile on oluline kasutajate tagasiside ja kõik ideed, mis aitavad Kivorat paremaks muuta.",
-        "contact.desc3":
-            "Kui soovid meiega ühendust võtta, täida allolev kontaktivorm. Vastame esimesel võimalusel.",
+        "contact.desc":
+            "Kas sul on küsimusi, ettepanekuid või vajad abi? Täida allolev vorm ja vastame esimesel võimalusel.",
         "contact.form.name": "Nimi",
         "contact.form.namePlaceholder": "Sinu nimi",
         "contact.form.email": "E-posti aadress",
@@ -2232,12 +2226,11 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "contact.saved":
             "Sõnum salvestati, kuid e-posti kättetoimetamist ei saanud kinnitada. Võtame sinu sõnumiga ühendust.",
         "contact.error": "Sõnumi saatmine ebaõnnestus. Palun proovi uuesti.",
-        "contact.info.title": "Kontaktandmed",
-        "contact.info.website": "Veebileht: kivora.ee",
-        "contact.info.email": "E-post: info@kivora.ee",
-        "contact.privacy.title": "Privaatsus",
+        "contact.info.title": "Kontakt ja privaatsus",
+        "contact.info.generalLabel": "Üldised küsimused",
+        "contact.info.supportLabel": "Kasutajatugi",
         "contact.privacy.text":
-            "Kontaktivormi kaudu saadetud andmeid kasutatakse ainult sinu päringule vastamiseks. Neid ei jagata kolmandatele osapooltele ega kasutata turunduslikel eesmärkidel.",
+            "Sinu sõnumit kasutame ainult sellele vastamiseks. Andmeid töötleme vastavalt meie privaatsuspoliitikale",
         "contact.thanks": "Aitäh, et aitad Kivorat paremaks muuta.",
         // terms / privacy
         "terms.title": "Kasutustingimused",
@@ -4277,11 +4270,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         // contact
         "contact.title": "Contact",
         "contact.subtitle": "Get in touch with us",
-        "contact.desc1": "Do you have questions, suggestions, or need help?",
-        "contact.desc2":
-            "User feedback and ideas that help improve Kivora are important to us.",
-        "contact.desc3":
-            "If you would like to contact us, please fill in the contact form below. We will respond as soon as possible.",
+        "contact.desc":
+            "Do you have questions, suggestions, or need help? Fill out the form below and we'll get back to you as soon as possible.",
         "contact.form.name": "Name",
         "contact.form.namePlaceholder": "Your name",
         "contact.form.email": "Email address",
@@ -4297,12 +4287,11 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "contact.saved":
             "Your message was saved but email delivery could not be confirmed. We will still follow up.",
         "contact.error": "Failed to send message. Please try again.",
-        "contact.info.title": "Contact information",
-        "contact.info.website": "Website: kivora.ee",
-        "contact.info.email": "Email: info@kivora.ee",
-        "contact.privacy.title": "Privacy",
+        "contact.info.title": "Contact & privacy",
+        "contact.info.generalLabel": "General questions",
+        "contact.info.supportLabel": "Support",
         "contact.privacy.text":
-            "Data sent through the contact form is used only to respond to your query. It is not shared with third parties or used for marketing purposes.",
+            "We use your message only to respond to it. We process data in accordance with our Privacy Policy",
         "contact.thanks": "Thank you for helping make Kivora better.",
         // terms / privacy
         "terms.title": "Terms of Use",
