@@ -103,7 +103,10 @@ export default function Landing() {
           layers. Ported from the approved static mockup; see
           AuroraBackground / AuroraVisual / AuroraDashboardPanel /
           AuroraGlassFragments for the piece-by-piece port notes. */}
-      <section className="relative isolate pt-10 sm:pt-20 pb-8 sm:pb-20 overflow-hidden">
+      {/* pt-20 clears the fixed PublicHeader's 64px (h-16) bar with a bit of
+          breathing room — pt-10 left the eyebrow badge mostly hidden behind
+          the header on mobile, with only its rounded bottom edge visible. */}
+      <section className="relative isolate pt-20 pb-8 sm:pb-20 overflow-hidden">
         <AuroraBackground />
 
         <div className="relative z-[2] max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-16">
@@ -115,20 +118,19 @@ export default function Landing() {
               variants={staggerContainer}
               className="flex-1 basis-[680px] min-w-0 max-[720px]:text-center max-[720px]:basis-auto"
             >
-              <motion.div
-                variants={fadeUp}
-                className="inline-flex items-center gap-2 text-[13px] font-bold tracking-wide text-[#6D28D9] bg-[#8B5CF6]/10 border border-[#8B5CF6]/[.22] rounded-full pl-3 pr-4 py-[7px] mb-[14px] min-[721px]:mb-[26px]"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-[#8B5CF6] shadow-[0_0_0_4px_rgba(139,92,246,0.18)]" />
-                {t('landing.aurora.eyebrow', lang)}
-              </motion.div>
-
               <motion.h1
                 variants={fadeUp}
-                className="text-[2.5rem] leading-[1.08] sm:text-5xl lg:text-[60px] font-extrabold tracking-tight text-[#1A1F36] mb-4 min-[721px]:mb-6 max-w-[580px] max-[720px]:max-w-full max-[720px]:mx-auto"
+                className="text-[2.5rem] leading-[1.08] sm:text-5xl lg:text-[60px] font-extrabold tracking-tight text-[#1A1F36] mb-3 min-[721px]:mb-4 max-w-[580px] max-[720px]:max-w-full max-[720px]:mx-auto"
               >
                 {t('landing.hero.title', lang)} {t('landing.hero.titleAccent', lang)}
               </motion.h1>
+
+              <motion.p
+                variants={fadeUp}
+                className="text-sm font-semibold tracking-wide text-[#6D28D9] mb-3 min-[721px]:mb-4"
+              >
+                {t('landing.aurora.eyebrow', lang)}
+              </motion.p>
 
               <motion.p
                 variants={fadeUp}
