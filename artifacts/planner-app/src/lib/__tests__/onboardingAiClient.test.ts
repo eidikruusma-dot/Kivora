@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const authenticatedFetchMock = vi.fn()
 vi.mock('@/lib/authenticatedFetch', () => ({
@@ -21,6 +21,26 @@ function sseStream(frames: string[]): ReadableStream<Uint8Array> {
       controller.close()
     },
   })
+}
+
+/** A stream whose frames arrive only when the test calls `push`/`close` — for simulating timing. */
+function controlledStream(): {
+  stream: ReadableStream<Uint8Array>
+  push: (frame: string) => void
+  close: () => void
+} {
+  const encoder = new TextEncoder()
+  let ctrl!: ReadableStreamDefaultController<Uint8Array>
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      ctrl = controller
+    },
+  })
+  return {
+    stream,
+    push: (frame: string) => ctrl.enqueue(encoder.encode(frame)),
+    close: () => ctrl.close(),
+  }
 }
 
 function sseFrame(event: string, data: unknown): string {
@@ -127,6 +147,94 @@ describe('onboardingAiClient — streamOnboardingChatReply', () => {
       onDelta: (text) => received.push(text),
     })
     expect(received).toEqual(['ok'])
+  })
+
+  describe('timeout/stall watchdog', () => {
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    it('calls onSlowResponse once 20s pass with no data, but still resolves normally once data arrives', async () => {
+      const { stream, push, close } = controlledStream()
+      authenticatedFetchMock.mockResolvedValue(okResponse(stream))
+      const onSlowResponse = vi.fn()
+      const received: string[] = []
+
+      const promise = streamOnboardingChatReply({
+        messages: [{ role: 'user', content: 'hi' }],
+        lang: 'et',
+        startedAt: new Date().toISOString(),
+        onSlowResponse,
+        onDelta: (text) => received.push(text),
+      })
+
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(onSlowResponse).toHaveBeenCalledTimes(1)
+
+      push(sseFrame('delta', { content: 'hi there' }))
+      push(sseFrame('done', { finishReason: 'stop' }))
+      close()
+      await promise
+
+      expect(received).toEqual(['hi there'])
+    })
+
+    it('rejects with AI_RESPONSE_TIMEOUT if no data arrives within 60s — the AI never started replying', async () => {
+      const { stream } = controlledStream() // never pushed to, never closed
+      authenticatedFetchMock.mockResolvedValue(okResponse(stream))
+
+      const promise = streamOnboardingChatReply({
+        messages: [{ role: 'user', content: 'hi' }],
+        lang: 'et',
+        startedAt: new Date().toISOString(),
+        onDelta: () => {},
+      })
+      const assertion = expect(promise).rejects.toMatchObject({ code: 'AI_RESPONSE_TIMEOUT' })
+      await vi.advanceTimersByTimeAsync(60_000)
+      await assertion
+    })
+
+    it('rejects with AI_RESPONSE_TIMEOUT if the stream starts, then goes silent for 60s — a mid-stream stall', async () => {
+      const { stream, push } = controlledStream()
+      authenticatedFetchMock.mockResolvedValue(okResponse(stream))
+      const received: string[] = []
+
+      const promise = streamOnboardingChatReply({
+        messages: [{ role: 'user', content: 'hi' }],
+        lang: 'et',
+        startedAt: new Date().toISOString(),
+        onDelta: (text) => received.push(text),
+      })
+
+      // Some real content arrives well before any timeout...
+      await vi.advanceTimersByTimeAsync(5_000)
+      push(sseFrame('delta', { content: 'Tere' }))
+      await vi.advanceTimersByTimeAsync(0)
+
+      // ...then the stream goes completely silent. The 60s stall clock
+      // resets on that last chunk, so this must still time out even though
+      // more than 60s have passed since the request started.
+      const assertion = expect(promise).rejects.toMatchObject({ code: 'AI_RESPONSE_TIMEOUT' })
+      await vi.advanceTimersByTimeAsync(60_000)
+      await assertion
+      expect(received).toEqual(['Tere']) // whatever arrived before the stall is preserved
+    })
+
+    it('a caller-initiated abort (e.g. component unmount) is never reported as AI_RESPONSE_TIMEOUT', async () => {
+      const { stream } = controlledStream()
+      authenticatedFetchMock.mockResolvedValue(okResponse(stream))
+      const controller = new AbortController()
+
+      const promise = streamOnboardingChatReply({
+        messages: [{ role: 'user', content: 'hi' }],
+        lang: 'et',
+        startedAt: new Date().toISOString(),
+        signal: controller.signal,
+        onDelta: () => {},
+      })
+      const assertion = expect(promise).rejects.not.toMatchObject({ code: 'AI_RESPONSE_TIMEOUT' })
+      controller.abort()
+      await assertion
+    })
   })
 })
 

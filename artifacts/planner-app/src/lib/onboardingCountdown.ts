@@ -15,3 +15,14 @@ export function formatCountdown(remainingMs: number): string {
   const seconds = totalSeconds % 60
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
+
+/**
+ * Pushes `startedAt` forward by `wastedMs` and returns the new ISO
+ * timestamp (never mutates). Used when a technical failure — a stream
+ * that was interrupted, or one that timed out waiting for the AI — ate
+ * into the 10-minute budget without the user getting a usable reply for
+ * it, so that wait doesn't count against their actual conversation time.
+ */
+export function extendStartedAtBy(startedAt: string, wastedMs: number): string {
+  return new Date(new Date(startedAt).getTime() + wastedMs).toISOString()
+}

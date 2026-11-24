@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { ONBOARDING_TIME_LIMIT_MS, ONBOARDING_NUDGE_AT_MS, formatCountdown } from '@/lib/onboardingCountdown'
+import {
+  ONBOARDING_TIME_LIMIT_MS,
+  ONBOARDING_NUDGE_AT_MS,
+  formatCountdown,
+  extendStartedAtBy,
+} from '@/lib/onboardingCountdown'
 
 describe('onboardingCountdown', () => {
   it('10-minute limit and 9-minute nudge are expressed in ms, nudge strictly before the limit', () => {
@@ -28,5 +33,23 @@ describe('onboardingCountdown', () => {
   it('rounds up partial seconds so the display never shows 0:00 while time technically remains', () => {
     expect(formatCountdown(1500)).toBe('0:02')
     expect(formatCountdown(100)).toBe('0:01')
+  })
+
+  describe('extendStartedAtBy', () => {
+    it('pushes startedAt forward by exactly the given number of ms', () => {
+      const result = extendStartedAtBy('2026-01-01T00:00:00.000Z', 45_000)
+      expect(result).toBe('2026-01-01T00:00:45.000Z')
+    })
+
+    it('zero wasted ms leaves startedAt unchanged', () => {
+      expect(extendStartedAtBy('2026-01-01T00:00:00.000Z', 0)).toBe('2026-01-01T00:00:00.000Z')
+    })
+
+    it('never mutates its input and always returns a valid ISO string', () => {
+      const input = '2026-06-15T12:30:00.000Z'
+      const result = extendStartedAtBy(input, 90_000)
+      expect(input).toBe('2026-06-15T12:30:00.000Z')
+      expect(new Date(result).toISOString()).toBe(result)
+    })
   })
 })

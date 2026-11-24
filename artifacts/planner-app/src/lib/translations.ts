@@ -1759,6 +1759,7 @@ export type TranslationKey =
     | "onboarding.chat.streamErrorTitle"
     | "onboarding.chat.streamErrorBody"
     | "onboarding.chat.retry"
+    | "onboarding.chat.slowResponseNotice"
     | "onboarding.chat.summaryLoading"
     | "onboarding.chat.summaryErrorTitle"
     | "onboarding.chat.summaryErrorBody"
@@ -3852,6 +3853,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "onboarding.chat.streamErrorTitle": "Ühendus katkes",
         "onboarding.chat.streamErrorBody": "Vastust ei õnnestunud lõpuni tuua. Sinu vestlus on alles.",
         "onboarding.chat.retry": "Proovi uuesti",
+        "onboarding.chat.slowResponseNotice": "Vastus võtab tavapärasest kauem aega. Palun oota veel hetk...",
         "onboarding.chat.summaryLoading": "Koostan sinu jaoks kokkuvõtet...",
         "onboarding.chat.summaryErrorTitle": "Kokkuvõtte loomine ebaõnnestus",
         "onboarding.chat.summaryErrorBody": "Midagi läks valesti. Võid proovida uuesti või valida moodulid käsitsi.",
@@ -5937,6 +5939,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "onboarding.chat.streamErrorTitle": "Connection interrupted",
         "onboarding.chat.streamErrorBody": "The reply couldn't be completed. Your conversation is still here.",
         "onboarding.chat.retry": "Try again",
+        "onboarding.chat.slowResponseNotice": "This is taking longer than usual. Please wait a moment...",
         "onboarding.chat.summaryLoading": "Putting together your summary...",
         "onboarding.chat.summaryErrorTitle": "Couldn't generate a summary",
         "onboarding.chat.summaryErrorBody": "Something went wrong. You can try again or set up modules manually.",

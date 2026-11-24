@@ -34,6 +34,7 @@ import { buildOnboardingChatMessages, buildOnboardingSummaryMessages } from "../
 import { normalizeOnboardingSummary } from "../lib/normalizeOnboardingSummary.js";
 import { allowedOnboardingModuleIds, ONBOARDING_MONEY_MODULE_ENABLED } from "../lib/onboardingConfig.js";
 import { enforceAiQuota } from "../lib/aiQuotaGate.js";
+import { logOnboardingChatStage } from "../lib/onboardingStageLog.js";
 
 const router = Router();
 
@@ -48,6 +49,8 @@ function writeSseEvent(res: Response, event: string, data: unknown): void {
 }
 
 router.post("/ai/onboarding/chat", async (req: Request, res: Response) => {
+  const requestStartedAtMs = Date.now();
+  let chunkCount = 0;
   try {
     const validation = validateOnboardingChatRequest(
       req.body as { messages?: unknown; lang?: unknown; startedAt?: unknown },
@@ -59,12 +62,14 @@ router.post("/ai/onboarding/chat", async (req: Request, res: Response) => {
       return;
     }
     const { lang, messages } = validation;
+    logOnboardingChatStage("request accepted", { msgCount: messages.length });
 
     // Quota check happens BEFORE any SSE header is sent, so a 401/429 here
     // is still a plain JSON response — the same shape every other gated
     // AI route returns, easy for the client to branch on uniformly.
     const { proceed } = await enforceAiQuota(res, "ai/onboarding/chat");
     if (!proceed) return;
+    logOnboardingChatStage("quota ok", { t: Date.now() - requestStartedAtMs });
 
     // Aborts the upstream OpenAI request the moment the browser tab closes
     // or navigates away mid-stream, so a user leaving mid-sentence doesn't
@@ -79,6 +84,7 @@ router.post("/ai/onboarding/chat", async (req: Request, res: Response) => {
 
     let stream: Awaited<ReturnType<typeof openai.chat.completions.create>>;
     try {
+      logOnboardingChatStage("calling OpenAI", { t: Date.now() - requestStartedAtMs });
       stream = await openai.chat.completions.create(
         {
           model: "gpt-4o-mini",
@@ -103,6 +109,10 @@ router.post("/ai/onboarding/chat", async (req: Request, res: Response) => {
       // this through the shared `ReturnType` above, so the cast documents
       // what's structurally guaranteed by the call just made.
       for await (const chunk of stream as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>) {
+        chunkCount++;
+        if (chunkCount === 1) {
+          logOnboardingChatStage("first chunk received", { t: Date.now() - requestStartedAtMs });
+        }
         const choice = chunk.choices[0];
         const delta = choice?.delta?.content;
         if (delta) writeSseEvent(res, "delta", { content: delta });
@@ -118,6 +128,7 @@ router.post("/ai/onboarding/chat", async (req: Request, res: Response) => {
       console.log(`[ai/onboarding/chat] stream interrupted: ${message}`);
       writeSseEvent(res, "error", { error: "AI_STREAM_INTERRUPTED" });
     } finally {
+      logOnboardingChatStage("stream ended", { totalChunks: chunkCount, t: Date.now() - requestStartedAtMs });
       if (!res.writableEnded) res.end();
     }
   } catch (err: unknown) {

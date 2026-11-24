@@ -32,7 +32,12 @@ import {
   type OnboardingConversationMessage,
 } from '@/lib/onboardingConversationStore'
 import { streamOnboardingChatReply, fetchOnboardingSummary, getAiErrorCode } from '@/lib/onboardingAiClient'
-import { ONBOARDING_TIME_LIMIT_MS, ONBOARDING_NUDGE_AT_MS, formatCountdown } from '@/lib/onboardingCountdown'
+import {
+  ONBOARDING_TIME_LIMIT_MS,
+  ONBOARDING_NUDGE_AT_MS,
+  formatCountdown,
+  extendStartedAtBy,
+} from '@/lib/onboardingCountdown'
 
 type Phase = 'chat' | 'time-up' | 'quota-exceeded' | 'summary-loading' | 'summary-error'
 
@@ -49,6 +54,7 @@ export default function OnboardingChatPage() {
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamError, setStreamError] = useState<{ code?: string } | null>(null)
+  const [slowResponseNotice, setSlowResponseNotice] = useState(false)
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>('chat')
   const [deletedNoticeVisible, setDeletedNoticeVisible] = useState(false)
@@ -123,6 +129,7 @@ export default function OnboardingChatPage() {
   const sendMessage = useCallback(
     async (baseHistory: OnboardingConversationMessage[], userText: string) => {
       setStreamError(null)
+      setSlowResponseNotice(false)
       setPendingUserMessage(userText)
       const userMessage: OnboardingConversationMessage = { role: 'user', content: userText }
       const historyWithUser = [...baseHistory, userMessage]
@@ -133,6 +140,7 @@ export default function OnboardingChatPage() {
       const controller = new AbortController()
       abortRef.current = controller
 
+      const requestStartedAtMs = Date.now()
       let accumulated = ''
       try {
         await streamOnboardingChatReply({
@@ -140,7 +148,9 @@ export default function OnboardingChatPage() {
           lang,
           startedAt,
           signal: controller.signal,
+          onSlowResponse: () => setSlowResponseNotice(true),
           onDelta: (chunk) => {
+            setSlowResponseNotice(false)
             accumulated += chunk
             setStreamingText(accumulated)
           },
@@ -164,14 +174,24 @@ export default function OnboardingChatPage() {
           persist(historyWithUser)
           setPhase('quota-exceeded')
         } else {
+          // A technical failure (stream interrupted, or timed out waiting
+          // for the AI — see ONBOARDING_STALL_TIMEOUT_MS) must not eat into
+          // the user's 10-minute conversation budget: push startedAt
+          // forward by exactly how long this failed attempt took, and
+          // persist it so a reload doesn't lose the adjustment.
+          const wastedMs = Date.now() - requestStartedAtMs
+          const extendedStartedAt = extendStartedAtBy(startedAt, wastedMs)
+          setStartedAt(extendedStartedAt)
+          if (uid) saveOnboardingConversation(uid, extendedStartedAt, historyWithUser)
           setStreamError({ code })
         }
       } finally {
         setIsStreaming(false)
+        setSlowResponseNotice(false)
         abortRef.current = null
       }
     },
-    [lang, startedAt],
+    [lang, startedAt, uid],
   )
 
   function handleSend() {
@@ -294,6 +314,9 @@ export default function OnboardingChatPage() {
                   )}
                 </div>
               </div>
+            )}
+            {isStreaming && slowResponseNotice && (
+              <p className="text-center text-[12px] text-[#9A94B8]">{t('onboarding.chat.slowResponseNotice', lang)}</p>
             )}
             <div ref={transcriptEndRef} />
           </div>
