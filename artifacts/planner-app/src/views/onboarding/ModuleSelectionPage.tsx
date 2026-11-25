@@ -28,21 +28,31 @@ import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
 import KivoraLogo from '@/components/brand/KivoraLogo'
 import { clearOnboardingConversation } from '@/lib/onboardingConversationStore'
+import type { OnboardingPurposeId } from '@/lib/onboardingAiClient'
 
 /** Hand-off shape from OnboardingChatPage's summary call (see router state). */
 interface OnboardingHandoffState {
+  recommendedPurposes?: OnboardingPurposeId[]
   recommendedModules?: ModuleId[]
   profileSummary?: string
 }
 
 // ── Purpose → module mapping ─────────────────────────────────────────────────
 
-const ALL_PURPOSE_MODULES: Record<string, ModuleId[]> = {
+const ALL_PURPOSE_MODULES: Record<OnboardingPurposeId, ModuleId[]> = {
   personal:  ['calendar', 'tasks', 'notes', 'habits', 'goals', 'plans'],
   learning:  ['calendar', 'tasks', 'notes', 'school'],
   finance:   ['finance', 'goals', 'tasks'],
   work:      ['calendar', 'tasks', 'notes', 'goals'],
 }
+
+const ALL_PURPOSE_IDS: OnboardingPurposeId[] = ['personal', 'learning', 'finance', 'work']
+
+// Selectable purpose ids for this onboarding page, live-filtered by the flag
+// — mirrors SELECTABLE_MODULE_IDS below.
+export const SELECTABLE_PURPOSE_IDS: OnboardingPurposeId[] = ALL_PURPOSE_IDS.filter(
+  (id) => id !== 'finance' || MONEY_MODULE_ENABLED,
+)
 
 // Modules gated by a central feature flag are filtered out live — re-enabling
 // the flag makes the purpose/module reappear automatically, no further
@@ -93,12 +103,22 @@ export default function ModuleSelectionPage() {
   // summary call — absent for a direct visit or the "Skip" link, in which
   // case this page behaves exactly as it always has.
   const handoff = (location.state ?? null) as OnboardingHandoffState | null
+  const recommendedPurposes = handoff?.recommendedPurposes?.filter(
+    (id): id is OnboardingPurposeId => SELECTABLE_PURPOSE_IDS.includes(id),
+  )
   const recommendedModules = handoff?.recommendedModules?.filter(
     (id): id is ModuleId => SELECTABLE_MODULE_IDS.includes(id),
   )
   const profileSummary = handoff?.profileSummary?.trim()
 
-  const [selectedPurposes, setSelectedPurposes] = useState<Set<string>>(new Set())
+  // Pre-selected from the AI conversation's own judgment of what the
+  // conversation was ABOUT (see buildOnboardingMessages.ts's
+  // recommendedPurposes prompt instructions) — not derived here from which
+  // modules happen to be recommended, so this can disagree with a purpose's
+  // usual module set. Always user-editable afterwards via togglePurpose.
+  const [selectedPurposes, setSelectedPurposes] = useState<Set<OnboardingPurposeId>>(() =>
+    recommendedPurposes && recommendedPurposes.length > 0 ? new Set(recommendedPurposes) : new Set(),
+  )
   const [enabledModules, setEnabledModules] = useState<Set<ModuleId>>(() =>
     recommendedModules && recommendedModules.length > 0
       ? new Set(recommendedModules)
@@ -110,7 +130,7 @@ export default function ModuleSelectionPage() {
   useEffect(() => subscribeToLanguage(s => setLang(s.appLang)), [])
 
   // When purposes change, update the recommended modules
-  function togglePurpose(purposeKey: string) {
+  function togglePurpose(purposeKey: OnboardingPurposeId) {
     const next = new Set(selectedPurposes)
     if (next.has(purposeKey)) {
       next.delete(purposeKey)
@@ -185,7 +205,7 @@ export default function ModuleSelectionPage() {
     }
   }
 
-  const allPurposes = [
+  const allPurposes: { key: OnboardingPurposeId; label: string }[] = [
     { key: 'personal',  label: t('modules.purpose.personal', lang) },
     { key: 'learning',  label: t('modules.purpose.learning', lang) },
     { key: 'finance',   label: t('modules.purpose.finance', lang) },
@@ -279,14 +299,14 @@ export default function ModuleSelectionPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {MODULE_META.map(({ id, icon, accentColor, accentBg }) => {
                 const enabled = enabledModules.has(id)
                 return (
                   <button
                     key={id}
                     onClick={() => toggleModule(id)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
+                    className={`flex items-start gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
                       enabled
                         ? 'border-[#6F5AE8] bg-[#EDE9FB]'
                         : 'border-[#E8ECF0] bg-white hover:border-[#C4B8F8]'
@@ -301,17 +321,17 @@ export default function ModuleSelectionPage() {
                     >
                       {icon}
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className={`text-sm font-semibold leading-tight ${enabled ? 'text-[#1A1F36]' : 'text-[#64748B]'}`}>
                         {t(('modules.name.' + id) as Parameters<typeof t>[0], lang)}
                       </p>
-                      <p className="text-[11px] text-[#94A3B8] leading-tight mt-0.5 line-clamp-1">
+                      <p className="text-[11px] text-[#94A3B8] leading-snug mt-0.5">
                         {t(('modules.desc.' + id) as Parameters<typeof t>[0], lang)}
                       </p>
                     </div>
                     {/* Checkmark */}
                     <div
-                      className={`ml-auto w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                      className={`ml-2 mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
                         enabled ? 'border-[#6F5AE8] bg-[#6F5AE8]' : 'border-[#D1D5DB]'
                       }`}
                     >

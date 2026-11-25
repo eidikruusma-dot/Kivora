@@ -45,6 +45,36 @@ export function allowedOnboardingModuleIds(moneyModuleEnabled: boolean): Onboard
 }
 
 /**
+ * The four top-level "what brings you here" purposes the summary call may
+ * recommend, alongside modules — mirrors
+ * artifacts/planner-app/src/views/onboarding/ModuleSelectionPage.tsx's
+ * `allPurposes` keys exactly (personal/learning/finance/work). Kept here,
+ * not inferred from ONBOARDING_MODULE_IDS, because a purpose is a
+ * human-meaningful judgment about what the conversation was ABOUT, not a
+ * mechanical union of which modules got recommended.
+ */
+export type OnboardingPurposeId = "personal" | "learning" | "finance" | "work";
+
+export const ONBOARDING_PURPOSE_IDS: OnboardingPurposeId[] = ["personal", "learning", "finance", "work"];
+
+/** Same finance-gating as allowedOnboardingModuleIds, for the purpose list. */
+export function allowedOnboardingPurposeIds(moneyModuleEnabled: boolean): OnboardingPurposeId[] {
+  return moneyModuleEnabled
+    ? ONBOARDING_PURPOSE_IDS
+    : ONBOARDING_PURPOSE_IDS.filter((id) => id !== "finance");
+}
+
+/**
+ * The AI must never suggest wrapping up the onboarding conversation before
+ * the user has answered at least this many times — regardless of how
+ * content-rich an early answer is. Enforced in buildOnboardingMessages.ts
+ * by injecting the user's actual reply count into the prompt on every
+ * turn (a programmatic check, not just static wording the model could
+ * choose to ignore).
+ */
+export const ONBOARDING_MIN_USER_REPLIES_BEFORE_WRAP_UP = 4;
+
+/**
  * Hard server-side cap on an onboarding conversation's wall-clock length.
  * The client reports when it started (see validateOnboardingRequest.ts);
  * once this many ms have elapsed, POST /api/ai/onboarding/chat stops

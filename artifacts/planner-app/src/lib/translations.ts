@@ -1897,7 +1897,9 @@ export type TranslationKey =
     | "modules.settingsTitle"
     | "modules.settingsDesc"
     | "modules.atLeastOne"
-    | "modules.saved";
+    | "modules.saved"
+    | "modules.restartOnboarding"
+    | "modules.restartOnboardingDesc";
 
 // ── Dictionary ─────────────────────────────────────────────────────────────
 const dict: Record<AppLang, Record<TranslationKey, string>> = {
@@ -3992,6 +3994,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "modules.settingsDesc": "Lülita sisse ainult need funktsioonid, mida vajad",
         "modules.atLeastOne": "Vali vähemalt üks moodul jätkamiseks",
         "modules.saved": "Salvestatud",
+        "modules.restartOnboarding": "Alusta tutvumisvestlust uuesti",
+        "modules.restartOnboardingDesc": "Käivita AI-tutvumisvestlus otsast peale, et saada uusi moodulisoovitusi.",
     },
     en: {
         // nav
@@ -6078,6 +6082,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "modules.settingsDesc": "Only enable the features you need",
         "modules.atLeastOne": "Select at least one module to continue",
         "modules.saved": "Saved",
+        "modules.restartOnboarding": "Restart the getting-to-know-you conversation",
+        "modules.restartOnboardingDesc": "Run the AI onboarding chat again from the start to get fresh module suggestions.",
     },
 };
 

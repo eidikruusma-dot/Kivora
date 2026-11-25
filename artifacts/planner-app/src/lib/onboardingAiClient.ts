@@ -25,8 +25,12 @@ export interface OnboardingChatMessage {
   content: string
 }
 
+/** Mirrors the backend's OnboardingPurposeId (api-server/src/lib/onboardingConfig.ts) by hand. */
+export type OnboardingPurposeId = 'personal' | 'learning' | 'finance' | 'work'
+
 export interface OnboardingSummary {
   profileSummary: string
+  recommendedPurposes: OnboardingPurposeId[]
   recommendedModules: ModuleId[]
 }
 
@@ -251,6 +255,7 @@ export async function fetchOnboardingSummary(params: {
   const data = await res.json()
   return {
     profileSummary: typeof data.profileSummary === 'string' ? data.profileSummary : '',
+    recommendedPurposes: Array.isArray(data.recommendedPurposes) ? data.recommendedPurposes : [],
     recommendedModules: Array.isArray(data.recommendedModules) ? data.recommendedModules : [],
   }
 }

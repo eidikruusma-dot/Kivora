@@ -32,6 +32,7 @@
 import type { Firestore } from "firebase-admin/firestore";
 import {
   checkAndConsumeAiQuota,
+  refundAiQuotaUnit,
   dailyBucketKeyUtc,
   nextUtcMidnight,
   AI_DAILY_REQUEST_LIMIT_FREE,
@@ -326,6 +327,92 @@ await group("9. concurrency: many requests racing for a handful of remaining slo
 
 await group("Sanity: the exported V1 Free-tier limit is the agreed 20 requests/day", () => {
   assert(AI_DAILY_REQUEST_LIMIT_FREE === 20, "AI_DAILY_REQUEST_LIMIT_FREE is exactly 20");
+});
+
+// ── refundAiQuotaUnit ────────────────────────────────────────────────────
+
+await group("10. refundAiQuotaUnit: decrements an existing count by exactly 1", async () => {
+  const db = makeFakeFirestore();
+  seedUsage(db, "u-refund", FIXED_BUCKET, 5);
+  await refundAiQuotaUnit({ uid: "u-refund", owner: false, now: FIXED_NOW, getDb: () => db });
+  assert(db._store.get(`aiUsage/u-refund_${FIXED_BUCKET}`)?.["count"] === 4, "count went from 5 to 4");
+});
+
+await group("11. refundAiQuotaUnit: never goes negative — floors at 0", async () => {
+  const db = makeFakeFirestore();
+  seedUsage(db, "u-refund-zero", FIXED_BUCKET, 0);
+  await refundAiQuotaUnit({ uid: "u-refund-zero", owner: false, now: FIXED_NOW, getDb: () => db });
+  assert(db._store.get(`aiUsage/u-refund-zero_${FIXED_BUCKET}`)?.["count"] === 0, "count stays at 0, never -1");
+});
+
+await group("12. refundAiQuotaUnit: a no-op for an owner — Firestore is never touched", async () => {
+  let getDbCalled = false;
+  await refundAiQuotaUnit({
+    uid: "u-owner",
+    owner: true,
+    now: FIXED_NOW,
+    getDb: () => {
+      getDbCalled = true;
+      throw new Error("getDb must never be called for an owner refund — nothing was ever consumed for them");
+    },
+  });
+  assert(!getDbCalled, "getDb() was never called");
+});
+
+await group("13. refundAiQuotaUnit: never throws, even when Firestore is entirely unavailable", async () => {
+  let threw = false;
+  try {
+    await refundAiQuotaUnit({
+      uid: "u-refund-broken",
+      owner: false,
+      now: FIXED_NOW,
+      getDb: () => {
+        throw new Error("simulated Firestore/Admin credential failure");
+      },
+    });
+  } catch {
+    threw = true;
+  }
+  assert(!threw, "refundAiQuotaUnit resolves silently instead of throwing — best-effort only");
+});
+
+await group("14. refundAiQuotaUnit: never throws even when the transaction itself fails", async () => {
+  const db = makeFakeFirestore();
+  const throwingDb = {
+    ...db,
+    runTransaction: async () => {
+      throw new Error("simulated Firestore transaction failure");
+    },
+  } as unknown as Firestore;
+  let threw = false;
+  try {
+    await refundAiQuotaUnit({ uid: "u-refund-txn-error", owner: false, now: FIXED_NOW, getDb: () => throwingDb });
+  } catch {
+    threw = true;
+  }
+  assert(!threw, "refundAiQuotaUnit resolves silently instead of throwing");
+});
+
+await group("15. refundAiQuotaUnit runs its own transaction, so it cannot race a concurrent consume and lose an update", async () => {
+  const db = makeFakeFirestore(15);
+  seedUsage(db, "u-refund-race", FIXED_BUCKET, 3);
+
+  // A refund (3 -> 2) and a fresh consume (whatever it reads -> +1) racing
+  // on the same document: whichever transaction commits first, the second
+  // must observe its result (Firestore's per-document serialization), so
+  // the final count must be exactly 3 (net zero change) either way, never
+  // off by one from a lost update.
+  const [, consumeResult] = await Promise.all([
+    refundAiQuotaUnit({ uid: "u-refund-race", owner: false, now: FIXED_NOW, getDb: () => db }),
+    checkAndConsumeAiQuota({ uid: "u-refund-race", owner: false, limit: 20, now: FIXED_NOW, getDb: () => db }),
+  ]);
+
+  assert(consumeResult.allowed === true, "the concurrent consume still succeeded");
+  assert(
+    db._store.get(`aiUsage/u-refund-race_${FIXED_BUCKET}`)?.["count"] === 3,
+    `final count is exactly 3 (net zero change from the refund+consume pair) — got ${db._store.get(`aiUsage/u-refund-race_${FIXED_BUCKET}`)?.["count"]}`,
+  );
+  assert(db._transactionCount() === 2, "both operations actually went through their own transaction (the race was real)");
 });
 
 console.log(`\n${"═".repeat(48)}`);

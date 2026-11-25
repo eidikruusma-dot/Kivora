@@ -32,8 +32,14 @@ import OpenAI from "openai";
 import { validateOnboardingChatRequest, validateOnboardingSummaryRequest } from "../lib/validateOnboardingRequest.js";
 import { buildOnboardingChatMessages, buildOnboardingSummaryMessages } from "../lib/buildOnboardingMessages.js";
 import { normalizeOnboardingSummary } from "../lib/normalizeOnboardingSummary.js";
-import { allowedOnboardingModuleIds, ONBOARDING_MONEY_MODULE_ENABLED } from "../lib/onboardingConfig.js";
+import {
+  allowedOnboardingModuleIds,
+  allowedOnboardingPurposeIds,
+  ONBOARDING_MONEY_MODULE_ENABLED,
+} from "../lib/onboardingConfig.js";
 import { enforceAiQuota } from "../lib/aiQuotaGate.js";
+import { refundAiQuotaUnit } from "../lib/aiQuota.js";
+import type { AuthenticatedUser } from "../middleware/requireFirebaseAuth.js";
 import { logOnboardingChatStage } from "../lib/onboardingStageLog.js";
 
 const router = Router();
@@ -70,6 +76,13 @@ router.post("/ai/onboarding/chat", async (req: Request, res: Response) => {
     const { proceed } = await enforceAiQuota(res, "ai/onboarding/chat");
     if (!proceed) return;
     logOnboardingChatStage("quota ok", { t: Date.now() - requestStartedAtMs });
+    // Set by requireFirebaseAuth before this handler ever runs (see the
+    // aiBoundary in routes/index.ts) — guaranteed present once enforceAiQuota
+    // has returned proceed:true. Kept for the refund calls below: a request
+    // that consumed a quota unit but then delivered nothing of value (the
+    // OpenAI call never started, or produced zero chunks before erroring)
+    // gives that unit back — see aiQuota.ts's refundAiQuotaUnit doc comment.
+    const authUser = res.locals["authUser"] as AuthenticatedUser;
 
     // Aborts the upstream OpenAI request the moment the browser tab closes
     // or navigates away mid-stream, so a user leaving mid-sentence doesn't
@@ -97,6 +110,9 @@ router.post("/ai/onboarding/chat", async (req: Request, res: Response) => {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to start the AI response.";
       console.log(`[ai/onboarding/chat] stream start failed: ${message}`);
+      // The OpenAI call never even started — the user got nothing for the
+      // quota unit enforceAiQuota already consumed above. Give it back.
+      await refundAiQuotaUnit({ uid: authUser.uid, owner: authUser.owner });
       writeSseEvent(res, "error", { error: "AI_STREAM_START_FAILED" });
       res.end();
       return;
@@ -126,6 +142,12 @@ router.post("/ai/onboarding/chat", async (req: Request, res: Response) => {
       // true in that case, so writeSseEvent's own guard makes this a no-op.
       const message = err instanceof Error ? err.message : "The AI response was interrupted.";
       console.log(`[ai/onboarding/chat] stream interrupted: ${message}`);
+      // Only refund when NOTHING of value was delivered: a request that
+      // streamed at least one real chunk genuinely called OpenAI at real
+      // cost, so that one still counts, even though it ended early.
+      if (chunkCount === 0) {
+        await refundAiQuotaUnit({ uid: authUser.uid, owner: authUser.owner });
+      }
       writeSseEvent(res, "error", { error: "AI_STREAM_INTERRUPTED" });
     } finally {
       logOnboardingChatStage("stream ended", { totalChunks: chunkCount, t: Date.now() - requestStartedAtMs });
@@ -162,12 +184,17 @@ router.post("/ai/onboarding/summary", async (req: Request, res: Response) => {
     // wrap-up call itself.
     const { proceed } = await enforceAiQuota(res, "ai/onboarding/summary");
     if (!proceed) return;
+    // See the chat route's identical comment — present once enforceAiQuota
+    // has returned proceed:true, used below to refund the quota unit if
+    // this call ends up delivering nothing usable.
+    const authUser = res.locals["authUser"] as AuthenticatedUser;
 
     const allowedModuleIds = allowedOnboardingModuleIds(ONBOARDING_MONEY_MODULE_ENABLED);
+    const allowedPurposeIds = allowedOnboardingPurposeIds(ONBOARDING_MONEY_MODULE_ENABLED);
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: buildOnboardingSummaryMessages({ lang, messages, allowedModuleIds }),
+      messages: buildOnboardingSummaryMessages({ lang, messages, allowedModuleIds, allowedPurposeIds }),
       response_format: { type: "json_object" },
       max_tokens: 512,
     });
@@ -180,6 +207,7 @@ router.post("/ai/onboarding/summary", async (req: Request, res: Response) => {
     // so a non-"stop" finish (truncated/filtered) must reject outright
     // rather than risk parsing a cut-off object.
     if (finishReason !== "stop") {
+      await refundAiQuotaUnit({ uid: authUser.uid, owner: authUser.owner });
       res.status(422).json({
         error: "The AI summary was incomplete. Please set up modules manually instead.",
         code: "ONBOARDING_SUMMARY_INCOMPLETE",
@@ -195,8 +223,9 @@ router.post("/ai/onboarding/summary", async (req: Request, res: Response) => {
       parsed = null;
     }
 
-    const summary = normalizeOnboardingSummary(parsed, allowedModuleIds);
+    const summary = normalizeOnboardingSummary(parsed, allowedModuleIds, allowedPurposeIds);
     if (!summary) {
+      await refundAiQuotaUnit({ uid: authUser.uid, owner: authUser.owner });
       res.status(422).json({
         error: "Could not generate a summary. Please set up modules manually instead.",
         code: "ONBOARDING_SUMMARY_UNUSABLE",
@@ -207,6 +236,12 @@ router.post("/ai/onboarding/summary", async (req: Request, res: Response) => {
     res.json(summary);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Tundmatu viga.";
+    // A technical failure here (e.g. the OpenAI call itself throwing)
+    // delivered nothing — refund if a quota unit was actually consumed
+    // (authUser only exists once enforceAiQuota has returned proceed:true;
+    // a failure before that point never touched quota in the first place).
+    const authUser = res.locals["authUser"] as AuthenticatedUser | undefined;
+    if (authUser) await refundAiQuotaUnit({ uid: authUser.uid, owner: authUser.owner });
     res.status(500).json({ error: message });
   }
 });

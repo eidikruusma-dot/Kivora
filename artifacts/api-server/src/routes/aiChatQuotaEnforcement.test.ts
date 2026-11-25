@@ -167,7 +167,7 @@ await group("4. owner bypasses quota — using the REAL checkAndConsumeAiQuota, 
   assert(res.statusCode === undefined, "no error response for an owner");
 });
 
-await group("5. quota backend failure fails closed — using the REAL checkAndConsumeAiQuota with a broken getDb", async () => {
+await group("5. quota backend failure fails closed, but is reported distinctly from a real limit hit — using the REAL checkAndConsumeAiQuota with a broken getDb", async () => {
   const res = fakeRes({ uid: "u-backend-down", owner: false });
   const result = await enforceAiQuota(res, "chat", (params) =>
     checkAndConsumeAiQuota({
@@ -178,8 +178,11 @@ await group("5. quota backend failure fails closed — using the REAL checkAndCo
     }),
   );
   assert(result.proceed === false, "proceed is false — a backend failure never falls back to allowing the request");
-  assert(res.statusCode === 429, "responded 429 (fail closed, same response shape as a real limit hit)");
-  assert((res.jsonBody as { code?: string })?.code === "QUOTA_EXCEEDED", "code is QUOTA_EXCEEDED even for a backend failure");
+  assert(res.statusCode === 503, "responded 503, not 429 — this is a technical failure, not the user having hit their real limit");
+  assert(
+    (res.jsonBody as { code?: string })?.code === "AI_QUOTA_CHECK_FAILED",
+    "code is AI_QUOTA_CHECK_FAILED, distinct from QUOTA_EXCEEDED",
+  );
 });
 
 await group("6. no client-supplied field can influence the outcome — enforceAiQuota never reads req at all", async () => {

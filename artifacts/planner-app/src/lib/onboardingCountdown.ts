@@ -26,3 +26,20 @@ export function formatCountdown(remainingMs: number): string {
 export function extendStartedAtBy(startedAt: string, wastedMs: number): string {
   return new Date(new Date(startedAt).getTime() + wastedMs).toISOString()
 }
+
+/**
+ * Computes the `startedAt` to actually use when resuming a saved
+ * conversation. A saved conversation can be up to localStorage's own
+ * expiry window old (currently 24h — see onboardingConversationStore.ts)
+ * and still get resumed, far longer than the 10-minute chat budget.
+ * Resuming with the ORIGINAL startedAt would make the budget look already
+ * spent purely from real time away from the app — an immediate "time's
+ * up" screen before the user has said a word this session. Being away
+ * doesn't use up conversation time, so a conversation that's already past
+ * the limit by the time it's resumed gets a fresh budget starting now;
+ * one still within the limit keeps its real startedAt unchanged.
+ */
+export function resumeStartedAt(savedStartedAt: string, nowMs: number = Date.now()): string {
+  const alreadyPastLimit = nowMs - new Date(savedStartedAt).getTime() >= ONBOARDING_TIME_LIMIT_MS
+  return alreadyPastLimit ? new Date(nowMs).toISOString() : savedStartedAt
+}

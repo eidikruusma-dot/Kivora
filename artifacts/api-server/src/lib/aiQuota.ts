@@ -235,3 +235,55 @@ export async function checkAndConsumeAiQuota(
     };
   }
 }
+
+/**
+ * Best-effort refund of exactly one previously-consumed quota unit,
+ * clamped at 0 — called when a request that successfully passed
+ * checkAndConsumeAiQuota then turned out to deliver nothing of value (the
+ * OpenAI call never started, or started and produced zero usable output
+ * before erroring/timing out). Never throws and never blocks the caller's
+ * response: a failure here just leaves the user's quota consumed, the
+ * same fail-safe direction checkAndConsumeAiQuota itself always takes.
+ *
+ * A no-op for an owner — nothing was ever consumed for them in the first
+ * place (see the owner-bypass branch above), so there is nothing to give
+ * back.
+ *
+ * Runs its own transaction (read-then-write), exactly like
+ * checkAndConsumeAiQuota, so a refund can never race a concurrent
+ * request's own consume (or another refund) on the same document and
+ * lose an update — the same concurrency guarantee, applied symmetrically.
+ */
+export async function refundAiQuotaUnit(
+  params: Pick<CheckAiQuotaParams, "uid" | "owner" | "now" | "getDb">,
+): Promise<void> {
+  const { uid, owner, now = new Date(), getDb = getFirebaseAdminFirestore } = params;
+  if (owner) return;
+
+  let db: Firestore;
+  try {
+    db = getDb();
+  } catch {
+    return;
+  }
+
+  const bucket = dailyBucketKeyUtc(now);
+  const ref = db.collection(AI_USAGE_COLLECTION).doc(usageDocId(uid, bucket));
+
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const data = snap.exists ? snap.data() : undefined;
+      const rawCount = data ? data["count"] : undefined;
+      const used = typeof rawCount === "number" ? rawCount : 0;
+      const nextUsed = Math.max(0, used - 1);
+      tx.set(
+        ref,
+        { uid, date: bucket, count: nextUsed, updatedAt: FieldValue.serverTimestamp() },
+        { merge: true },
+      );
+    });
+  } catch {
+    // Best-effort only — see doc comment above.
+  }
+}

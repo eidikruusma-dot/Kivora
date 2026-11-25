@@ -37,6 +37,7 @@ import {
   ONBOARDING_NUDGE_AT_MS,
   formatCountdown,
   extendStartedAtBy,
+  resumeStartedAt,
 } from '@/lib/onboardingCountdown'
 
 type Phase = 'chat' | 'time-up' | 'quota-exceeded' | 'summary-loading' | 'summary-error'
@@ -80,7 +81,9 @@ export default function OnboardingChatPage() {
     const saved = loadOnboardingConversation(uid)
     if (saved && saved.messages.length > 0) {
       setMessages(saved.messages)
-      setStartedAt(saved.startedAt)
+      const effectiveStartedAt = resumeStartedAt(saved.startedAt)
+      setStartedAt(effectiveStartedAt)
+      if (effectiveStartedAt !== saved.startedAt) saveOnboardingConversation(uid, effectiveStartedAt, saved.messages)
       setResumed(true)
     } else {
       const freshStartedAt = new Date().toISOString()
@@ -225,7 +228,11 @@ export default function OnboardingChatPage() {
       const summary = await fetchOnboardingSummary({ messages, lang })
       navigate('/onboarding', {
         replace: true,
-        state: { recommendedModules: summary.recommendedModules, profileSummary: summary.profileSummary },
+        state: {
+          recommendedPurposes: summary.recommendedPurposes,
+          recommendedModules: summary.recommendedModules,
+          profileSummary: summary.profileSummary,
+        },
       })
     } catch {
       setPhase('summary-error')

@@ -4,6 +4,7 @@ import {
   ONBOARDING_NUDGE_AT_MS,
   formatCountdown,
   extendStartedAtBy,
+  resumeStartedAt,
 } from '@/lib/onboardingCountdown'
 
 describe('onboardingCountdown', () => {
@@ -50,6 +51,30 @@ describe('onboardingCountdown', () => {
       const result = extendStartedAtBy(input, 90_000)
       expect(input).toBe('2026-06-15T12:30:00.000Z')
       expect(new Date(result).toISOString()).toBe(result)
+    })
+  })
+
+  describe('resumeStartedAt', () => {
+    const now = new Date('2026-06-15T12:30:00.000Z').getTime()
+
+    it('keeps the real startedAt when still within the 10-minute budget', () => {
+      const savedStartedAt = new Date(now - 5 * 60 * 1000).toISOString() // 5 min ago
+      expect(resumeStartedAt(savedStartedAt, now)).toBe(savedStartedAt)
+    })
+
+    it('keeps the real startedAt exactly at the boundary (just under the limit)', () => {
+      const savedStartedAt = new Date(now - (ONBOARDING_TIME_LIMIT_MS - 1)).toISOString()
+      expect(resumeStartedAt(savedStartedAt, now)).toBe(savedStartedAt)
+    })
+
+    it('resets to a fresh budget (now) once the saved conversation is already past the 10-minute limit', () => {
+      const savedStartedAt = new Date(now - ONBOARDING_TIME_LIMIT_MS).toISOString() // exactly at the limit
+      expect(resumeStartedAt(savedStartedAt, now)).toBe(new Date(now).toISOString())
+    })
+
+    it('resets to a fresh budget for a conversation resumed hours later (within localStorage\'s 24h expiry)', () => {
+      const savedStartedAt = new Date(now - 3 * 60 * 60 * 1000).toISOString() // 3 hours ago
+      expect(resumeStartedAt(savedStartedAt, now)).toBe(new Date(now).toISOString())
     })
   })
 })

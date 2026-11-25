@@ -24,7 +24,8 @@
  */
 
 import type { OnboardingLang, OnboardingRequestMessage } from "./validateOnboardingRequest.js";
-import type { OnboardingModuleId } from "./onboardingConfig.js";
+import type { OnboardingModuleId, OnboardingPurposeId } from "./onboardingConfig.js";
+import { ONBOARDING_MIN_USER_REPLIES_BEFORE_WRAP_UP } from "./onboardingConfig.js";
 
 export interface OnboardingChatMessageParam {
   role: "system" | "user" | "assistant";
@@ -44,7 +45,8 @@ Rules for how you talk:
 - This is a real conversation, not a fixed questionnaire — let what they say shape what you ask next, rather than following a script.
 - Do not mention tasks, notes, habits, goals, calendar, finance, plans, or school as concrete "features" yet — you are getting to know the person, not pitching the product. The module recommendation happens separately, later, after this conversation ends.
 - You have no access to create, delete, or change anything in Kivora during this conversation. Never claim to have done so.
-- After roughly 5-8 exchanges, once you feel you understand their situation reasonably well, say so warmly and suggest wrapping up (e.g. "I think I've got a good sense of how you like to stay organized — ready to see what I'd suggest?"). Never drag the conversation out artificially.
+- Never suggest wrapping up before the user has answered at least ${ONBOARDING_MIN_USER_REPLIES_BEFORE_WRAP_UP} times — no matter how much they share in an early answer, that alone is never "enough". A system note below each message tells you exactly how many times they've answered so far and whether you're allowed to suggest wrapping up yet; follow that note, not your own impression.
+- Once you are allowed to and you feel you understand their situation reasonably well (typically after 5-8 exchanges total), say so warmly and suggest wrapping up (e.g. "I think I've got a good sense of how you like to stay organized — ready to see what I'd suggest?"). Never drag the conversation out artificially either.
 - Always respond in English.`
     : `Oled Kivora tutvumisvestluse läbiviija, kes kohtub äsja konto loonud uue kasutajaga esimest korda.
 
@@ -57,15 +59,44 @@ Reeglid, kuidas rääkida:
 - See on päris vestlus, mitte fikseeritud küsimustik — lase sellel, mida inimene ütleb, kujundada järgmist küsimust, mitte ei järgi skripti.
 - Ära maini veel ülesandeid, märkmeid, harjumusi, eesmärke, kalendrit, rahaasju, plaane ega kooli kui konkreetseid "funktsioone" — sa tutvud inimesega, mitte ei esitle toodet. Moodulisoovitus tuleb eraldi, hiljem, pärast vestluse lõppu.
 - Sul pole selle vestluse ajal ligipääsu millegi loomiseks, kustutamiseks ega muutmiseks Kivoras. Ära kunagi väida, et oled seda teinud.
-- Umbes 5-8 vastuse järel, kui tunned, et saad inimese olukorrast piisavalt aru, ütle seda soojalt ja paku vestluse lõpetamist (nt "Tundub, et sain hea pildi, kuidas sa ennast korraldad — kas näitan, mida soovitan?"). Ära veni vestlust kunstlikult pikemaks.
+- Ära kunagi paku vestluse lõpetamist enne, kui kasutaja on vastanud vähemalt ${ONBOARDING_MIN_USER_REPLIES_BEFORE_WRAP_UP} korda — ükskõik kui palju ta esimeses vastuses jagab, see üksi ei ole kunagi "piisav". Iga sõnumi all olev süsteemimärkus ütleb täpselt, mitu korda ta on seni vastanud ja kas tohid juba lõpetamist pakkuda — järgi seda märkust, mitte oma muljet.
+- Kui tohid juba ja tunned, et saad inimese olukorrast piisavalt aru (tavaliselt pärast 5-8 vahetust kokku), ütle seda soojalt ja paku vestluse lõpetamist (nt "Tundub, et sain hea pildi, kuidas sa ennast korraldad — kas näitan, mida soovitan?"). Ära veni vestlust kunstlikult pikemaks ka pärast seda.
 - Vasta alati eesti keeles.`;
+}
+
+/** Counts how many times the user has actually replied so far in this transcript. */
+export function countUserReplies(messages: OnboardingRequestMessage[]): number {
+  return messages.filter((m) => m.role === "user").length;
+}
+
+/**
+ * The per-turn, state-aware reinforcement of the minimum-replies rule above
+ * — a programmatic check, not just static wording the model could choose
+ * to ignore: it tells the model the user's EXACT reply count and whether
+ * suggesting wrap-up is allowed yet, recomputed fresh on every single
+ * turn from the real transcript. Positioned last in the message array
+ * (closest to generation), the same positional convention
+ * buildOnboardingSummaryMessages' closing instruction already uses.
+ */
+function buildWrapUpGuardMessage(lang: OnboardingLang, userReplyCount: number): OnboardingChatMessageParam {
+  const allowed = userReplyCount >= ONBOARDING_MIN_USER_REPLIES_BEFORE_WRAP_UP;
+  const content =
+    lang === "en"
+      ? allowed
+        ? `[System note: the user has answered ${userReplyCount} time(s) so far. You may now suggest wrapping up if it feels natural, but you don't have to yet.]`
+        : `[System note: the user has answered only ${userReplyCount} time(s) so far (minimum ${ONBOARDING_MIN_USER_REPLIES_BEFORE_WRAP_UP} required). Do NOT suggest wrapping up or claim to understand them well enough yet, no matter how rich their last answer was — ask a genuine next question instead.]`
+      : allowed
+        ? `[Süsteemimärkus: kasutaja on seni vastanud ${userReplyCount} korda. Võid nüüd pakkuda vestluse lõpetamist, kui see tundub loomulik, aga ei pea veel.]`
+        : `[Süsteemimärkus: kasutaja on seni vastanud ainult ${userReplyCount} korda (minimaalselt vajalik: ${ONBOARDING_MIN_USER_REPLIES_BEFORE_WRAP_UP}). ÄRA paku veel vestluse lõpetamist ega väida, et saad temast piisavalt aru, ükskõik kui sisukas tema viimane vastus oli — küsi selle asemel päris järgmine küsimus.]`;
+  return { role: "system", content };
 }
 
 /**
  * Builds the full OpenAI message array for one onboarding chat turn: the
  * system prompt, then the conversation so far (including the current turn
- * as the last message) — no CURRENT_KIVORA_STATE equivalent, since a
- * brand-new onboarding user has no Kivora data yet to ground against.
+ * as the last message), then the wrap-up guard note recomputed from the
+ * real transcript — no CURRENT_KIVORA_STATE equivalent, since a brand-new
+ * onboarding user has no Kivora data yet to ground against.
  */
 export function buildOnboardingChatMessages(params: {
   lang: OnboardingLang;
@@ -74,6 +105,7 @@ export function buildOnboardingChatMessages(params: {
   return [
     { role: "system", content: buildOnboardingChatSystemPrompt(params.lang) },
     ...params.messages,
+    buildWrapUpGuardMessage(params.lang, countUserReplies(params.messages)),
   ];
 }
 
@@ -81,35 +113,65 @@ function formatAllowedModuleIdsForPrompt(allowedModuleIds: OnboardingModuleId[])
   return allowedModuleIds.map((id) => `"${id}"`).join(", ");
 }
 
+/**
+ * Short, human-meaning descriptions of each purpose id, embedded in the
+ * summary prompt so the model classifies from what the conversation was
+ * actually ABOUT — not by mechanically unioning whichever modules it also
+ * recommended. Mirrors the labels shown on ModuleSelectionPage.tsx's
+ * purpose chips (modules.purpose.* translations) so the model's judgment
+ * and the UI the user then sees describe the same four concepts.
+ */
+function formatAllowedPurposeIdsForPrompt(lang: OnboardingLang, allowedPurposeIds: OnboardingPurposeId[]): string {
+  const labels: Record<OnboardingLang, Record<OnboardingPurposeId, string>> = {
+    en: {
+      personal: `"personal" (personal life — daily routines, family, household, personal projects)`,
+      learning: `"learning" (studies, school, courses)`,
+      finance: `"finance" (money, budgeting, financial goals)`,
+      work: `"work" (job, career, professional tasks)`,
+    },
+    et: {
+      personal: `"personal" (isiklik elu — igapäevane korraldus, perekond, kodu, isiklikud projektid)`,
+      learning: `"learning" (õpingud, kool, kursused)`,
+      finance: `"finance" (rahaasjad, eelarve, rahalised eesmärgid)`,
+      work: `"work" (töö, karjäär, tööalased ülesanded)`,
+    },
+  };
+  return allowedPurposeIds.map((id) => labels[lang][id]).join(", ");
+}
+
 function buildOnboardingSummarySystemPrompt(
   lang: OnboardingLang,
   allowedModuleIds: OnboardingModuleId[],
+  allowedPurposeIds: OnboardingPurposeId[],
 ): string {
   const idList = formatAllowedModuleIdsForPrompt(allowedModuleIds);
+  const purposeList = formatAllowedPurposeIdsForPrompt(lang, allowedPurposeIds);
   return lang === "en"
     ? `You just finished a short getting-to-know-you conversation with a new Kivora user (the full transcript follows as the conversation history below). Your job now is ONLY to summarize it as JSON — do not continue the conversation, do not ask any more questions.
 
 Respond with a single JSON object, exactly this shape:
-{"profileSummary": string, "recommendedModules": string[]}
+{"profileSummary": string, "recommendedPurposes": string[], "recommendedModules": string[]}
 
 - "profileSummary": 1-3 short sentences, written TO the user ("You mentioned..."), warmly recapping what you learned about how they organize their life. Never invent anything they did not actually say.
-- "recommendedModules": an array containing only values from this exact list: [${idList}]. Include only modules that genuinely fit what they described — not all of them by default. If nothing in the conversation points to a particular module, leave it out.
-- If the conversation is too short or unclear to recommend anything confidently, return an empty recommendedModules array rather than guessing.`
+- "recommendedPurposes": an array containing only values from this exact list, judged from what the conversation was actually ABOUT, not from which modules you separately recommend: ${purposeList}. Include a purpose only if the conversation genuinely touched on it.
+- "recommendedModules": an array containing only values from this exact list: [${idList}]. Include only modules that genuinely fit what they described — not all of them by default, and not simply every module that is loosely associated with a recommended purpose. If nothing in the conversation points to a particular module, leave it out.
+- If the conversation is too short or unclear to recommend anything confidently, return empty arrays for both rather than guessing.`
     : `Lõpetasid just lühikese tutvumisvestluse uue Kivora kasutajaga (täielik transkript on allpool vestlusajaloona). Sinu ülesanne on nüüd AINULT see JSON-ina kokku võtta — ära jätka vestlust, ära küsi enam ühtegi küsimust.
 
 Vasta ühe JSON-objektiga, täpselt sellisel kujul:
-{"profileSummary": string, "recommendedModules": string[]}
+{"profileSummary": string, "recommendedPurposes": string[], "recommendedModules": string[]}
 
 - "profileSummary": 1-3 lühikest lauset, kirjutatud KASUTAJALE ("Sa mainisid..."), mis võtab soojalt kokku, mida said teada tema elukorralduse kohta. Ära kunagi väljamõtle midagi, mida ta tegelikult ei öelnud.
-- "recommendedModules": massiiv, mis sisaldab ainult väärtusi sellest täpsest loendist: [${idList}]. Lisa ainult moodulid, mis tõeliselt sobivad sellega, mida ta kirjeldas — mitte kõiki vaikimisi. Kui vestluses pole miski konkreetse mooduli kasuks, jäta see välja.
-- Kui vestlus on liiga lühike või ebaselge, et midagi kindlalt soovitada, tagasta tühi recommendedModules massiiv, mitte ei arva.`;
+- "recommendedPurposes": massiiv, mis sisaldab ainult väärtusi sellest täpsest loendist, hinnatuna selle põhjal, MILLEST vestlus tegelikult rääkis, mitte selle põhjal, milliseid mooduleid eraldi soovitad: ${purposeList}. Lisa eesmärk ainult siis, kui vestlus tegelikult seda puudutas.
+- "recommendedModules": massiiv, mis sisaldab ainult väärtusi sellest täpsest loendist: [${idList}]. Lisa ainult moodulid, mis tõeliselt sobivad sellega, mida ta kirjeldas — mitte kõiki vaikimisi ja mitte lihtsalt kõiki mooduleid, mis on soovitatud eesmärgiga lõdvalt seotud. Kui vestluses pole miski konkreetse mooduli kasuks, jäta see välja.
+- Kui vestlus on liiga lühike või ebaselge, et midagi kindlalt soovitada, tagasta mõlema jaoks tühi massiiv, mitte ei arva.`;
 }
 
 /**
  * Builds the full OpenAI message array for the one-time onboarding
- * summary call: the summary instructions + allowed module list as the
- * system prompt, the full transcript as conversation history, and a final
- * system message (closest to generation, same positional convention
+ * summary call: the summary instructions + allowed module/purpose lists as
+ * the system prompt, the full transcript as conversation history, and a
+ * final system message (closest to generation, same positional convention
  * buildChatMessages.ts's CURRENT_KIVORA_STATE already uses) reiterating
  * that only JSON should be returned now.
  */
@@ -117,6 +179,7 @@ export function buildOnboardingSummaryMessages(params: {
   lang: OnboardingLang;
   messages: OnboardingRequestMessage[];
   allowedModuleIds: OnboardingModuleId[];
+  allowedPurposeIds: OnboardingPurposeId[];
 }): OnboardingChatMessageParam[] {
   const closingInstruction =
     params.lang === "en"
@@ -124,7 +187,10 @@ export function buildOnboardingSummaryMessages(params: {
       : "Ülalolev vestlus on lõppenud. Vasta nüüd ainult eespool kirjeldatud JSON-objektiga — muud teksti mitte.";
 
   return [
-    { role: "system", content: buildOnboardingSummarySystemPrompt(params.lang, params.allowedModuleIds) },
+    {
+      role: "system",
+      content: buildOnboardingSummarySystemPrompt(params.lang, params.allowedModuleIds, params.allowedPurposeIds),
+    },
     ...params.messages,
     { role: "system", content: closingInstruction },
   ];

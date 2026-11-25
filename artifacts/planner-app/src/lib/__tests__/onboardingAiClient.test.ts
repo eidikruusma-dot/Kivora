@@ -241,19 +241,27 @@ describe('onboardingAiClient — streamOnboardingChatReply', () => {
 describe('onboardingAiClient — fetchOnboardingSummary', () => {
   beforeEach(() => authenticatedFetchMock.mockReset())
 
-  it('returns the parsed profileSummary and recommendedModules on success', async () => {
+  it('returns the parsed profileSummary, recommendedPurposes and recommendedModules on success', async () => {
     authenticatedFetchMock.mockResolvedValue({
       ok: true,
-      json: async () => ({ profileSummary: 'Sa oled üliõpilane.', recommendedModules: ['tasks', 'calendar'] }),
+      json: async () => ({
+        profileSummary: 'Sa oled üliõpilane.',
+        recommendedPurposes: ['learning'],
+        recommendedModules: ['tasks', 'calendar'],
+      }),
     } as unknown as Response)
     const result = await fetchOnboardingSummary({ messages: [{ role: 'user', content: 'hi' }], lang: 'et' })
-    expect(result).toEqual({ profileSummary: 'Sa oled üliõpilane.', recommendedModules: ['tasks', 'calendar'] })
+    expect(result).toEqual({
+      profileSummary: 'Sa oled üliõpilane.',
+      recommendedPurposes: ['learning'],
+      recommendedModules: ['tasks', 'calendar'],
+    })
   })
 
   it('defaults to an empty summary shape if the server response is missing fields', async () => {
     authenticatedFetchMock.mockResolvedValue({ ok: true, json: async () => ({}) } as unknown as Response)
     const result = await fetchOnboardingSummary({ messages: [{ role: 'user', content: 'hi' }], lang: 'et' })
-    expect(result).toEqual({ profileSummary: '', recommendedModules: [] })
+    expect(result).toEqual({ profileSummary: '', recommendedPurposes: [], recommendedModules: [] })
   })
 
   it('rejects with the server error code on failure (e.g. ONBOARDING_SUMMARY_INCOMPLETE)', async () => {

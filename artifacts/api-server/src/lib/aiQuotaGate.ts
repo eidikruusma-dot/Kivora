@@ -58,6 +58,23 @@ export async function enforceAiQuota(
     // Safe diagnostic logging only: route label and the quota decision's
     // reason — never uid, email, filename, or any request content.
     console.log(`[${routeLabel}] quota denied reason=${quota.reason}`);
+
+    // A technical failure to even CHECK quota (Firestore/Admin credentials
+    // unavailable, the transaction itself erroring) is NOT the same thing
+    // as the user genuinely having used up today's limit. Reporting it as
+    // QUOTA_EXCEEDED would tell them "come back tomorrow" for what is
+    // really a transient backend problem — a distinct status/code lets the
+    // client show an honest, different message and simply invite a retry.
+    // The request is still refused either way (fail-closed) — only the
+    // response shown to the user differs.
+    if (quota.reason === "quota_lookup_failed") {
+      res.status(503).json({
+        error: "Could not verify your AI usage limit right now. Please try again in a moment.",
+        code: "AI_QUOTA_CHECK_FAILED",
+      });
+      return { proceed: false };
+    }
+
     res.status(429).json({
       error: "Daily AI request limit reached. Try again tomorrow.",
       code: "QUOTA_EXCEEDED",

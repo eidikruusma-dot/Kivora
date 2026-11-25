@@ -25,7 +25,7 @@
  *      non-owner request naturally fails closed in THIS test environment,
  *      because no real Firebase Admin credentials are configured here —
  *      checkAndConsumeAiQuota's getDb() throws, enforceAiQuota resolves
- *      allowed:false, and the route responds 429 QUOTA_EXCEEDED WITHOUT
+ *      allowed:false, and the route responds 503 AI_QUOTA_CHECK_FAILED WITHOUT
  *      ever reaching its extraction/OpenAI code. This is exercised
  *      against the real, unmodified handler functions — not a stand-in —
  *      and is exactly the "quota backend failure fails closed before any
@@ -186,34 +186,34 @@ function getRouteHandler(
   return lastHandler as (req: Request, res: Response) => Promise<void>;
 }
 
-await group("3. /ai/upload: authenticated non-owner request fails closed (no real Admin credentials here) — 429, never reaches extraction", async () => {
+await group("3. /ai/upload: authenticated non-owner request fails closed (no real Admin credentials here) — 503 AI_QUOTA_CHECK_FAILED, never reaches extraction", async () => {
   const { default: aiUploadRouter } = await import("./aiUpload.js");
   const handler = getRouteHandler(aiUploadRouter, "/ai/upload");
   const req = fakeFileReq("statement.pdf", "application/pdf");
   const res = fakeRes();
   await handler(req, res);
-  assert(res.statusCode === 429, `responded 429 (got ${res.statusCode})`);
-  assert((res.jsonBody as { code?: string })?.code === "QUOTA_EXCEEDED", "code is QUOTA_EXCEEDED");
+  assert(res.statusCode === 503, `responded 503 — a quota-check failure, not a real limit hit (got ${res.statusCode})`);
+  assert((res.jsonBody as { code?: string })?.code === "AI_QUOTA_CHECK_FAILED", "code is AI_QUOTA_CHECK_FAILED");
 });
 
-await group("4. /ai/bank-import: authenticated non-owner request fails closed — 429, never reaches extraction", async () => {
+await group("4. /ai/bank-import: authenticated non-owner request fails closed — 503 AI_QUOTA_CHECK_FAILED, never reaches extraction", async () => {
   const { default: aiUploadRouter } = await import("./aiUpload.js");
   const handler = getRouteHandler(aiUploadRouter, "/ai/bank-import");
   const req = fakeFileReq("statement.pdf", "application/pdf");
   const res = fakeRes();
   await handler(req, res);
-  assert(res.statusCode === 429, `responded 429 (got ${res.statusCode})`);
-  assert((res.jsonBody as { code?: string })?.code === "QUOTA_EXCEEDED", "code is QUOTA_EXCEEDED");
+  assert(res.statusCode === 503, `responded 503 — a quota-check failure, not a real limit hit (got ${res.statusCode})`);
+  assert((res.jsonBody as { code?: string })?.code === "AI_QUOTA_CHECK_FAILED", "code is AI_QUOTA_CHECK_FAILED");
 });
 
-await group("5. /ai/upload-direct-test: authenticated non-owner request fails closed — 429, never reaches extraction", async () => {
+await group("5. /ai/upload-direct-test: authenticated non-owner request fails closed — 503 AI_QUOTA_CHECK_FAILED, never reaches extraction", async () => {
   const { default: aiUploadRouter } = await import("./aiUpload.js");
   const handler = getRouteHandler(aiUploadRouter, "/ai/upload-direct-test");
   const req = fakeFileReq("statement.pdf", "application/pdf");
   const res = fakeRes();
   await handler(req, res);
-  assert(res.statusCode === 429, `responded 429 (got ${res.statusCode})`);
-  assert((res.jsonBody as { code?: string })?.code === "QUOTA_EXCEEDED", "code is QUOTA_EXCEEDED");
+  assert(res.statusCode === 503, `responded 503 — a quota-check failure, not a real limit hit (got ${res.statusCode})`);
+  assert((res.jsonBody as { code?: string })?.code === "AI_QUOTA_CHECK_FAILED", "code is AI_QUOTA_CHECK_FAILED");
 });
 
 await group("6. /ai/bank-import/revalidate: unaffected — still runs its own real validation, not the quota gate", async () => {
@@ -223,7 +223,7 @@ await group("6. /ai/bank-import/revalidate: unaffected — still runs its own re
   // No transactions/bankMeta in the body — revalidate's OWN existing
   // validation should reject this with its own 400, proving the handler
   // ran its real logic rather than being intercepted by any quota gate
-  // (which would have produced 429 QUOTA_EXCEEDED, not 400).
+  // (which would have produced a 429/503 quota response, not 400).
   const req = { body: {} } as unknown as Request;
   await handler(req, res);
   assert(res.statusCode === 400, `revalidate's own validation still runs (got ${res.statusCode}, expected 400)`);
