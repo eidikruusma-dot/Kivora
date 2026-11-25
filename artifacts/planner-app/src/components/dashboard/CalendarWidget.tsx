@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { ArrowRight, CalendarPlus } from 'lucide-react'
+import { ArrowRight, CalendarPlus, Calendar } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import Card from '@/components/ui/AppCard'
+import DashboardCard from '@/components/dashboard/DashboardCard'
 import { useCalendarEvents, addCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '@/lib/calendarStore'
 import { getEventsForDate } from '@/lib/calendar/eventLayout'
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
@@ -62,12 +62,15 @@ export default function CalendarWidget() {
 
   return (
     <>
-      <Card className="h-full flex flex-col">
+      <DashboardCard className="h-full flex flex-col">
         <div className="px-5 py-4 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-[#1A1F36]">{t('dash.calendar.title', lang)}</h2>
+          <h2 className="flex items-center gap-2 text-sm font-bold text-[#1A1F36] dark:text-[#F1EFFB]">
+            <Calendar size={17} className="text-[#6F5AE8] dark:text-[#A78BFA]" />
+            {t('dash.calendar.title', lang)}
+          </h2>
           <button
             onClick={() => navigate('/app/calendar')}
-            className="text-[11px] text-[#6F5AE8] font-medium flex items-center gap-0.5 hover:underline"
+            className="text-[11px] text-[#6F5AE8] dark:text-[#A78BFA] font-medium flex items-center gap-0.5 hover:underline"
           >
             {t('dash.viewCalendar', lang)} <ArrowRight size={11} />
           </button>
@@ -76,13 +79,13 @@ export default function CalendarWidget() {
         <div className="flex-1 px-5 space-y-1 overflow-y-auto scrollbar-thin pb-3">
           {todayEvents.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-5 text-center gap-2.5">
-              <div className="w-12 h-12 rounded-full bg-[#EFF6FF] flex items-center justify-center">
-                <CalendarPlus size={22} className="text-[#3B82F6]" />
+              <div className="w-12 h-12 rounded-full bg-[#EFF6FF] dark:bg-blue-400/15 flex items-center justify-center">
+                <CalendarPlus size={22} className="text-[#3B82F6] dark:text-blue-300" />
               </div>
-              <p className="text-xs text-[#94A3B8] max-w-[220px]">{t('dash.calendar.empty', lang)}</p>
+              <p className="text-xs text-[#94A3B8] dark:text-[#9C96C2] max-w-[220px]">{t('dash.calendar.empty', lang)}</p>
               <button
                 onClick={() => setAddOpen(true)}
-                className="min-h-[44px] px-4 flex items-center justify-center rounded-xl bg-[#EFF6FF] text-[#3B82F6] text-xs font-semibold hover:opacity-80 transition-opacity"
+                className="min-h-[44px] px-4 flex items-center justify-center rounded-xl bg-[#EFF6FF] dark:bg-blue-400/15 text-[#3B82F6] dark:text-blue-300 text-xs font-semibold hover:opacity-80 transition-opacity"
               >
                 {t('dash.calendar.emptyCta', lang)}
               </button>
@@ -92,21 +95,21 @@ export default function CalendarWidget() {
               <div
                 key={event.id}
                 onClick={() => setSelectedEventId(event.id)}
-                className="flex items-center gap-3 py-2 rounded-lg px-1 -mx-1 cursor-pointer hover:bg-[#F8F7F4] transition-colors"
+                className="flex items-center gap-3 py-2 rounded-lg px-1 -mx-1 cursor-pointer hover:bg-[#F8F7F4] dark:hover:bg-white/5 transition-colors"
               >
                 <div
                   className="w-0.5 h-8 rounded-full flex-shrink-0"
                   style={{ background: event.color ?? '#6F5AE8' }}
                 />
                 <div className="flex-shrink-0 w-12">
-                  <span className="text-sm font-bold text-[#1A1F36]">{event.startTime}</span>
+                  <span className="text-sm font-bold text-[#1A1F36] dark:text-[#F1EFFB]">{event.startTime}</span>
                 </div>
-                <span className="text-sm text-[#1A1F36] truncate">{event.title}</span>
+                <span className="text-sm text-[#1A1F36] dark:text-[#F1EFFB] truncate">{event.title}</span>
               </div>
             ))
           )}
         </div>
-      </Card>
+      </DashboardCard>
 
       {/* Event details */}
       <EventDetailsModal

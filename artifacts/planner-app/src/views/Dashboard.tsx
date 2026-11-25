@@ -7,8 +7,22 @@ import HabitsWidget from '@/components/dashboard/HabitsWidget'
 import GoalsWidget from '@/components/dashboard/GoalsWidget'
 import QuickActionsWidget from '@/components/dashboard/QuickActionsWidget'
 import HeroCard from '@/components/dashboard/HeroCard'
+import DashboardStatCards from '@/components/dashboard/DashboardStatCards'
+import DashboardBackground from '@/components/dashboard/DashboardBackground'
 import { useModules } from '@/lib/modulesStore'
 
+/**
+ * Single, unified, mobile-first flow for every breakpoint — replacing the
+ * earlier "fixed-height desktop grid vs. natural-flow mobile" split. The
+ * confirmed design reference is itself a tall, naturally-scrolling page
+ * (greeting → 4 separate stat cards → quick actions → task/calendar row →
+ * habit/goal row → quick note), so the dashboard now follows that same
+ * structure at every width instead of trying to force everything into a
+ * fixed desktop viewport height (which was producing large empty gaps
+ * under the Habits/Goals row on wide screens). Only the column COUNT of
+ * each row adapts with the viewport (1 col on narrow phones, 2 from sm:),
+ * not the overall composition.
+ */
 export default function Dashboard() {
   const location = useLocation()
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -19,89 +33,38 @@ export default function Dashboard() {
     scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }, [location.key])
 
-  // Build visible widget arrays — QuickActionsWidget is always shown
-  const row1 = [
+  const taskCalRow = [
     modules.tasks    && <TasksWidget    key="tasks"    />,
     modules.calendar && <CalendarWidget key="calendar" />,
-    modules.notes    && <QuickNoteWidget key="notes"   />,
   ].filter(Boolean) as React.ReactElement[]
 
-  const row2 = [
-    modules.habits && <HabitsWidget  key="habits" />,
-    modules.goals  && <GoalsWidget   key="goals"  />,
-    <QuickActionsWidget key="actions" />,
+  const habitGoalRow = [
+    modules.habits && <HabitsWidget key="habits" />,
+    modules.goals  && <GoalsWidget  key="goals"  />,
   ].filter(Boolean) as React.ReactElement[]
-
-  // Combine rows; if row1 is empty, put everything in a single row
-  const allWidgets = [...row1, ...row2]
-
-  // Desktop: split into two balanced rows (up to 3 per row)
-  const desktopRow1 = row1.length > 0 ? row1 : allWidgets.slice(0, Math.ceil(allWidgets.length / 2))
-  const desktopRow2 = row1.length > 0 ? row2 : allWidgets.slice(Math.ceil(allWidgets.length / 2))
 
   return (
-    <div ref={scrollRef} className="h-full overflow-y-auto scrollbar-thin lg:overflow-hidden">
-      {/* Desktop: fixed grid with hero strip + up to 2 rows of cards */}
-      <div className="hidden lg:flex lg:h-full lg:min-h-0 lg:flex-col px-8 pt-4 pb-5 gap-3.5">
-        <div className="flex-shrink-0">
-          <HeroCard />
-        </div>
+    <div ref={scrollRef} className="relative h-full overflow-y-auto scrollbar-thin bg-[#FBFAFF] dark:bg-transparent">
+      <DashboardBackground />
 
-        {allWidgets.length > 0 ? (
-          <div
-            className="flex-1 min-h-0 gap-3.5"
-            style={{
-              display: 'grid',
-              gridTemplateRows: desktopRow2.length > 0
-                ? 'minmax(0, 1fr) minmax(0, 1fr)'
-                : 'minmax(0, 1fr)',
-            }}
-          >
-            {/* Row 1 */}
-            {desktopRow1.length > 0 && (
-              <div
-                className="min-h-0 gap-3.5"
-                style={{ display: 'grid', gridTemplateColumns: `repeat(${desktopRow1.length}, minmax(0, 1fr))` }}
-              >
-                {desktopRow1}
-              </div>
-            )}
-            {/* Row 2 */}
-            {desktopRow2.length > 0 && (
-              <div
-                className="min-h-0 gap-3.5"
-                style={{ display: 'grid', gridTemplateColumns: `repeat(${desktopRow2.length}, minmax(0, 1fr))` }}
-              >
-                {desktopRow2}
-              </div>
-            )}
-          </div>
-        ) : (
-          /* All modules disabled — empty state */
-          <div className="flex-1 flex items-center justify-center text-sm text-[#94A3B8]">
-            {/* Modules can be re-enabled in Settings */}
-          </div>
-        )}
-      </div>
-
-      {/*
-       * Mobile / tablet (< lg): natural flow with page scroll.
-       *
-       * Widget columns:
-       *   < sm  (portrait phone  ≤ 639 px)  → 1 column
-       *   sm+   (landscape phone ≥ 640 px)  → 2 columns
-       *
-       * The sm breakpoint (640 px) captures virtually all landscape phones
-       * (iPhone SE landscape = 667 px, Pixel 5 landscape = 851 px, etc.)
-       * without affecting portrait phones.
-       */}
-      <div className="flex flex-col px-4 sm:px-6 pt-3 sm:pt-4 pb-4 gap-3 lg:hidden">
+      <div className="relative z-10 flex flex-col gap-3 sm:gap-4 px-4 sm:px-6 lg:px-8 pt-3 sm:pt-4 pb-6 max-w-[1280px] mx-auto">
         <HeroCard />
-        {allWidgets.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {allWidgets}
+        <DashboardStatCards />
+        <QuickActionsWidget />
+
+        {taskCalRow.length > 0 && (
+          <div className={`grid grid-cols-1 ${taskCalRow.length > 1 ? 'sm:grid-cols-2' : ''} gap-3 sm:gap-4 items-stretch`}>
+            {taskCalRow}
           </div>
         )}
+
+        {habitGoalRow.length > 0 && (
+          <div className={`grid grid-cols-1 ${habitGoalRow.length > 1 ? 'sm:grid-cols-2' : ''} gap-3 sm:gap-4 items-stretch`}>
+            {habitGoalRow}
+          </div>
+        )}
+
+        {modules.notes && <QuickNoteWidget />}
       </div>
     </div>
   )

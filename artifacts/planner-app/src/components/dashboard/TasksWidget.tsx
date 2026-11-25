@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { ArrowRight, ListChecks } from 'lucide-react'
+import { ArrowRight, ListChecks, CheckSquare } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import Card from '@/components/ui/AppCard'
+import DashboardCard from '@/components/dashboard/DashboardCard'
 import { useTasks, toggleTask, addTask } from '@/lib/tasksStore'
 import TaskDetailModal from '@/components/dashboard/TaskDetailModal'
 import AddTaskModal from '@/components/tasks/AddTaskModal'
@@ -11,9 +11,9 @@ import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
 
 const priorityColor: Record<Priority, string> = {
-  high: 'text-orange-500',
-  medium: 'text-orange-400',
-  low: 'text-slate-400',
+  high: 'text-orange-500 dark:text-orange-300',
+  medium: 'text-orange-400 dark:text-orange-300/80',
+  low: 'text-slate-400 dark:text-slate-500',
 }
 
 export default function TasksWidget() {
@@ -34,12 +34,15 @@ export default function TasksWidget() {
 
   return (
     <>
-      <Card className="h-full flex flex-col">
+      <DashboardCard className="h-full flex flex-col">
         <div className="px-5 py-4 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-[#1A1F36]">{t('dash.tasks.title', lang)}</h2>
+          <h2 className="flex items-center gap-2 text-sm font-bold text-[#1A1F36] dark:text-[#F1EFFB]">
+            <CheckSquare size={17} className="text-[#6F5AE8] dark:text-[#A78BFA]" />
+            {t('dash.tasks.title', lang)}
+          </h2>
           <button
             onClick={() => navigate('/app/tasks')}
-            className="text-[11px] text-[#6F5AE8] font-medium flex items-center gap-0.5 hover:underline"
+            className="text-[11px] text-[#6F5AE8] dark:text-[#A78BFA] font-medium flex items-center gap-0.5 hover:underline"
           >
             {t('dash.viewAll', lang)} <ArrowRight size={11} />
           </button>
@@ -50,7 +53,7 @@ export default function TasksWidget() {
             <div
               key={task.id}
               onClick={() => setSelectedTaskId(task.id)}
-              className="flex items-center gap-3 py-1.5 rounded-lg px-1 -mx-1 cursor-pointer hover:bg-[#F8F7F4] transition-colors group"
+              className="flex items-center gap-3 py-1.5 rounded-lg px-1 -mx-1 cursor-pointer hover:bg-[#F8F7F4] dark:hover:bg-white/5 transition-colors group"
             >
               {/* Checkbox — toggles directly, does not open the modal */}
               <button
@@ -61,7 +64,7 @@ export default function TasksWidget() {
                 className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
                   task.completed
                     ? 'bg-[#6F5AE8] border-[#6F5AE8]'
-                    : 'border-[#D1D5DB] bg-white hover:border-[#6F5AE8]'
+                    : 'border-[#D1D5DB] dark:border-white/20 bg-white dark:bg-transparent hover:border-[#6F5AE8]'
                 }`}
               >
                 {task.completed && (
@@ -71,8 +74,8 @@ export default function TasksWidget() {
                 )}
               </button>
 
-              {/* Title */}
-              <span className={`flex-1 text-sm truncate ${task.completed ? 'text-[#94A3B8] line-through' : 'text-[#1A1F36]'}`}>
+              {/* Title — wraps instead of truncating so no task name is ever cut off */}
+              <span className={`flex-1 min-w-0 text-sm break-words ${task.completed ? 'text-[#94A3B8] dark:text-[#6B6485] line-through' : 'text-[#1A1F36] dark:text-[#F1EFFB]'}`}>
                 {task.title}
               </span>
 
@@ -85,27 +88,27 @@ export default function TasksWidget() {
 
               {/* Time */}
               {task.time && (
-                <span className="text-xs text-[#94A3B8] flex-shrink-0">{task.time}</span>
+                <span className="text-xs text-[#94A3B8] dark:text-[#9C96C2] flex-shrink-0">{task.time}</span>
               )}
             </div>
           ))}
 
           {todayTasks.length === 0 && (
             <div className="flex flex-col items-center justify-center py-5 text-center gap-2.5">
-              <div className="w-12 h-12 rounded-full bg-[#EDE9FB] flex items-center justify-center">
-                <ListChecks size={22} className="text-[#6F5AE8]" />
+              <div className="w-12 h-12 rounded-full bg-[#EDE9FB] dark:bg-[#A78BFA]/15 flex items-center justify-center">
+                <ListChecks size={22} className="text-[#6F5AE8] dark:text-[#A78BFA]" />
               </div>
-              <p className="text-xs text-[#94A3B8] max-w-[220px]">{t('dash.tasks.empty', lang)}</p>
+              <p className="text-xs text-[#94A3B8] dark:text-[#9C96C2] max-w-[220px]">{t('dash.tasks.empty', lang)}</p>
               <button
                 onClick={() => setAddOpen(true)}
-                className="min-h-[44px] px-4 flex items-center justify-center rounded-xl bg-[#EDE9FB] text-[#6F5AE8] text-xs font-semibold hover:opacity-80 transition-opacity"
+                className="min-h-[44px] px-4 flex items-center justify-center rounded-xl bg-[#EDE9FB] dark:bg-[#A78BFA]/15 text-[#6F5AE8] dark:text-[#C4B5FD] text-xs font-semibold hover:opacity-80 transition-opacity"
               >
                 {t('dash.tasks.emptyCta', lang)}
               </button>
             </div>
           )}
         </div>
-      </Card>
+      </DashboardCard>
 
       <TaskDetailModal
         taskId={selectedTaskId}

@@ -63,25 +63,25 @@ export default function Header({ onMenuToggle }: HeaderProps) {
 
   return (
     <header
-      className="flex-shrink-0 flex items-center justify-between bg-white h-[61px] pl-4 pr-[22px] lg:pl-[30px]"
+      className="flex-shrink-0 flex items-center justify-between bg-white dark:bg-[#16112A] h-[61px] pl-4 pr-[22px] lg:pl-[30px]"
     >
       {/* Left: hamburger (mobile/tablet only) + page title */}
       <div className="flex items-center gap-2 min-w-0">
         <button
           onClick={onMenuToggle}
           aria-label="Open navigation"
-          className="lg:hidden flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg text-[#94A3B8] hover:text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
+          className="lg:hidden flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg text-[#94A3B8] dark:text-[#9C96C2] hover:text-[#1A1F36] dark:hover:text-[#F1EFFB] hover:bg-[#F8F7F4] dark:hover:bg-white/5 transition-colors"
         >
           <Menu size={20} />
         </button>
-        <h1 className="text-xl font-bold text-[#1A1F36] truncate">{pageTitle}</h1>
+        <h1 className="text-xl font-bold text-[#1A1F36] dark:text-[#F1EFFB] truncate">{pageTitle}</h1>
       </div>
 
       {/* Right: search, notifications, user menu */}
       <div className="flex items-center gap-3 flex-shrink-0">
         <button
           onClick={() => setSearchOpen(true)}
-          className="flex items-center justify-center text-[#94A3B8] hover:text-[#1A1F36] transition-colors"
+          className="flex items-center justify-center text-[#94A3B8] dark:text-[#9C96C2] hover:text-[#1A1F36] dark:hover:text-[#F1EFFB] transition-colors"
           style={{ width: '20px', height: '20px' }}
         >
           <Search size={20} />
@@ -96,7 +96,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setMenuOpen((o) => !o)}
-            className="flex items-center gap-1.5 py-1 rounded-lg hover:bg-[#F8F7F4] transition-colors"
+            className="flex items-center gap-1.5 py-1 rounded-lg hover:bg-[#F8F7F4] dark:hover:bg-white/5 transition-colors"
           >
             <Avatar
               photoURL={user?.photoURL || null}
@@ -104,25 +104,25 @@ export default function Header({ onMenuToggle }: HeaderProps) {
               fallbackEmail={user?.email}
               size="xs"
             />
-            <ChevronDown size={14} className={`text-[#94A3B8] transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown size={14} className={`text-[#94A3B8] dark:text-[#9C96C2] transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {menuOpen && (
-            <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl border border-[#E8E6E0] shadow-lg py-1.5 z-50">
-              <div className="px-4 py-2.5 border-b border-[#F0F0F0]">
-                <p className="text-sm font-medium text-[#1A1F36] truncate">{displayName}</p>
-                <p className="text-xs text-[#94A3B8] truncate">{user?.email}</p>
+            <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-[#1E1B33] rounded-xl border border-[#E8E6E0] dark:border-white/10 shadow-lg py-1.5 z-50">
+              <div className="px-4 py-2.5 border-b border-[#F0F0F0] dark:border-white/10">
+                <p className="text-sm font-medium text-[#1A1F36] dark:text-[#F1EFFB] truncate">{displayName}</p>
+                <p className="text-xs text-[#94A3B8] dark:text-[#9C96C2] truncate">{user?.email}</p>
               </div>
               <button
                 onClick={() => { setMenuOpen(false); navigate('/app/profile') }}
-                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#1A1F36] hover:bg-[#F8F7F4] transition-colors"
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#1A1F36] dark:text-[#F1EFFB] hover:bg-[#F8F7F4] dark:hover:bg-white/5 transition-colors"
               >
-                <User size={16} className="text-[#94A3B8]" />
+                <User size={16} className="text-[#94A3B8] dark:text-[#9C96C2]" />
                 {t('header.myProfile', lang)}
               </button>
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
               >
                 <LogOut size={16} />
                 {t('header.logout', lang)}

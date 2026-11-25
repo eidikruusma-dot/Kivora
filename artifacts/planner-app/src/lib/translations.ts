@@ -14,6 +14,7 @@ export type TranslationKey =
     | "nav.school"
     | "nav.help"
     | "nav.settings"
+    | "nav.more"
     // ── Sidebar footer ────────────────────────────────────────────────────────
     | "sidebar.darkMode"
     // ── Header user menu ──────────────────────────────────────────────────────
@@ -1916,6 +1917,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "nav.school": "Kool",
         "nav.help": "Abi ja tugi",
         "nav.settings": "Seaded",
+        "nav.more": "Rohkem",
         "sidebar.darkMode": "Tume režiim",
         "header.myProfile": "Minu profiil",
         "header.logout": "Logi välja",
@@ -4010,6 +4012,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "nav.school": "School",
         "nav.help": "Help & Support",
         "nav.settings": "Settings",
+        "nav.more": "More",
         "sidebar.darkMode": "Dark mode",
         "header.myProfile": "My profile",
         "header.logout": "Log out",

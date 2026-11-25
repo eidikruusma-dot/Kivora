@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Check, ArrowRight, Repeat } from 'lucide-react'
+import { Check, ArrowRight, Leaf } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import Card from '@/components/ui/AppCard'
-import ProgressRing from '@/components/ui/ProgressRing'
+import DashboardCard from '@/components/dashboard/DashboardCard'
+import DashboardProgressRing from '@/components/dashboard/DashboardProgressRing'
 import { getAllHabits, getDashboardPercent, subscribeHabits, toggleHabitDay } from '@/lib/habitsStore'
 import type { Habit } from '@/data/habitsData'
 import { toDateKey, isHabitDoneOnDate, getCurrentWeekDates, computeHabitDateRangeStats } from '@/data/habitsData'
@@ -30,12 +30,15 @@ export default function HabitsWidget() {
   const weekDates = getCurrentWeekDates(today)
 
   return (
-    <Card className="h-full flex flex-col">
+    <DashboardCard className="h-full flex flex-col">
       <div className="px-5 py-4 flex items-center justify-between">
-        <h2 className="text-sm font-bold text-[#1A1F36]">{t('dash.habits.title', lang)}</h2>
+        <h2 className="flex items-center gap-2 text-sm font-bold text-[#1A1F36] dark:text-[#F1EFFB]">
+          <Leaf size={17} className="text-[#16A34A] dark:text-green-300" />
+          {t('dash.habits.title', lang)}
+        </h2>
         <button
           onClick={() => navigate('/app/habits')}
-          className="text-[11px] text-[#6F5AE8] font-medium flex items-center gap-0.5 hover:underline"
+          className="text-[11px] text-[#6F5AE8] dark:text-[#A78BFA] font-medium flex items-center gap-0.5 hover:underline"
         >
           {t('dash.viewAll', lang)} <ArrowRight size={11} />
         </button>
@@ -50,7 +53,7 @@ export default function HabitsWidget() {
               <div
                 key={habit.id}
                 onClick={() => navigate('/app/habits')}
-                className="flex items-center gap-2.5 rounded-lg px-1 -mx-1 py-0.5 cursor-pointer hover:bg-[#F8F7F4] transition-colors group"
+                className="flex items-center gap-2.5 rounded-lg px-1 -mx-1 py-0.5 cursor-pointer hover:bg-[#F8F7F4] dark:hover:bg-white/5 transition-colors group"
               >
                 {/* Checkbox — toggles today's completion, does not navigate */}
                 <button
@@ -65,33 +68,33 @@ export default function HabitsWidget() {
                   className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-colors ${
                     done
                       ? 'bg-green-500 hover:bg-green-600'
-                      : 'border border-[#D1D5DB] bg-white hover:border-green-500'
+                      : 'border border-[#D1D5DB] dark:border-white/20 bg-white dark:bg-transparent hover:border-green-500'
                   }`}
                 >
                   {done && <Check size={10} className="text-white" />}
                 </button>
 
-                <span className={`flex-1 text-sm truncate ${done ? 'text-[#94A3B8]' : 'text-[#1A1F36]'}`}>
+                <span className={`flex-1 min-w-0 text-sm break-words ${done ? 'text-[#94A3B8] dark:text-[#6B6485]' : 'text-[#1A1F36] dark:text-[#F1EFFB]'}`}>
                   {habit.title}
                 </span>
 
                 {done ? (
-                  <span className="text-xs text-green-500 font-medium flex-shrink-0">{t('dash.habits.done', lang)}</span>
+                  <span className="text-xs text-green-500 dark:text-green-300 font-medium flex-shrink-0">{t('dash.habits.done', lang)}</span>
                 ) : (
-                  <span className="text-xs text-[#94A3B8] flex-shrink-0">{weekDone} / {weekTotal}</span>
+                  <span className="text-xs text-[#94A3B8] dark:text-[#9C96C2] flex-shrink-0">{weekDone} / {weekTotal}</span>
                 )}
               </div>
             )
           })}
           {activeHabits.length === 0 && (
             <div className="flex flex-col items-center justify-center py-5 text-center gap-2.5">
-              <div className="w-12 h-12 rounded-full bg-[#DCFCE7] flex items-center justify-center">
-                <Repeat size={22} className="text-[#16A34A]" />
+              <div className="w-12 h-12 rounded-full bg-[#DCFCE7] dark:bg-green-400/15 flex items-center justify-center">
+                <Leaf size={22} className="text-[#16A34A] dark:text-green-300" />
               </div>
-              <p className="text-xs text-[#94A3B8] max-w-[220px]">{t('dash.habits.empty', lang)}</p>
+              <p className="text-xs text-[#94A3B8] dark:text-[#9C96C2] max-w-[220px]">{t('dash.habits.empty', lang)}</p>
               <button
                 onClick={() => navigate('/app/habits', { state: { openCreate: true } })}
-                className="min-h-[44px] px-4 flex items-center justify-center rounded-xl bg-[#DCFCE7] text-[#16A34A] text-xs font-semibold hover:opacity-80 transition-opacity"
+                className="min-h-[44px] px-4 flex items-center justify-center rounded-xl bg-[#DCFCE7] dark:bg-green-400/15 text-[#16A34A] dark:text-green-300 text-xs font-semibold hover:opacity-80 transition-opacity"
               >
                 {t('dash.habits.emptyCta', lang)}
               </button>
@@ -99,8 +102,8 @@ export default function HabitsWidget() {
           )}
         </div>
         {/* Progress ring */}
-        <ProgressRing value={percent} size={88} stroke={8} />
+        <DashboardProgressRing value={percent} lang={lang} size={88} stroke={8} />
       </div>
-    </Card>
+    </DashboardCard>
   )
 }

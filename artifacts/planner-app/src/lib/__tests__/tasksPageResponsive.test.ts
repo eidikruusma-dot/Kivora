@@ -66,15 +66,15 @@ describe('TasksPage responsive markup (BUG-01)', () => {
     expect(SRC).toMatch(/sm:opacity-0 sm:group-hover:opacity-100/)
   })
 
-  it('AppLayout.tsx was not modified by this fix (scope: TasksPage only)', () => {
+  it('AppLayout.tsx <main> still has no overflow-x band-aid (scope: TasksPage only; pb-16 lg:pb-0 was added later by the Minu päev/bottom-nav redesign, not this fix)', () => {
     const appLayoutSrc = readFileSync(
       resolve(process.cwd(), 'src/components/layout/AppLayout.tsx'),
       'utf8',
     )
     // The known pre-existing implicit overflow-x:auto on <main> (from
     // overflow-y-auto with no overflow-x set) is left exactly as-is —
-    // no overflow-x-hidden, no new wrapper, no structural change here.
-    expect(appLayoutSrc).toMatch(/<main key=\{location\.pathname\} className="flex-1 overflow-y-auto kv-page-enter">\{children\}<\/main>/)
+    // no overflow-x-hidden, no structural change here.
+    expect(appLayoutSrc).toMatch(/<main key=\{location\.pathname\} className="flex-1 overflow-y-auto kv-page-enter[^"]*">\{children\}<\/main>/)
     expect(appLayoutSrc).not.toMatch(/overflow-x/)
   })
 })

@@ -32,6 +32,7 @@ function readSrc(relPath: string): string {
 }
 
 const HERO_SRC = readSrc('src/components/dashboard/HeroCard.tsx')
+const STATCARDS_SRC = readSrc('src/components/dashboard/DashboardStatCards.tsx')
 const TASKS_SRC = readSrc('src/components/dashboard/TasksWidget.tsx')
 const CALENDAR_SRC = readSrc('src/components/dashboard/CalendarWidget.tsx')
 const HABITS_SRC = readSrc('src/components/dashboard/HabitsWidget.tsx')
@@ -39,6 +40,7 @@ const GOALS_SRC = readSrc('src/components/dashboard/GoalsWidget.tsx')
 const NOTE_SRC = readSrc('src/components/dashboard/QuickNoteWidget.tsx')
 const ACTIONS_SRC = readSrc('src/components/dashboard/QuickActionsWidget.tsx')
 const DASHBOARD_SRC = readSrc('src/views/Dashboard.tsx')
+const BOTTOMNAV_SRC = readSrc('src/components/layout/MobileBottomNav.tsx')
 const TRANSLATIONS_SRC = readSrc('src/lib/translations.ts')
 
 describe('translation keys: dashboard empty-state CTAs exist in ET and EN', () => {
@@ -93,94 +95,105 @@ describe('unrelated School (sched.*) translation lines are byte-for-byte untouch
   })
 })
 
-describe('HeroCard: livelier lavender banner + full motivational text + dark-mode illustration', () => {
-  it('the outer card uses the soft-lavender background, not plain white', () => {
-    expect(HERO_SRC).toMatch(/bg-\[#F4F2FF\]/)
-    expect(HERO_SRC).not.toMatch(/<div className="bg-white/)
+describe('HeroCard: round-4 rebuild — cover-filled photo, no seams, gradient text scrim', () => {
+  // HeroCard went through a fourth pass: round 3's `contain` + solid
+  // letterbox-fill approach, while never over-zooming the photo, left a
+  // visible seam between the photo and the fallback color plus empty
+  // bars above/below on phones — not acceptable per the confirmed design
+  // reference, which wants the photo filling the card edge to edge. Round
+  // 4 switches to `cover` (always fills completely, no seam, no bars) and
+  // keeps the bloom framed via a breakpoint-responsive background
+  // position instead of a fixed fallback color. The earlier rounds'
+  // changes (SVG petal illustration gone, round 2; mountain illustration
+  // and inline stat strip gone, round 1 — stats are their own
+  // DashboardStatCards component, see below) still hold.
+
+  it('uses the optimized WebP photo as the real background image, not an SVG illustration', () => {
+    expect(HERO_SRC).toMatch(/import heroBloom from '@\/assets\/dashboard\/hero-bloom\.webp'/)
+    expect(HERO_SRC).toMatch(/backgroundImage: `url\(\$\{heroBloom\}\)`/)
+    expect(HERO_SRC).not.toMatch(/function HeroPetals/)
+    expect(HERO_SRC).not.toMatch(/MountainIllustration/)
+    expect(HERO_SRC).not.toMatch(/<svg/)
   })
 
-  it('the daily-message text no longer truncates (no line-clamp/truncate on it)', () => {
-    const dailyMsgLines = HERO_SRC
-      .split('\n')
-      .filter((line) => line.includes('{dailyMsg}'))
-    expect(dailyMsgLines.length).toBeGreaterThan(0)
-    for (const line of dailyMsgLines) {
-      expect(line).not.toMatch(/line-clamp/)
-      expect(line).not.toMatch(/\btruncate\b/)
+  it('uses `cover` (never `contain`) so the photo always fills the card edge to edge, with no visible seam or empty bars', () => {
+    expect(HERO_SRC).toMatch(/bg-cover bg-no-repeat/)
+    expect(HERO_SRC).not.toMatch(/backgroundSize: 'contain'/)
+    expect(HERO_SRC).not.toMatch(/backgroundSize/) // size is a Tailwind class (bg-cover) now, not an inline style
+  })
+
+  it('the bloom stays framed via a breakpoint-responsive background position (further right on narrow phones, where `cover` crops more off the left)', () => {
+    expect(HERO_SRC).toMatch(/bg-\[position:82%_center\] sm:bg-\[position:72%_center\] lg:bg-\[position:64%_center\]/)
+  })
+
+  it('dark mode gets a uniform darkening scrim over the WHOLE card (bloom included), not just near the text; light mode stays fully transparent', () => {
+    expect(HERO_SRC).toMatch(/bg-transparent dark:bg-\[#140D28\]\/45/)
+  })
+
+  it('a separate smooth gradient sits behind the text specifically, fading toward the bloom, pale in light mode and dark in dark mode, wider/more opaque on mobile', () => {
+    expect(HERO_SRC).toMatch(/bg-gradient-to-r from-white\/85 via-white\/55 to-transparent sm:from-white\/80 sm:via-white\/30 sm:to-transparent dark:from-black\/60 dark:via-black\/30 dark:to-transparent sm:dark:from-black\/55 sm:dark:via-black\/20 sm:dark:to-transparent/)
+  })
+
+  it('greeting/date/quote text is dark-purple in light mode (for contrast against the pale photo) and white in dark mode (over the scrim)', () => {
+    expect(HERO_SRC).toMatch(/text-\[#3D2B6B\] dark:text-white/)
+    expect(HERO_SRC).toMatch(/text-\[#5B4A8A\] dark:text-white\/85/)
+    expect(HERO_SRC).toMatch(/text-\[#5B4A8A\] dark:text-white\/90/)
+  })
+
+  it('shows the real weekday + date + month + year (not just the time-of-day greeting)', () => {
+    expect(HERO_SRC).toMatch(/import \{ WEEKDAYS_ET_FULL, WEEKDAYS_EN_FULL, MONTHS_ET, MONTHS_EN \} from '@\/lib\/calendar\/dateUtils'/)
+    expect(HERO_SRC).toMatch(/const dateLabel = lang === 'en'/)
+    expect(HERO_SRC).toMatch(/<p className="text-sm text-\[#5B4A8A\] dark:text-white\/85 font-medium">\{dateLabel\}<\/p>/)
+  })
+
+  it('the daily motivational message is styled as an italic quote and never truncates', () => {
+    const quoteBlock = HERO_SRC.match(/<p className="[^"]*">\s*\n\s*„\{dailyMsg\}"\s*\n\s*<\/p>/)?.[0] ?? ''
+    expect(quoteBlock).not.toBe('')
+    expect(quoteBlock).toMatch(/\bitalic\b/)
+    expect(quoteBlock).not.toMatch(/line-clamp/)
+    expect(quoteBlock).not.toMatch(/\btruncate\b/)
+  })
+
+  it('no longer computes or renders any stat (that logic moved to DashboardStatCards)', () => {
+    expect(HERO_SRC).not.toMatch(/tasksCompleted|eventsToday|goalsPercent|habitsPercent/)
+    expect(HERO_SRC).not.toMatch(/useTasks|useCalendarEvents|useGoals|getDashboardPercent/)
+  })
+
+  it('the greeting text is bigger/bolder than the first redesign pass', () => {
+    expect(HERO_SRC).toMatch(/text-2xl sm:text-3xl font-bold text-\[#3D2B6B\] dark:text-white leading-tight/)
+  })
+})
+
+describe('DashboardStatCards: four separate glass stat cards (not one shared inset strip)', () => {
+  it('renders 4 independent cards, 2x2 on narrow phones and 4-across from sm:, each with its own shadow/background', () => {
+    expect(STATCARDS_SRC).toMatch(/grid grid-cols-2 sm:grid-cols-4 gap-3/)
+    expect(STATCARDS_SRC).toMatch(/bg-white\/85 dark:bg-\[#1E1B33\]\/80 backdrop-blur-xl border border-white\/70 dark:border-white\/10 rounded-2xl/)
+  })
+
+  it('statistic values and per-stat navigation targets are preserved exactly (tasks/events/goals%/habits%)', () => {
+    expect(STATCARDS_SRC).toMatch(/value: `\$\{tasksCompleted\}\/\$\{tasksTotal\}`/)
+    expect(STATCARDS_SRC).toMatch(/value: String\(eventsToday\)/)
+    expect(STATCARDS_SRC).toMatch(/value: `\$\{goalsPercent\}%`/)
+    expect(STATCARDS_SRC).toMatch(/value: `\$\{habitsPercent\}%`/)
+    expect(STATCARDS_SRC).toMatch(/to: '\/app\/tasks'/)
+    expect(STATCARDS_SRC).toMatch(/to: '\/app\/calendar'/)
+    expect(STATCARDS_SRC).toMatch(/to: '\/app\/goals'/)
+    expect(STATCARDS_SRC).toMatch(/to: '\/app\/habits'/)
+  })
+
+  it('stat labels never truncate with an ellipsis AND never break mid-word — sized (10px on the 2-col phone layout) to fit on one line at the narrowest supported width (320px)', () => {
+    expect(STATCARDS_SRC).not.toMatch(/\btruncate\b/)
+    expect(STATCARDS_SRC).not.toMatch(/break-words/) // was break-words in round 2, which produced ugly mid-word splits like "Eesmär-gid" at 320px
+    expect(STATCARDS_SRC).toMatch(/text-\[10px\] sm:text-xs text-\[#94A3B8\] dark:text-\[#9C96C2\] leading-tight whitespace-nowrap overflow-hidden/)
+  })
+
+  it('each stat card icon has a dark-mode-aware tinted circular background', () => {
+    const iconStyles = [...STATCARDS_SRC.matchAll(/iconBg: '([^']+)', iconColor: '([^']+)'/g)]
+    expect(iconStyles.length).toBe(4)
+    for (const [, iconBg, iconColor] of iconStyles) {
+      expect(iconBg).toMatch(/\bdark:/)
+      expect(iconColor).toMatch(/\bdark:/)
     }
-  })
-
-  it('the mountain illustration is dark-mode aware (accepts isDark and varies its sky gradient)', () => {
-    expect(HERO_SRC).toMatch(/function MountainIllustration\(\{ isDark \}: \{ isDark: boolean \}\)/)
-    expect(HERO_SRC).toMatch(/stopColor=\{isDark \? '#1E1B2E' : '#EDE9FB'\}/)
-    expect(HERO_SRC).toMatch(/<MountainIllustration isDark=\{isDark\} \/>/)
-  })
-
-  it('uses the shared useIsDark hook rather than introducing a new dark-mode mechanism', () => {
-    expect(HERO_SRC).toMatch(/import \{ useIsDark, tc \} from '@\/lib\/themeColors'/)
-    expect(HERO_SRC).toMatch(/const isDark = useIsDark\(\)/)
-  })
-
-  it('the old side-by-side vertical-divider stats arrangement is gone', () => {
-    expect(HERO_SRC).not.toMatch(/h-10 w-px flex-shrink-0/)
-    expect(HERO_SRC).not.toMatch(/E5DFFC/)
-  })
-
-  it('all four statistics now sit together in one lighter inset row below the greeting', () => {
-    const smBlock = HERO_SRC.match(/hidden sm:block[\s\S]*?\n {6}<\/div>\n\n {4}<\/div>/)?.[0] ?? ''
-    expect(smBlock).not.toBe('')
-    // The greeting/message block and the (absolutely positioned) mountain
-    // share one relative-positioned wrapper...
-    expect(smBlock).toMatch(/<div className="relative">/)
-    // ...and the stats grid is a separate, visually lighter block underneath, not inline with the greeting.
-    const statsRowMatch = smBlock.match(/<div\s*\n\s*className="bg-white rounded-xl[\s\S]*?<\/div>\s*\n\s*<\/div>/)
-    expect(statsRowMatch).not.toBeNull()
-    expect(statsRowMatch![0]).toMatch(/grid grid-cols-2 md:grid-cols-4/)
-    expect(statsRowMatch![0]).toMatch(/\{stats\.map\(\(s\) => <StatButton key=\{s\.label\} \{\.\.\.s\} \/>\)\}/)
-  })
-
-  it('the stats row uses the shared bg-white dark-mode override, not a bespoke color', () => {
-    expect(HERO_SRC).toMatch(/className="bg-white rounded-xl px-4 py-3 mt-3 grid grid-cols-2 md:grid-cols-4/)
-  })
-
-  it('the mountain illustration is absolutely positioned in the upper-right so its height cannot affect the card layout height', () => {
-    expect(HERO_SRC).not.toMatch(/hidden lg:block/)
-    expect(HERO_SRC).toMatch(/hidden md:block absolute top-0 right-0 h-12 lg:h-14 xl:h-16 aspect-\[11\/10\] pointer-events-none/)
-    // It must no longer be a sibling flex item of the greeting (which would let its height affect row height).
-    expect(HERO_SRC).not.toMatch(/flex items-start justify-between gap-4/)
-  })
-
-  it('the desktop/tablet section has no oversized vertical padding or explicit min-height causing an empty gap', () => {
-    expect(HERO_SRC).toMatch(/hidden sm:block px-5 lg:px-6 py-3 lg:py-4/)
-    expect(HERO_SRC).not.toMatch(/minHeight/)
-    expect(HERO_SRC).not.toMatch(/min-h-/)
-    expect(HERO_SRC).not.toMatch(/flex-grow|flex-1.*MountainIllustration|grow\b/)
-  })
-
-  it('the greeting text reserves right padding so it cannot overlap the absolutely positioned mountain', () => {
-    expect(HERO_SRC).toMatch(/<div className="min-w-0 pr-20 lg:pr-28">/)
-  })
-
-  it('the mountain sits after the greeting in source order and before the stats row (still visually upper-right, above the stats)', () => {
-    const illustrationIdx = HERO_SRC.indexOf('<MountainIllustration isDark={isDark} />')
-    const statsRowIdx = HERO_SRC.indexOf('grid grid-cols-2 md:grid-cols-4')
-    expect(illustrationIdx).toBeGreaterThan(-1)
-    expect(statsRowIdx).toBeGreaterThan(-1)
-    expect(illustrationIdx).toBeLessThan(statsRowIdx)
-  })
-
-  it('statistic values and per-stat logic are preserved exactly (tasks/events/goals%/habits%)', () => {
-    expect(HERO_SRC).toMatch(/value: `\$\{tasksCompleted\}\/\$\{tasksTotal\}`/)
-    expect(HERO_SRC).toMatch(/value: String\(eventsToday\)/)
-    expect(HERO_SRC).toMatch(/value: `\$\{goalsPercent\}%`/)
-    expect(HERO_SRC).toMatch(/value: `\$\{habitsPercent\}%`/)
-  })
-
-  it('mobile portrait layout is unchanged (no illustration, stacked greeting + 2x2 grid)', () => {
-    const portraitBlock = HERO_SRC.match(/sm:hidden px-4 py-3[\s\S]*?<\/div>\s*\n {6}<\/div>/)?.[0] ?? ''
-    expect(portraitBlock).not.toBe('')
-    expect(portraitBlock).not.toMatch(/MountainIllustration/)
-    expect(portraitBlock).toMatch(/grid grid-cols-2 gap-2/)
   })
 })
 
@@ -192,7 +205,7 @@ describe('TasksWidget: compact icon + CTA empty state, wired to the real add-tas
   })
 
   it('the CTA uses a soft lavender/purple tint (not the old uniform solid-purple button)', () => {
-    expect(TASKS_SRC).toMatch(/bg-\[#EDE9FB\] text-\[#6F5AE8\] text-xs font-semibold hover:opacity-80/)
+    expect(TASKS_SRC).toMatch(/bg-\[#EDE9FB\] dark:bg-\[#A78BFA\]\/15 text-\[#6F5AE8\] dark:text-\[#C4B5FD\] text-xs font-semibold hover:opacity-80/)
     expect(TASKS_SRC).not.toMatch(/bg-\[#6F5AE8\] text-white text-xs font-medium hover:bg-\[#5B48D8\]/)
   })
 
@@ -222,7 +235,7 @@ describe('CalendarWidget: compact icon + CTA empty state, wired to the real add-
   })
 
   it('the CTA uses a soft blue tint (not the old uniform solid-purple button)', () => {
-    expect(CALENDAR_SRC).toMatch(/bg-\[#EFF6FF\] text-\[#3B82F6\] text-xs font-semibold hover:opacity-80/)
+    expect(CALENDAR_SRC).toMatch(/bg-\[#EFF6FF\] dark:bg-blue-400\/15 text-\[#3B82F6\] dark:text-blue-300 text-xs font-semibold hover:opacity-80/)
     expect(CALENDAR_SRC).not.toMatch(/bg-\[#6F5AE8\] text-white text-xs font-medium hover:bg-\[#5B48D8\]/)
   })
 
@@ -248,12 +261,12 @@ describe('CalendarWidget: compact icon + CTA empty state, wired to the real add-
 describe('HabitsWidget: compact icon + CTA empty state, navigating to the real Habits creation surface', () => {
   it('renders a 48px icon-circle (up from 36px) with a proportionally larger icon, and the emptyCta translation key', () => {
     expect(HABITS_SRC).toMatch(/w-12 h-12 rounded-full bg-\[#DCFCE7\]/)
-    expect(HABITS_SRC).toMatch(/<Repeat size=\{22\}/)
+    expect(HABITS_SRC).toMatch(/<Leaf size=\{22\}/) // swapped from Repeat to Leaf to match the confirmed design reference's habit icon (header + bottom nav + empty state all now use Leaf)
     expect(HABITS_SRC).toMatch(/t\('dash\.habits\.emptyCta', lang\)/)
   })
 
   it('the CTA uses a soft mint/green tint (not the old uniform solid-purple button)', () => {
-    expect(HABITS_SRC).toMatch(/bg-\[#DCFCE7\] text-\[#16A34A\] text-xs font-semibold hover:opacity-80/)
+    expect(HABITS_SRC).toMatch(/bg-\[#DCFCE7\] dark:bg-green-400\/15 text-\[#16A34A\] dark:text-green-300 text-xs font-semibold hover:opacity-80/)
     expect(HABITS_SRC).not.toMatch(/bg-\[#6F5AE8\] text-white text-xs font-medium hover:bg-\[#5B48D8\]/)
   })
 
@@ -271,12 +284,12 @@ describe('HabitsWidget: compact icon + CTA empty state, navigating to the real H
 describe('GoalsWidget: compact icon + CTA empty state, navigating to the real Goals creation surface', () => {
   it('renders a 48px icon-circle (up from 36px) with a proportionally larger icon, soft lavender/purple like the reference, and the emptyCta translation key', () => {
     expect(GOALS_SRC).toMatch(/w-12 h-12 rounded-full bg-\[#EDE9FB\]/)
-    expect(GOALS_SRC).toMatch(/<Flag size=\{22\} className="text-\[#6F5AE8\]"/)
+    expect(GOALS_SRC).toMatch(/<Target size=\{22\} className="text-\[#6F5AE8\] dark:text-\[#A78BFA\]"/) // swapped from Flag to Target to match the header icon and the confirmed design reference
     expect(GOALS_SRC).toMatch(/t\('dash\.goals\.emptyCta', lang\)/)
   })
 
   it('the CTA uses a soft lavender/purple tint (not the old uniform solid-purple button)', () => {
-    expect(GOALS_SRC).toMatch(/bg-\[#EDE9FB\] text-\[#6F5AE8\] text-xs font-semibold hover:opacity-80/)
+    expect(GOALS_SRC).toMatch(/bg-\[#EDE9FB\] dark:bg-\[#A78BFA\]\/15 text-\[#6F5AE8\] dark:text-\[#C4B5FD\] text-xs font-semibold hover:opacity-80/)
     expect(GOALS_SRC).not.toMatch(/bg-\[#6F5AE8\] text-white text-xs font-medium hover:bg-\[#5B48D8\]/)
   })
 
@@ -303,15 +316,17 @@ describe('QuickNoteWidget: warm icon + two-line empty copy, no functional change
   it('still calls the real addQuickNote store action from the same input/button (no duplicate note-creation control)', () => {
     expect(NOTE_SRC).toMatch(/import \{\s*\n\s*getLatestQuickNotes,\s*\n\s*addQuickNote,\s*\n\s*subscribeNotes,\s*\n\} from '@\/lib\/quickNotesStore'/)
     expect(NOTE_SRC).toMatch(/addQuickNote\(trimmed\)/)
-    // Exactly one Plus-icon button (the existing add control) — nothing new was introduced.
-    const plusButtonCount = (NOTE_SRC.match(/<Plus size=\{16\}/g) ?? []).length
-    expect(plusButtonCount).toBe(1)
+    // Exactly one send button (the existing add control, now a paper-plane
+    // icon per the confirmed design reference, swapped from the old Plus
+    // icon) — nothing new was introduced.
+    const sendButtonCount = (NOTE_SRC.match(/<Send size=\{15\}/g) ?? []).length
+    expect(sendButtonCount).toBe(1)
   })
 
   it('renders a small warm-orange tinted icon container in the empty state', () => {
-    expect(NOTE_SRC).toMatch(/import \{ Plus, ArrowRight, Lightbulb \} from 'lucide-react'/)
-    expect(NOTE_SRC).toMatch(/w-10 h-10 rounded-full bg-\[#FFEDD5\] flex items-center justify-center/)
-    expect(NOTE_SRC).toMatch(/<Lightbulb size=\{18\} className="text-\[#F97316\]" \/>/)
+    expect(NOTE_SRC).toMatch(/import \{ Send, ArrowRight, Lightbulb, StickyNote \} from 'lucide-react'/)
+    expect(NOTE_SRC).toMatch(/w-10 h-10 rounded-full bg-\[#FFEDD5\] dark:bg-orange-400\/15 flex items-center justify-center/)
+    expect(NOTE_SRC).toMatch(/<Lightbulb size=\{18\} className="text-\[#F97316\] dark:text-orange-300" \/>/)
   })
 
   it('renders both the primary and the lighter supporting empty-state lines', () => {
@@ -326,22 +341,26 @@ describe('QuickNoteWidget: warm icon + two-line empty copy, no functional change
   })
 })
 
-describe('QuickActionsWidget: softly tinted purple/blue/orange/green icon containers', () => {
-  it('New task / New event / Quick note icons each sit in their own tinted container', () => {
-    expect(ACTIONS_SRC).toMatch(/iconBg: 'bg-\[#EDE9FB\]', iconColor: 'text-\[#6F5AE8\]'/) // purple
-    expect(ACTIONS_SRC).toMatch(/iconBg: 'bg-\[#EFF6FF\]', iconColor: 'text-\[#3B82F6\]'/) // blue
-    expect(ACTIONS_SRC).toMatch(/iconBg: 'bg-\[#FFEDD5\]', iconColor: 'text-\[#F97316\]'/) // orange
-  })
-
-  it('the Focus timer action gets its own tinted (green) container, matching the other three', () => {
-    const timerBlock = ACTIONS_SRC.match(/onClick=\{openModal\}[\s\S]*?<\/button>/)?.[0] ?? ''
-    expect(timerBlock).toMatch(/bg-\[#DCFCE7\]/)
-    expect(timerBlock).toMatch(/<Timer size=\{16\} className="text-\[#16A34A\]" \/>/)
+describe('QuickActionsWidget: round-2 rebuild — fully solid-colored button cards', () => {
+  // Round 2 of the redesign replaced the neutral card + tinted icon chip
+  // look with the confirmed design reference's fully solid-colored button
+  // cards (purple / blue / peach / green gradients fill the whole button,
+  // not just a small icon chip). See quickActionsWidgetMobileLabelWrap.test.ts
+  // for full coverage of the current structure; this block cross-checks
+  // the same color/handler invariants from this file's own reading.
+  it('each action button has its own solid-colored gradient background (not just a tinted icon chip), dark-mode aware', () => {
+    expect(ACTIONS_SRC).toMatch(/bg: 'bg-gradient-to-b from-\[#EDE7FD\] to-\[#E1D7FB\] dark:from-\[#3B2F66\] dark:to-\[#30275A\]'/) // purple
+    expect(ACTIONS_SRC).toMatch(/bg: 'bg-gradient-to-b from-\[#DCEAFE\] to-\[#C9DEFC\] dark:from-\[#1E3156\] dark:to-\[#192A49\]'/) // blue
+    expect(ACTIONS_SRC).toMatch(/bg: 'bg-gradient-to-b from-\[#FDE9D2\] to-\[#FBDCB8\] dark:from-\[#4A2E14\] dark:to-\[#3D250F\]'/) // peach
+    expect(ACTIONS_SRC).toMatch(/bg: 'bg-gradient-to-b from-\[#D7F5DE\] to-\[#C2EDCD\] dark:from-\[#153821\] dark:to-\[#102C1A\]'/) // green
   })
 
   it('all four actions still navigate/act through the pre-existing handlers (no new store or modal logic introduced)', () => {
-    expect(ACTIONS_SRC).toMatch(/onClick=\{\(\) => navigate\(to\)\}/)
+    expect(ACTIONS_SRC).toMatch(/onClick: \(\) => navigate\('\/app\/tasks'\)/)
+    expect(ACTIONS_SRC).toMatch(/onClick: \(\) => navigate\('\/app\/calendar'\)/)
+    expect(ACTIONS_SRC).toMatch(/onClick: \(\) => navigate\('\/app\/notes'\)/)
     expect(ACTIONS_SRC).toMatch(/const \{ openModal \} = useFocusTimer\(\)/)
+    expect(ACTIONS_SRC).toMatch(/onClick: openModal/)
   })
 })
 
@@ -350,12 +369,52 @@ describe('module visibility, navigation and data logic in Dashboard.tsx are unto
     expect(DASHBOARD_SRC).toMatch(/const \{ settings: modules \} = useModules\(\)/)
     expect(DASHBOARD_SRC).toMatch(/modules\.tasks\s+&&\s+<TasksWidget/)
     expect(DASHBOARD_SRC).toMatch(/modules\.calendar\s+&&\s+<CalendarWidget/)
-    expect(DASHBOARD_SRC).toMatch(/modules\.notes\s+&&\s+<QuickNoteWidget/)
+    expect(DASHBOARD_SRC).toMatch(/\{modules\.notes\s+&&\s+<QuickNoteWidget\s+\/>\}/)
     expect(DASHBOARD_SRC).toMatch(/modules\.habits\s+&&\s+<HabitsWidget/)
     expect(DASHBOARD_SRC).toMatch(/modules\.goals\s+&&\s+<GoalsWidget/)
   })
 
-  it('QuickActionsWidget is still always rendered, independent of module toggles', () => {
-    expect(DASHBOARD_SRC).toMatch(/<QuickActionsWidget key="actions" \/>/)
+  it('QuickActionsWidget and DashboardStatCards are still always rendered, independent of module toggles', () => {
+    expect(DASHBOARD_SRC).toMatch(/<DashboardStatCards \/>/)
+    expect(DASHBOARD_SRC).toMatch(/<QuickActionsWidget \/>/)
+    expect(DASHBOARD_SRC).not.toMatch(/modules\.\w+\s+&&\s+<QuickActionsWidget/)
+    expect(DASHBOARD_SRC).not.toMatch(/modules\.\w+\s+&&\s+<DashboardStatCards/)
+  })
+
+  it('uses the single unified responsive layout (no separate desktop-only/mobile-only branches)', () => {
+    expect(DASHBOARD_SRC).not.toMatch(/hidden lg:flex/)
+    expect(DASHBOARD_SRC).not.toMatch(/lg:hidden/)
+  })
+})
+
+describe('MobileBottomNav: labels never split mid-word on the narrowest phones', () => {
+  // At 320px / 6 items, the original 9.5px label size + forced
+  // `hyphens-auto` produced a visible hyphen mid-word (e.g. "Harju-mused")
+  // and, before that fix existed at all, no overflow handling whatsoever —
+  // which let long single-word labels like "Harjumused"/"Eesmärgid"
+  // visually run into the neighboring nav item. Both are gone: labels are
+  // now sized to fit on one line at 320px by design, with `whitespace-nowrap
+  // overflow-hidden` as a safe (invisible, non-breaking) fallback only.
+  it('no label forces character-level or hyphenated breaking', () => {
+    expect(BOTTOMNAV_SRC).not.toMatch(/\bhyphens-auto\b/)
+    expect(BOTTOMNAV_SRC).not.toMatch(/\bbreak-words\b/)
+    expect(BOTTOMNAV_SRC).not.toMatch(/\btruncate\b/)
+  })
+
+  it('labels use whitespace-nowrap + overflow-hidden (clip, never split) as the overflow fallback', () => {
+    const labelSpanCount = (BOTTOMNAV_SRC.match(/text-\[8\.5px\] font-medium leading-\[1\.1\] text-center whitespace-nowrap overflow-hidden/g) ?? []).length
+    expect(labelSpanCount).toBe(2) // one for the module NavLinks, one for the "Rohkem" button
+  })
+
+  it('label font-size (8.5px) is small enough to fit every nav label on one line at 320px / 6 items', () => {
+    expect(BOTTOMNAV_SRC).toMatch(/text-\[8\.5px\]/)
+  })
+
+  it('icons match the confirmed design reference exactly: home / checkbox / calendar / leaf / target / grid', () => {
+    expect(BOTTOMNAV_SRC).toMatch(/import \{ Home, CheckSquare, Calendar, Leaf, Target, LayoutGrid \} from 'lucide-react'/)
+  })
+
+  it('the active item gets the reference\'s rounded lavender pill behind both icon and label', () => {
+    expect(BOTTOMNAV_SRC).toMatch(/isActive \? 'bg-\[#EDE7FD\] dark:bg-\[#3B2F66\]' : ''/)
   })
 })

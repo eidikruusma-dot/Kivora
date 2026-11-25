@@ -1,170 +1,75 @@
-import { CheckSquare, Calendar, CheckCircle2, Target } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { getDailyMessage } from '@/lib/dailyMessage'
-import { useTasks } from '@/lib/tasksStore'
-import { useCalendarEvents } from '@/lib/calendarStore'
-import { getEventsForDate } from '@/lib/calendar/eventLayout'
-import { getDashboardPercent, subscribeHabits } from '@/lib/habitsStore'
-import { useGoals } from '@/lib/goalsStore'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
-import { useIsDark, tc } from '@/lib/themeColors'
-
-function MountainIllustration({ isDark }: { isDark: boolean }) {
-  return (
-    <svg viewBox="0 0 220 200" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-      <defs>
-        <linearGradient id="skyG" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={isDark ? '#1E1B2E' : '#EDE9FB'} />
-          <stop offset="100%" stopColor={isDark ? '#151329' : '#F5F3FF'} />
-        </linearGradient>
-      </defs>
-      <rect width="220" height="200" fill="url(#skyG)" />
-      <path d="M0 200 L25 115 L50 140 L80 85 L110 120 L140 70 L170 105 L220 75 L220 200 Z" fill="#C4B5FD" opacity="0.45"/>
-      <path d="M0 200 L35 145 L65 160 L95 110 L125 140 L158 95 L195 125 L220 108 L220 200 Z" fill="#A78BFA" opacity="0.4"/>
-      <path d="M45 200 L128 32 L210 200 Z" fill="#8B5CF6" opacity="0.85"/>
-      <path d="M128 32 L162 95 L210 200 Z" fill="#7C3AED" opacity="0.25"/>
-      <path d="M121 56 L128 32 L135 56 Q128 61 121 56 Z" fill="white" opacity="0.75"/>
-      <polygon points="18,182 27,160 36,182" fill="#7C3AED" opacity="0.65"/>
-      <polygon points="30,192 38,173 46,192" fill="#8B5CF6" opacity="0.55"/>
-      <polygon points="172,186 180,166 188,186" fill="#7C3AED" opacity="0.65"/>
-      <polygon points="186,194 193,178 200,194" fill="#8B5CF6" opacity="0.5"/>
-      <path d="M128 32 C136 58 147 76 157 91 S171 116 174 138 S177 164 179 195"
-            stroke="white" strokeWidth="2.5" fill="none"
-            strokeDasharray="5,4" opacity="0.85" strokeLinecap="round"/>
-      <line x1="128" y1="32" x2="128" y2="13" stroke="#6D28D9" strokeWidth="2"/>
-      <polygon points="128,13 148,20 128,27" fill="#6F5AE8"/>
-      <circle cx="157" cy="91" r="6" fill="white" opacity="0.95"/>
-      <circle cx="157" cy="91" r="3.5" fill="#6F5AE8"/>
-    </svg>
-  )
-}
+import { WEEKDAYS_ET_FULL, WEEKDAYS_EN_FULL, MONTHS_ET, MONTHS_EN } from '@/lib/calendar/dateUtils'
+import heroBloom from '@/assets/dashboard/hero-bloom.webp'
 
 export default function HeroCard() {
-  const navigate = useNavigate()
   const { user } = useAuth()
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
-  const isDark = useIsDark()
-
-  const allTasks      = useTasks()
-  const allEvents     = useCalendarEvents()
-  const goals         = useGoals()
-  const [habitsPercent, setHabitsPercent] = useState(getDashboardPercent())
-
   useEffect(() => subscribeToLanguage((s) => setLang(s.appLang)), [])
-  useEffect(() => subscribeHabits(() => setHabitsPercent(getDashboardPercent())), [])
 
-  const tasksCompleted = allTasks.filter((tk) => tk.completed).length
-  const tasksTotal     = allTasks.length
-  const eventsToday    = getEventsForDate(allEvents, new Date()).length
-  const goalsPercent   = goals.length === 0
-    ? 0
-    : Math.round(goals.reduce((sum, g) => sum + (g.progressValue / Math.max(g.progressMax, 1)) * 100, 0) / goals.length)
-
-  const stats = [
-    { icon: CheckSquare,  color: 'text-blue-400',   bg: 'bg-blue-50',   value: `${tasksCompleted}/${tasksTotal}`, label: t('hero.tasks',   lang), to: '/app/tasks'    },
-    { icon: Calendar,     color: 'text-sky-400',    bg: 'bg-sky-50',    value: String(eventsToday),               label: t('hero.events',  lang), to: '/app/calendar' },
-    { icon: Target,       color: 'text-orange-400', bg: 'bg-orange-50', value: `${goalsPercent}%`,                label: t('hero.goals',   lang), to: '/app/goals'    },
-    { icon: CheckCircle2, color: 'text-green-500',  bg: 'bg-green-50',  value: `${habitsPercent}%`,               label: t('hero.habits',  lang), to: '/app/habits'   },
-  ]
-
-  const hour     = new Date().getHours()
+  const hour = new Date().getHours()
   const greeting = hour < 12 ? t('hero.morning', lang) : hour < 18 ? t('hero.afternoon', lang) : t('hero.evening', lang)
-  const name     = user?.displayName || t('header.user', lang)
+  const name = user?.displayName || t('header.user', lang)
   const dailyMsg = getDailyMessage({ date: new Date(), lang })
 
-  // Shared stat button used in both portrait and landscape layouts
-  const StatButton = ({ icon: Icon, color, bg, value, label, to, compact = false }: {
-    icon: typeof CheckSquare
-    color: string
-    bg: string
-    value: string
-    label: string
-    to: string
-    compact?: boolean
-  }) => (
-    <button
-      onClick={() => navigate(to)}
-      className="flex items-center gap-2 text-left hover:opacity-80 transition-opacity min-w-0"
-    >
-      <div className={`rounded-lg ${bg} flex items-center justify-center flex-shrink-0 ${compact ? 'w-8 h-8' : 'w-8 h-8 lg:w-9 lg:h-9'}`}>
-        <Icon size={15} className={color} />
-      </div>
-      <div className="min-w-0">
-        <p className={`font-bold text-[#1A1F36] leading-none ${compact ? 'text-sm' : 'text-sm lg:text-base'}`}>
-          {value}
-        </p>
-        <p className="text-[10px] lg:text-xs text-[#94A3B8] mt-0.5 lg:mt-1 leading-tight truncate">
-          {label}
-        </p>
-      </div>
-    </button>
-  )
+  const today = new Date()
+  const weekday = lang === 'en' ? WEEKDAYS_EN_FULL[(today.getDay() + 6) % 7] : WEEKDAYS_ET_FULL[(today.getDay() + 6) % 7]
+  const month = lang === 'en' ? MONTHS_EN[today.getMonth()] : MONTHS_ET[today.getMonth()]
+  const dateLabel = lang === 'en'
+    ? `${weekday}, ${month} ${today.getDate()}, ${today.getFullYear()}`
+    : `${weekday}, ${today.getDate()}. ${month.toLowerCase()} ${today.getFullYear()}`
 
   return (
-    <div className="bg-[#F4F2FF] rounded-2xl overflow-hidden">
+    <div className="relative overflow-hidden rounded-[28px] bg-[#E4D6FB] dark:bg-[#2A1D52] shadow-[0_22px_48px_rgba(99,69,181,0.22),0_4px_14px_rgba(99,69,181,0.1)] dark:shadow-[0_22px_48px_rgba(0,0,0,0.4),0_4px_14px_rgba(0,0,0,0.25)] px-5 sm:px-7 py-5 sm:py-7">
+      {/* The photo itself, `cover`-sized so it fills the card edge to edge
+         at every breakpoint — never letterboxed, so there is no visible
+         seam against a fallback color and no empty bars above/below on
+         phones. `bg-cover` always crops rather than shrinks, so the
+         position below (not the size) is what keeps the bloom framed:
+         anchored further right on narrow phones (where cover crops more
+         off the left) and progressively less so on wider screens (where
+         cover crops top/bottom instead and the bloom is naturally fully
+         visible already). */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 bg-cover bg-no-repeat bg-[position:82%_center] sm:bg-[position:72%_center] lg:bg-[position:64%_center]"
+        style={{ backgroundImage: `url(${heroBloom})` }}
+      />
 
-      {/*
-       * ── PORTRAIT (< sm = 640 px) ──────────────────────────────────────────
-       * Greeting stacked above a 2 × 2 stat grid.
-       * No illustration, no divider, compact spacing.
-       */}
-      <div className="sm:hidden px-4 py-3 flex flex-col gap-3">
-        <div className="min-w-0">
-          <p className="text-base font-bold text-[#1A1F36] leading-tight truncate">
-            {greeting}, {name} 👋
-          </p>
-          <p className="text-xs text-[#94A3B8] mt-0.5">{dailyMsg}</p>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {stats.map((s) => <StatButton key={s.label} {...s} compact />)}
-        </div>
+      {/* Dark-mode-only uniform darkening scrim over the WHOLE card — the
+         source photo is a pale, light-toned pearl/lavender image, so dark
+         mode needs an even scrim across it (bloom included), not just
+         near the text, to read as part of the dark theme. Fully
+         transparent in light mode. */}
+      <div className="absolute inset-0 bg-transparent dark:bg-[#140D28]/45" />
+
+      {/* Smooth transparent gradient behind the text specifically — pale
+         (light mode) or dark (dark mode) near the greeting, fading to
+         fully transparent toward the bloom on the right, so the text
+         always has enough contrast regardless of exactly what part of
+         the photo ends up behind it after cover-cropping. Wider/more
+         opaque on mobile (where the greeting spans the full card width)
+         than on sm+ (where it's already confined to the left by the
+         pr-40/pr-52 reserved space). */}
+      <div className="absolute inset-0 bg-gradient-to-r from-white/85 via-white/55 to-transparent sm:from-white/80 sm:via-white/30 sm:to-transparent dark:from-black/60 dark:via-black/30 dark:to-transparent sm:dark:from-black/55 sm:dark:via-black/20 sm:dark:to-transparent" />
+
+      <div className="relative min-w-0 pr-0 sm:pr-40 md:pr-52">
+        <p className="text-2xl sm:text-3xl font-bold text-[#3D2B6B] dark:text-white leading-tight">
+          {greeting},
+        </p>
+        <p className="text-2xl sm:text-3xl font-bold text-[#3D2B6B] dark:text-white leading-tight mb-2">
+          {name} 👋
+        </p>
+        <p className="text-sm text-[#5B4A8A] dark:text-white/85 font-medium">{dateLabel}</p>
+        <p className="text-sm sm:text-base text-[#5B4A8A] dark:text-white/90 italic mt-3 max-w-md">
+          „{dailyMsg}"
+        </p>
       </div>
-
-      {/*
-       * ── LANDSCAPE PHONE + TABLET + DESKTOP (sm+) ─────────────────────────
-       * Greeting + full motivational text top-left, mountain illustration
-       * top-right (from md, once there's room), and all four statistics
-       * together in one lighter inset row underneath — matching the
-       * approved visual reference. No divider, no side-by-side stats.
-       */}
-      <div className="hidden sm:block px-5 lg:px-6 py-3 lg:py-4">
-        <div className="relative">
-          {/* Greeting — the daily message wraps (no truncation) so the full
-             sentence is always shown. Right padding (from md+, where the
-             illustration is visible) reserves room for it so the text can
-             never run underneath. */}
-          <div className="min-w-0 pr-20 lg:pr-28">
-            <p className="text-base lg:text-lg font-bold text-[#1A1F36] leading-tight">
-              {greeting}, {name} 👋
-            </p>
-            <p className="text-xs lg:text-sm text-[#94A3B8] mt-1 max-w-xl">{dailyMsg}</p>
-          </div>
-
-          {/* Illustration — absolutely positioned in the upper-right so its
-             own height never contributes to the card's layout height; the
-             greeting text's height alone drives this row. Sized small
-             enough to comfortably clear the shortest realistic greeting. */}
-          <div className="hidden md:block absolute top-0 right-0 h-12 lg:h-14 xl:h-16 aspect-[11/10] pointer-events-none">
-            <MountainIllustration isDark={isDark} />
-          </div>
-        </div>
-
-        {/* Stats — lighter inset row directly below the greeting.
-         *   sm–md  (640–767 px)  → 2 columns (landscape phone)
-         *   md+    (768 px+)     → 4 columns (tablet / desktop)
-         */}
-        <div
-          className="bg-white rounded-xl px-4 py-3 mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-5"
-          style={{ boxShadow: tc('0 1px 3px rgba(17, 12, 46, 0.06)', 'none', isDark) }}
-        >
-          {stats.map((s) => <StatButton key={s.label} {...s} />)}
-        </div>
-      </div>
-
     </div>
   )
 }
