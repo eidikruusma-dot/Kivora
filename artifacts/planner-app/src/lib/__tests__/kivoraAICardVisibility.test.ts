@@ -39,10 +39,15 @@ describe('KivoraAICard round 2: mascot at least 2x the original size, always row
   })
 
   it('the header row (mascot + title/subtitle/summary) is always a row — no flex-col/sm:flex-row stacking split', () => {
-    expect(CARD_SRC).toMatch(/<div className="flex items-start gap-3 sm:gap-4">/)
+    expect(CARD_SRC).toMatch(/<div className=\{`flex gap-3 sm:gap-4 \$\{isLongText \? 'items-center' : 'items-start'\}`\}>/)
     expect(CARD_SRC).not.toMatch(/flex-col sm:flex-row/)
     expect(CARD_SRC).not.toMatch(/mx-auto sm:mx-0/)
     expect(CARD_SRC).not.toMatch(/text-center sm:text-left/)
+  })
+
+  it('round 4: the title/subtitle column is vertically centered against the mascot only when the suggestion is long (short case keeps its original top alignment)', () => {
+    expect(CARD_SRC).toMatch(/isLongText \? 'items-center' : 'items-start'/)
+    expect(CARD_SRC).toMatch(/\$\{isLongText \? '' : 'pt-1'\}/)
   })
 
   it('the three action buttons sit in their own full-width row below the mascot+text header, not nested inside the text column', () => {

@@ -364,8 +364,9 @@ describe('QuickNoteWidget: compact row empty state (Kivora 2.0, 40-50% shorter),
     expect(NOTE_SRC).toMatch(/t\('dash\.notes\.emptyHint', lang\)/)
   })
 
-  it('the empty card no longer stretches to match a filled sibling\'s height (self-start instead of h-full)', () => {
-    expect(NOTE_SRC).toMatch(/className=\{notes\.length === 0 \? 'flex flex-col self-start' : 'h-full flex flex-col'\}/)
+  it('is rendered as a plain flex-col card, not a grid item — no self-start/h-full toggle, which would shrink its WIDTH (not just height) since it sits directly in Dashboard.tsx\'s flex-col container, not a grid row with a sibling', () => {
+    expect(NOTE_SRC).toMatch(/<DashboardCard className="flex flex-col">/)
+    expect(NOTE_SRC).not.toMatch(/self-start/)
   })
 })
 

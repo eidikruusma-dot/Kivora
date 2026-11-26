@@ -34,7 +34,7 @@ export default function QuickNoteWidget() {
   }, [text])
 
   return (
-    <DashboardCard className={notes.length === 0 ? 'flex flex-col self-start' : 'h-full flex flex-col'}>
+    <DashboardCard className="flex flex-col">
       <div className="px-5 py-4 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-sm font-bold text-[#1A1F36] dark:text-[#F1EFFB]">
           <StickyNote size={17} className="text-[#F97316] dark:text-orange-300" />

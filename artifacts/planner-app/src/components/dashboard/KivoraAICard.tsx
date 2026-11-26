@@ -135,15 +135,19 @@ export default function KivoraAICard() {
         {/* Header row: mascot always on the left, title/subtitle always on the
            right — even at 320px (never stacked). The summary bubble joins
            this row only while its text is short enough for the viewport;
-           see isLongText below. */}
-        <div className="flex items-start gap-3 sm:gap-4">
+           see isLongText below. When the text IS long (and moves to its own
+           full-width block below), the title/subtitle column is noticeably
+           shorter than the mascot, so it's centered against the mascot
+           instead of sitting top-aligned with empty space below it — the
+           short-text case keeps its original top alignment unchanged. */}
+        <div className={`flex gap-3 sm:gap-4 ${isLongText ? 'items-center' : 'items-start'}`}>
           <img
             src={kivoraMascot}
             alt={t('dash.ai.mascotAlt', lang)}
             className="w-32 h-32 sm:w-40 sm:h-40 object-contain flex-shrink-0 drop-shadow-[0_8px_18px_rgba(111,90,232,0.28)]"
           />
 
-          <div className="flex-1 min-w-0 pt-1">
+          <div className={`flex-1 min-w-0 ${isLongText ? '' : 'pt-1'}`}>
             <h2 className="flex items-center gap-1.5 text-base sm:text-lg font-bold text-[#1A1F36] dark:text-[#F8F7FD]">
               {t('dash.ai.title', lang)}
               <Sparkles size={16} className="text-[#A78BFA]" />
