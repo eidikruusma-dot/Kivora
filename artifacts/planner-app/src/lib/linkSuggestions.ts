@@ -6,13 +6,22 @@
  * Call computeSuggestions() from any React component; re-run whenever
  * the relevant dependency arrays change.
  *
- * Scoring (0–1):
+ * Scoring (0–1), used for ranking and for the "show suggestion" tier:
  *   • Word overlap between title/context tokens  — up to 0.55
  *   • Exact category/subject/folder match        — +0.30
  *   • Date proximity (within 14 days)            — +0.25
  *
- * High confidence: score ≥ 0.65  (auto-link eligible)
- * Show suggestion: score ≥ 0.20
+ * Show suggestion: score ≥ SHOW_SUGGESTION_THRESHOLD (0.30).
+ *
+ * High confidence (auto-link eligible) is a SEPARATE, stricter gate — see
+ * computeIsHighConfidence() below. A high score from word overlap alone is
+ * NOT enough: category/date can help a genuinely specific match clear the
+ * score bar, but can never substitute for real textual evidence, and two
+ * generic/filler words (WEAK_WORDS) are never treated as that evidence —
+ * this holds regardless of how many items the user has (1, 2, 3, or
+ * thousands): the gate is a fixed word list plus an exact-title check,
+ * never a frequency statistic computed over the user's own (possibly
+ * tiny) data, which would be meaningless with little data.
  */
 
 import { getAllTasks } from '@/lib/tasksStore'
@@ -37,7 +46,7 @@ export interface LinkSuggestion {
   date?: string
   reason: string
   score: number
-  /** true when score ≥ 0.65 — safe to auto-link without confirmation */
+  /** true when safe to auto-link without confirmation — see computeIsHighConfidence() */
   isHighConfidence: boolean
   suggestedRelation: RelationType
 }
@@ -55,6 +64,86 @@ const STOPWORDS = new Set([
   'this','that','are','was','not','be','has','have','my','me','i','you','we',
   'can','will','do','did','but','if','then','than','also','just','so','up',
 ])
+
+// ── Thresholds ────────────────────────────────────────────────────────────────
+// Raised from 0.20: the weakest single-generic-word-only matches used to
+// show up as "suggestions" too, adding noise with little chance of being
+// genuinely useful. 0.30 still lets a single specific shared word, or a
+// category+date coincidence, through for manual review — it only cuts the
+// very weakest tier.
+const SHOW_SUGGESTION_THRESHOLD = 0.30
+
+// ── Weak / generic words ──────────────────────────────────────────────────────
+// Words that are common filler across many unrelated tasks/notes/events and
+// carry little distinguishing signal on their own — distinct from grammatical
+// STOPWORDS. A shared match consisting ONLY of these words is never treated
+// as strong evidence of a real relationship, no matter how rare that word
+// happens to be in the user's current (possibly very small) dataset. This is
+// a fixed list, not a statistic, so it behaves identically whether the user
+// has 1 item or 10,000.
+const WEAK_WORDS = new Set([
+  // Estonian
+  'kohtumine', 'tegevus', 'ülesanne', 'ülesanded', 'asi', 'asjad', 'teema',
+  'plaan', 'plaanid', 'märkus', 'märkmed', 'info', 'projekt', 'päev', 'nädal',
+  'kuu', 'aeg', 'kell', 'homme', 'täna', 'eile', 'varsti', 'hiljem', 'uus',
+  'vana', 'tähtis', 'kiire',
+  // English
+  'meeting', 'task', 'tasks', 'thing', 'things', 'topic', 'plan', 'plans',
+  'note', 'notes', 'info', 'project', 'day', 'week', 'month', 'time', 'clock',
+  'tomorrow', 'today', 'yesterday', 'soon', 'later', 'new', 'old',
+  'important', 'urgent',
+])
+
+/** Normalizes a title for exact-match comparison: lowercase, trimmed, collapsed whitespace, no trailing punctuation. */
+function normalizeTitle(title: string | undefined): string {
+  if (!title) return ''
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/[.,;:!?]+$/g, '')
+    .replace(/\s+/g, ' ')
+}
+
+/** True when two titles are identical (or differ only in case/whitespace/trailing punctuation). */
+function isExactTitleMatch(a: string | undefined, b: string | undefined): boolean {
+  const na = normalizeTitle(a)
+  const nb = normalizeTitle(b)
+  return na.length >= 3 && na === nb
+}
+
+/**
+ * The auto-link gate. Exported (not just used internally) so it can be
+ * unit-tested directly against the exact score/word combinations that
+ * matter, independent of the store-reading machinery in
+ * computeSuggestions() — including with a tiny or empty candidate pool,
+ * where a frequency-based "rarity" statistic would be meaningless.
+ *
+ * `candidateType` + `fromType` gate out calendar candidates for task/school
+ * sources specifically, to avoid a duplicate `scheduled` link alongside the
+ * one automaticLinking.ts's dedicated step already creates for those two
+ * types — see the module doc comment. Every other type pairing is
+ * unaffected: calendar suggestions are still computed and still shown for
+ * manual linking either way (this gate only decides automatic linking).
+ */
+export function computeIsHighConfidence(params: {
+  sharedWords: string[]
+  totalScore: number
+  srcTitle: string | undefined
+  candidateTitle: string | undefined
+  candidateType: EntityType
+  fromType: EntityType
+}): boolean {
+  const { sharedWords, totalScore, srcTitle, candidateTitle, candidateType, fromType } = params
+
+  if (candidateType === 'calendar' && (fromType === 'task' || fromType === 'school')) {
+    return false
+  }
+
+  if (isExactTitleMatch(srcTitle, candidateTitle)) return true
+
+  const specificSharedCount = sharedWords.filter((w) => !WEAK_WORDS.has(w)).length
+  return specificSharedCount >= 2 && totalScore >= 0.65
+}
 
 // ── Tokenizer ─────────────────────────────────────────────────────────────────
 
@@ -316,7 +405,16 @@ export function computeSuggestions(
     const dateScore = dateProximityScore(dayDiff)
 
     const totalScore = Math.min(1.0, overlapScore + catScore + dateScore)
-    if (totalScore < 0.20) continue
+    if (totalScore < SHOW_SUGGESTION_THRESHOLD) continue
+
+    const isHighConfidence = computeIsHighConfidence({
+      sharedWords,
+      totalScore,
+      srcTitle: src.title,
+      candidateTitle: c.title,
+      candidateType: c.type,
+      fromType,
+    })
 
     results.push({
       type: c.type,
@@ -326,7 +424,7 @@ export function computeSuggestions(
       date: c.date,
       reason: buildReason(sharedWords, catMatch, c.category, dayDiff, lang),
       score: totalScore,
-      isHighConfidence: totalScore >= 0.65,
+      isHighConfidence,
       suggestedRelation: suggestRelation(c.type),
     })
   }

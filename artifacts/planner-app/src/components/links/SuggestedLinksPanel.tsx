@@ -2,15 +2,17 @@
  * SuggestedLinksPanel.tsx
  *
  * Compact "Suggested links" section shown above LinkedItemsPanel.
- * Renders when ≥1 suggestion passes the 0.20 score threshold.
+ * Renders when ≥1 suggestion passes linkSuggestions.ts's score threshold.
  *
- * Each suggestion shows:
+ * Starts collapsed into a single summary row ("Soovitused · N") — it never
+ * auto-expands, so a weak or merely-plausible match never demands the
+ * user's attention. One click expands it to:
  *   icon · title · context/date · reason chip
  *   → "Link" button (creates the link immediately)
  *   → "×" dismiss button (hides forever via localStorage)
  *
  * A "Link all confident" button appears when ≥2 high-confidence
- * suggestions are present.
+ * suggestions are present (only once expanded).
  */
 
 import { useState, useMemo, useCallback } from 'react'
@@ -76,6 +78,14 @@ interface Props {
 export default function SuggestedLinksPanel({ type, entityId, lang, className = '' }: Props) {
   // Re-render when links change so we exclude freshly added items
   const existingLinks = useLinksForEntity(type, entityId)
+  // A content-based signature (not the raw array reference) for the
+  // useMemo dependency below. useLinksForEntity re-subscribes to the
+  // ENTIRE app's shared link store — any link change ANYWHERE (even for a
+  // completely unrelated entity) produces a new array reference and would
+  // otherwise re-run computeSuggestions() and re-render this panel. The
+  // signature only changes when the SET of links for THIS entity actually
+  // changes, so an unrelated global update is a no-op here.
+  const linksSignature = existingLinks.map((l) => l.id).sort().join(',')
 
   // Dismissed set — persisted to localStorage per entity
   const [dismissed, setDismissed] = useState<Set<string>>(
@@ -88,11 +98,16 @@ export default function SuggestedLinksPanel({ type, entityId, lang, className = 
   // Collapse when too many suggestions (show 3 by default)
   const [expanded, setExpanded] = useState(false)
 
-  // Compute suggestions — re-runs when links or dismissals change
+  // The whole section starts collapsed into a single compact summary row —
+  // suggestions (especially weak ones) no longer demand attention the
+  // moment the form opens. Expanding is one click away and nothing is
+  // hidden permanently.
+  const [sectionOpen, setSectionOpen] = useState(false)
+
+  // Compute suggestions — re-runs only when the relevant signals actually change
   const suggestions: LinkSuggestion[] = useMemo(
     () => computeSuggestions(type, entityId, lang, dismissed),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [type, entityId, lang, dismissed, existingLinks],
+    [type, entityId, lang, dismissed, linksSignature],
   )
 
   const visible = suggestions.filter((s) => !linked.has(`${s.type}:${s.id}`))
@@ -130,11 +145,38 @@ export default function SuggestedLinksPanel({ type, entityId, lang, className = 
     ? `Link all (${highConf.length})`
     : `Seo kõik (${highConf.length})`
 
+  // Collapsed: one compact, unobtrusive summary row. Nothing here demands
+  // attention or auto-expands — the user opens it when (and if) they want to.
+  if (!sectionOpen) {
+    return (
+      <div className={className}>
+        <button
+          onClick={() => setSectionOpen(true)}
+          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-[#FDFCFF] transition-colors"
+        >
+          <span className="flex items-center gap-1.5">
+            <Sparkles size={11} strokeWidth={2} className="text-[#B48EF5]" />
+            <span className="text-[11px] font-semibold text-[#B48EF5] uppercase tracking-wider">
+              {sectionLabel}
+            </span>
+            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[#F3E8FF] text-[#9333EA] text-[10px] font-bold leading-none">
+              {visible.length}
+            </span>
+          </span>
+          <ChevronDown size={12} className="text-[#B48EF5]" />
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className={className}>
-      {/* Header */}
+      {/* Header — also collapses the section back */}
       <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-1.5">
+        <button
+          onClick={() => setSectionOpen(false)}
+          className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+        >
           <Sparkles size={11} strokeWidth={2} className="text-[#B48EF5]" />
           <span className="text-[11px] font-semibold text-[#B48EF5] uppercase tracking-wider">
             {sectionLabel}
@@ -142,7 +184,8 @@ export default function SuggestedLinksPanel({ type, entityId, lang, className = 
           <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[#F3E8FF] text-[#9333EA] text-[10px] font-bold leading-none">
             {visible.length}
           </span>
-        </div>
+          <ChevronUp size={12} className="text-[#B48EF5]" />
+        </button>
         {highConf.length >= 2 && (
           <button
             onClick={linkAll}
