@@ -34,7 +34,7 @@ export default function QuickNoteWidget() {
   }, [text])
 
   return (
-    <DashboardCard className="h-full flex flex-col">
+    <DashboardCard className={notes.length === 0 ? 'flex flex-col self-start' : 'h-full flex flex-col'}>
       <div className="px-5 py-4 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-sm font-bold text-[#1A1F36] dark:text-[#F1EFFB]">
           <StickyNote size={17} className="text-[#F97316] dark:text-orange-300" />
@@ -68,9 +68,9 @@ export default function QuickNoteWidget() {
           </button>
         </div>
       </div>
-      <div className="flex-1 px-5 overflow-y-auto scrollbar-thin pb-3">
-        <p className="text-xs text-[#94A3B8] dark:text-[#9C96C2] font-medium mb-2">{t('dash.notes.recentLabel', lang)}</p>
-        {notes.length > 0 ? (
+      {notes.length > 0 ? (
+        <div className="flex-1 px-5 overflow-y-auto scrollbar-thin pb-3">
+          <p className="text-xs text-[#94A3B8] dark:text-[#9C96C2] font-medium mb-2">{t('dash.notes.recentLabel', lang)}</p>
           <ul className="space-y-2">
             {notes.map((n) => (
               <li key={n.id} className="text-sm text-[#64748B] dark:text-[#B4AFD1] leading-relaxed flex gap-2">
@@ -79,18 +79,17 @@ export default function QuickNoteWidget() {
               </li>
             ))}
           </ul>
-        ) : (
-          <div className="flex flex-col items-center text-center gap-2 py-2">
-            <div className="w-10 h-10 rounded-full bg-[#FFEDD5] dark:bg-orange-400/15 flex items-center justify-center">
-              <Lightbulb size={18} className="text-[#F97316] dark:text-orange-300" />
+        </div>
+      ) : (
+        <div className="px-5 pb-3">
+          <div className="flex items-center gap-3 py-1">
+            <div className="w-8 h-8 rounded-full bg-[#FFEDD5] dark:bg-orange-400/15 flex items-center justify-center flex-shrink-0">
+              <Lightbulb size={16} className="text-[#F97316] dark:text-orange-300" />
             </div>
-            <div>
-              <p className="text-sm font-medium text-[#1A1F36] dark:text-[#F1EFFB]">{t('dash.notes.emptyTitle', lang)}</p>
-              <p className="text-xs text-[#94A3B8] dark:text-[#9C96C2] mt-0.5">{t('dash.notes.emptyHint', lang)}</p>
-            </div>
+            <p className="text-xs text-[#94A3B8] dark:text-[#9C96C2] leading-snug">{t('dash.notes.emptyHint', lang)}</p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </DashboardCard>
   )
 }

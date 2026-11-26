@@ -62,7 +62,7 @@ export default function CalendarWidget() {
 
   return (
     <>
-      <DashboardCard className="h-full flex flex-col">
+      <DashboardCard className={todayEvents.length === 0 ? 'flex flex-col self-start' : 'h-full flex flex-col'}>
         <div className="px-5 py-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-bold text-[#1A1F36] dark:text-[#F1EFFB]">
             <Calendar size={17} className="text-[#6F5AE8] dark:text-[#A78BFA]" />
@@ -78,17 +78,19 @@ export default function CalendarWidget() {
 
         <div className="flex-1 px-5 space-y-1 overflow-y-auto scrollbar-thin pb-3">
           {todayEvents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-5 text-center gap-2.5">
-              <div className="w-12 h-12 rounded-full bg-[#EFF6FF] dark:bg-blue-400/15 flex items-center justify-center">
-                <CalendarPlus size={22} className="text-[#3B82F6] dark:text-blue-300" />
+            <div className="flex items-center gap-3 py-3">
+              <div className="w-8 h-8 rounded-full bg-[#EFF6FF] dark:bg-blue-400/15 flex items-center justify-center flex-shrink-0">
+                <CalendarPlus size={16} className="text-[#3B82F6] dark:text-blue-300" />
               </div>
-              <p className="text-xs text-[#94A3B8] dark:text-[#9C96C2] max-w-[220px]">{t('dash.calendar.empty', lang)}</p>
-              <button
-                onClick={() => setAddOpen(true)}
-                className="min-h-[44px] px-4 flex items-center justify-center rounded-xl bg-[#EFF6FF] dark:bg-blue-400/15 text-[#3B82F6] dark:text-blue-300 text-xs font-semibold hover:opacity-80 transition-opacity"
-              >
-                {t('dash.calendar.emptyCta', lang)}
-              </button>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-[#94A3B8] dark:text-[#9C96C2] leading-snug">{t('dash.calendar.empty', lang)}</p>
+                <button
+                  onClick={() => setAddOpen(true)}
+                  className="text-xs font-semibold text-[#3B82F6] dark:text-blue-300 hover:underline py-1"
+                >
+                  {t('dash.calendar.emptyCta', lang)}
+                </button>
+              </div>
             </div>
           ) : (
             todayEvents.map((event) => (

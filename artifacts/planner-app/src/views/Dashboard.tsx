@@ -7,6 +7,7 @@ import HabitsWidget from '@/components/dashboard/HabitsWidget'
 import GoalsWidget from '@/components/dashboard/GoalsWidget'
 import QuickActionsWidget from '@/components/dashboard/QuickActionsWidget'
 import HeroCard from '@/components/dashboard/HeroCard'
+import KivoraAICard from '@/components/dashboard/KivoraAICard'
 import DashboardStatCards from '@/components/dashboard/DashboardStatCards'
 import DashboardBackground from '@/components/dashboard/DashboardBackground'
 import { useModules } from '@/lib/modulesStore'
@@ -49,6 +50,7 @@ export default function Dashboard() {
 
       <div className="relative z-10 flex flex-col gap-3 sm:gap-4 px-4 sm:px-6 lg:px-8 pt-3 sm:pt-4 pb-6 max-w-[1280px] mx-auto">
         <HeroCard />
+        {modules.assistant && <KivoraAICard />}
         <DashboardStatCards />
         <QuickActionsWidget />
 

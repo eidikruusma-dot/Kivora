@@ -23,7 +23,7 @@ export default function GoalsWidget() {
 
   return (
     <>
-      <DashboardCard className="h-full flex flex-col">
+      <DashboardCard className={goals.length === 0 ? 'flex flex-col self-start' : 'h-full flex flex-col'}>
         <div className="px-5 py-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-bold text-[#1A1F36] dark:text-[#F1EFFB]">
             <Target size={17} className="text-[#F97316] dark:text-orange-300" />
@@ -70,17 +70,19 @@ export default function GoalsWidget() {
             )
           })}
           {goals.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-5 text-center gap-2.5">
-              <div className="w-12 h-12 rounded-full bg-[#EDE9FB] dark:bg-[#A78BFA]/15 flex items-center justify-center">
-                <Target size={22} className="text-[#6F5AE8] dark:text-[#A78BFA]" />
+            <div className="flex items-center gap-3 py-3">
+              <div className="w-8 h-8 rounded-full bg-[#EDE9FB] dark:bg-[#A78BFA]/15 flex items-center justify-center flex-shrink-0">
+                <Target size={16} className="text-[#6F5AE8] dark:text-[#A78BFA]" />
               </div>
-              <p className="text-xs text-[#94A3B8] dark:text-[#9C96C2] max-w-[220px]">{t('dash.goals.empty', lang)}</p>
-              <button
-                onClick={() => navigate('/app/goals', { state: { openCreate: true } })}
-                className="min-h-[44px] px-4 flex items-center justify-center rounded-xl bg-[#EDE9FB] dark:bg-[#A78BFA]/15 text-[#6F5AE8] dark:text-[#C4B5FD] text-xs font-semibold hover:opacity-80 transition-opacity"
-              >
-                {t('dash.goals.emptyCta', lang)}
-              </button>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-[#94A3B8] dark:text-[#9C96C2] leading-snug">{t('dash.goals.empty', lang)}</p>
+                <button
+                  onClick={() => navigate('/app/goals', { state: { openCreate: true } })}
+                  className="text-xs font-semibold text-[#6F5AE8] dark:text-[#C4B5FD] hover:underline py-1"
+                >
+                  {t('dash.goals.emptyCta', lang)}
+                </button>
+              </div>
             </div>
           )}
         </div>

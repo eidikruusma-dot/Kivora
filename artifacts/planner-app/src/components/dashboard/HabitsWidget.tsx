@@ -30,7 +30,7 @@ export default function HabitsWidget() {
   const weekDates = getCurrentWeekDates(today)
 
   return (
-    <DashboardCard className="h-full flex flex-col">
+    <DashboardCard className={activeHabits.length === 0 ? 'flex flex-col self-start' : 'h-full flex flex-col'}>
       <div className="px-5 py-4 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-sm font-bold text-[#1A1F36] dark:text-[#F1EFFB]">
           <Leaf size={17} className="text-[#16A34A] dark:text-green-300" />
@@ -43,6 +43,24 @@ export default function HabitsWidget() {
           {t('dash.viewAll', lang)} <ArrowRight size={11} />
         </button>
       </div>
+      {activeHabits.length === 0 ? (
+        <div className="px-5 pb-4">
+          <div className="flex items-center gap-3 py-3">
+            <div className="w-8 h-8 rounded-full bg-[#DCFCE7] dark:bg-green-400/15 flex items-center justify-center flex-shrink-0">
+              <Leaf size={16} className="text-[#16A34A] dark:text-green-300" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-[#94A3B8] dark:text-[#9C96C2] leading-snug">{t('dash.habits.empty', lang)}</p>
+              <button
+                onClick={() => navigate('/app/habits', { state: { openCreate: true } })}
+                className="text-xs font-semibold text-[#16A34A] dark:text-green-300 hover:underline py-1"
+              >
+                {t('dash.habits.emptyCta', lang)}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="flex-1 flex items-center px-5 pb-4 gap-4 min-h-0">
         {/* Habits list */}
         <div className="flex-1 space-y-2 min-w-0 overflow-y-auto scrollbar-thin">
@@ -86,24 +104,11 @@ export default function HabitsWidget() {
               </div>
             )
           })}
-          {activeHabits.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-5 text-center gap-2.5">
-              <div className="w-12 h-12 rounded-full bg-[#DCFCE7] dark:bg-green-400/15 flex items-center justify-center">
-                <Leaf size={22} className="text-[#16A34A] dark:text-green-300" />
-              </div>
-              <p className="text-xs text-[#94A3B8] dark:text-[#9C96C2] max-w-[220px]">{t('dash.habits.empty', lang)}</p>
-              <button
-                onClick={() => navigate('/app/habits', { state: { openCreate: true } })}
-                className="min-h-[44px] px-4 flex items-center justify-center rounded-xl bg-[#DCFCE7] dark:bg-green-400/15 text-[#16A34A] dark:text-green-300 text-xs font-semibold hover:opacity-80 transition-opacity"
-              >
-                {t('dash.habits.emptyCta', lang)}
-              </button>
-            </div>
-          )}
         </div>
         {/* Progress ring */}
         <DashboardProgressRing value={percent} lang={lang} size={88} stroke={8} />
       </div>
+      )}
     </DashboardCard>
   )
 }

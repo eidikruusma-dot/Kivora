@@ -167,7 +167,17 @@ describe('HeroCard: round-4 rebuild — cover-filled photo, no seams, gradient t
 describe('DashboardStatCards: four separate glass stat cards (not one shared inset strip)', () => {
   it('renders 4 independent cards, 2x2 on narrow phones and 4-across from sm:, each with its own shadow/background', () => {
     expect(STATCARDS_SRC).toMatch(/grid grid-cols-2 sm:grid-cols-4 gap-3/)
-    expect(STATCARDS_SRC).toMatch(/bg-white\/85 dark:bg-\[#1E1B33\]\/80 backdrop-blur-xl border border-white\/70 dark:border-white\/10 rounded-2xl/)
+    expect(STATCARDS_SRC).toMatch(/backdrop-blur-xl border border-white\/70 dark:border-white\/10 rounded-2xl/)
+  })
+
+  it('each stat card has its own soft pastel gradient background (Kivora 2.0 restyle), dark-mode aware, keeping the same glass blur/border/shadow chrome', () => {
+    const cardBgStyles = [...STATCARDS_SRC.matchAll(/cardBg: '([^']+)',/g)].map((m) => m[1])
+    expect(cardBgStyles.length).toBe(4)
+    for (const bg of cardBgStyles) {
+      expect(bg).toMatch(/^bg-gradient-to-br from-\[#[0-9A-Fa-f]{6}\] to-\[#[0-9A-Fa-f]{6}\] dark:from-\[#[0-9A-Fa-f]{6}\] dark:to-\[#[0-9A-Fa-f]{6}\]$/)
+    }
+    // all 4 gradients are distinct from one another
+    expect(new Set(cardBgStyles).size).toBe(4)
   })
 
   it('statistic values and per-stat navigation targets are preserved exactly (tasks/events/goals%/habits%)', () => {
@@ -184,7 +194,7 @@ describe('DashboardStatCards: four separate glass stat cards (not one shared ins
   it('stat labels never truncate with an ellipsis AND never break mid-word — sized (10px on the 2-col phone layout) to fit on one line at the narrowest supported width (320px)', () => {
     expect(STATCARDS_SRC).not.toMatch(/\btruncate\b/)
     expect(STATCARDS_SRC).not.toMatch(/break-words/) // was break-words in round 2, which produced ugly mid-word splits like "Eesmär-gid" at 320px
-    expect(STATCARDS_SRC).toMatch(/text-\[10px\] sm:text-xs text-\[#94A3B8\] dark:text-\[#9C96C2\] leading-tight whitespace-nowrap overflow-hidden/)
+    expect(STATCARDS_SRC).toMatch(/text-\[10px\] sm:text-xs text-\[#94A3B8\] dark:text-\[#B4AFD1\] leading-tight whitespace-nowrap overflow-hidden/)
   })
 
   it('each stat card icon has a dark-mode-aware tinted circular background', () => {
@@ -197,20 +207,28 @@ describe('DashboardStatCards: four separate glass stat cards (not one shared ins
   })
 })
 
-describe('TasksWidget: compact icon + CTA empty state, wired to the real add-task flow', () => {
-  it('renders a 48px icon-circle (up from 36px) with a proportionally larger icon, and the emptyCta translation key', () => {
-    expect(TASKS_SRC).toMatch(/w-12 h-12 rounded-full bg-\[#EDE9FB\]/)
-    expect(TASKS_SRC).toMatch(/<ListChecks size=\{22\}/)
+describe('TasksWidget: compact row empty state (Kivora 2.0, 40-50% shorter), wired to the real add-task flow', () => {
+  // Kivora 2.0 round: the stacked icon/text/pill-button empty state (48px
+  // icon circle + py-5 + a 44px pill button) was replaced by a single
+  // horizontal row (small icon + text + inline text-link CTA) so an empty
+  // card is now noticeably shorter than a populated one, per the explicit
+  // "tühjade kaartide kõrgust vähenda 40-50%" requirement — structural
+  // change only, not just a padding tweak.
+  it('renders a compact 32px icon-circle in a horizontal row (not the old 48px stacked layout), and the emptyCta translation key', () => {
+    expect(TASKS_SRC).toMatch(/flex items-center gap-3 py-3/)
+    expect(TASKS_SRC).toMatch(/w-8 h-8 rounded-full bg-\[#EDE9FB\]/)
+    expect(TASKS_SRC).toMatch(/<ListChecks size=\{16\}/)
     expect(TASKS_SRC).toMatch(/t\('dash\.tasks\.emptyCta', lang\)/)
+    expect(TASKS_SRC).not.toMatch(/w-12 h-12 rounded-full bg-\[#EDE9FB\]/)
   })
 
-  it('the CTA uses a soft lavender/purple tint (not the old uniform solid-purple button)', () => {
-    expect(TASKS_SRC).toMatch(/bg-\[#EDE9FB\] dark:bg-\[#A78BFA\]\/15 text-\[#6F5AE8\] dark:text-\[#C4B5FD\] text-xs font-semibold hover:opacity-80/)
-    expect(TASKS_SRC).not.toMatch(/bg-\[#6F5AE8\] text-white text-xs font-medium hover:bg-\[#5B48D8\]/)
+  it('the CTA is now an inline text link (no pill background), matching the task\'s accent color', () => {
+    expect(TASKS_SRC).toMatch(/text-xs font-semibold text-\[#6F5AE8\] dark:text-\[#C4B5FD\] hover:underline/)
+    expect(TASKS_SRC).not.toMatch(/min-h-\[44px\] px-4 flex items-center justify-center rounded-xl bg-\[#EDE9FB\]/)
   })
 
-  it('the CTA keeps its 44px minimum tap target', () => {
-    expect(TASKS_SRC).toMatch(/min-h-\[44px\] px-4 flex items-center justify-center rounded-xl bg-\[#EDE9FB\]/)
+  it('the empty card no longer stretches to match a filled sibling\'s height (self-start instead of h-full)', () => {
+    expect(TASKS_SRC).toMatch(/className=\{todayTasks\.length === 0 \? 'flex flex-col self-start' : 'h-full flex flex-col'\}/)
   })
 
   it('the CTA button opens AddTaskModal, and saving calls the real addTask store action (not a fake/no-op)', () => {
@@ -227,20 +245,22 @@ describe('TasksWidget: compact icon + CTA empty state, wired to the real add-tas
   })
 })
 
-describe('CalendarWidget: compact icon + CTA empty state, wired to the real add-event flow', () => {
-  it('renders a 48px icon-circle (up from 36px) with a proportionally larger icon, and the emptyCta translation key', () => {
-    expect(CALENDAR_SRC).toMatch(/w-12 h-12 rounded-full bg-\[#EFF6FF\]/)
-    expect(CALENDAR_SRC).toMatch(/<CalendarPlus size=\{22\}/)
+describe('CalendarWidget: compact row empty state (Kivora 2.0, 40-50% shorter), wired to the real add-event flow', () => {
+  it('renders a compact 32px icon-circle in a horizontal row (not the old 48px stacked layout), and the emptyCta translation key', () => {
+    expect(CALENDAR_SRC).toMatch(/flex items-center gap-3 py-3/)
+    expect(CALENDAR_SRC).toMatch(/w-8 h-8 rounded-full bg-\[#EFF6FF\]/)
+    expect(CALENDAR_SRC).toMatch(/<CalendarPlus size=\{16\}/)
     expect(CALENDAR_SRC).toMatch(/t\('dash\.calendar\.emptyCta', lang\)/)
+    expect(CALENDAR_SRC).not.toMatch(/w-12 h-12 rounded-full bg-\[#EFF6FF\]/)
   })
 
-  it('the CTA uses a soft blue tint (not the old uniform solid-purple button)', () => {
-    expect(CALENDAR_SRC).toMatch(/bg-\[#EFF6FF\] dark:bg-blue-400\/15 text-\[#3B82F6\] dark:text-blue-300 text-xs font-semibold hover:opacity-80/)
-    expect(CALENDAR_SRC).not.toMatch(/bg-\[#6F5AE8\] text-white text-xs font-medium hover:bg-\[#5B48D8\]/)
+  it('the CTA is now an inline text link (no pill background), matching the calendar\'s accent color', () => {
+    expect(CALENDAR_SRC).toMatch(/text-xs font-semibold text-\[#3B82F6\] dark:text-blue-300 hover:underline/)
+    expect(CALENDAR_SRC).not.toMatch(/min-h-\[44px\] px-4 flex items-center justify-center rounded-xl bg-\[#EFF6FF\]/)
   })
 
-  it('the CTA keeps its 44px minimum tap target', () => {
-    expect(CALENDAR_SRC).toMatch(/min-h-\[44px\] px-4 flex items-center justify-center rounded-xl bg-\[#EFF6FF\]/)
+  it('the empty card no longer stretches to match a filled sibling\'s height (self-start instead of h-full)', () => {
+    expect(CALENDAR_SRC).toMatch(/className=\{todayEvents\.length === 0 \? 'flex flex-col self-start' : 'h-full flex flex-col'\}/)
   })
 
   it('the CTA opens a second, create-mode NewEventModal instance wired to the real addCalendarEvent store action', () => {
@@ -258,20 +278,23 @@ describe('CalendarWidget: compact icon + CTA empty state, wired to the real add-
   })
 })
 
-describe('HabitsWidget: compact icon + CTA empty state, navigating to the real Habits creation surface', () => {
-  it('renders a 48px icon-circle (up from 36px) with a proportionally larger icon, and the emptyCta translation key', () => {
-    expect(HABITS_SRC).toMatch(/w-12 h-12 rounded-full bg-\[#DCFCE7\]/)
-    expect(HABITS_SRC).toMatch(/<Leaf size=\{22\}/) // swapped from Repeat to Leaf to match the confirmed design reference's habit icon (header + bottom nav + empty state all now use Leaf)
+describe('HabitsWidget: compact row empty state (Kivora 2.0, 40-50% shorter), navigating to the real Habits creation surface', () => {
+  it('renders a compact 32px icon-circle in a horizontal row (not the old 48px stacked layout), and the emptyCta translation key', () => {
+    expect(HABITS_SRC).toMatch(/flex items-center gap-3 py-3/)
+    expect(HABITS_SRC).toMatch(/w-8 h-8 rounded-full bg-\[#DCFCE7\]/)
+    expect(HABITS_SRC).toMatch(/<Leaf size=\{16\}/)
     expect(HABITS_SRC).toMatch(/t\('dash\.habits\.emptyCta', lang\)/)
+    expect(HABITS_SRC).not.toMatch(/w-12 h-12 rounded-full bg-\[#DCFCE7\]/)
   })
 
-  it('the CTA uses a soft mint/green tint (not the old uniform solid-purple button)', () => {
-    expect(HABITS_SRC).toMatch(/bg-\[#DCFCE7\] dark:bg-green-400\/15 text-\[#16A34A\] dark:text-green-300 text-xs font-semibold hover:opacity-80/)
-    expect(HABITS_SRC).not.toMatch(/bg-\[#6F5AE8\] text-white text-xs font-medium hover:bg-\[#5B48D8\]/)
+  it('the CTA is now an inline text link (no pill background), matching the habit\'s accent color', () => {
+    expect(HABITS_SRC).toMatch(/text-xs font-semibold text-\[#16A34A\] dark:text-green-300 hover:underline/)
+    expect(HABITS_SRC).not.toMatch(/min-h-\[44px\] px-4 flex items-center justify-center rounded-xl bg-\[#DCFCE7\]/)
   })
 
-  it('the CTA keeps its 44px minimum tap target', () => {
-    expect(HABITS_SRC).toMatch(/min-h-\[44px\] px-4 flex items-center justify-center rounded-xl bg-\[#DCFCE7\]/)
+  it('the empty card no longer stretches to match a filled sibling\'s height, and the progress ring is hidden (not meaningful at 0 active habits) instead of taking up space', () => {
+    expect(HABITS_SRC).toMatch(/className=\{activeHabits\.length === 0 \? 'flex flex-col self-start' : 'h-full flex flex-col'\}/)
+    expect(HABITS_SRC).toMatch(/\{activeHabits\.length === 0 \? \(/)
   })
 
   it('the CTA navigates to /app/habits with an openCreate signal that opens the real create-habit flow on HabitsPage (see dashboardCreateFlowSignal.test.ts for the full signal-wiring coverage)', () => {
@@ -279,22 +302,29 @@ describe('HabitsWidget: compact icon + CTA empty state, navigating to the real H
       /onClick=\{\(\) => navigate\('\/app\/habits', \{ state: \{ openCreate: true \} \}\)\}[\s\S]{0,400}t\('dash\.habits\.emptyCta', lang\)/,
     )
   })
+
+  it('populated state (active habits list + progress ring) is unchanged: same toggle handler, same ring props', () => {
+    expect(HABITS_SRC).toMatch(/toggleHabitDay\(habit\.id, toDateKey\(today\)\)/)
+    expect(HABITS_SRC).toMatch(/<DashboardProgressRing value=\{percent\} lang=\{lang\} size=\{88\} stroke=\{8\} \/>/)
+  })
 })
 
-describe('GoalsWidget: compact icon + CTA empty state, navigating to the real Goals creation surface', () => {
-  it('renders a 48px icon-circle (up from 36px) with a proportionally larger icon, soft lavender/purple like the reference, and the emptyCta translation key', () => {
-    expect(GOALS_SRC).toMatch(/w-12 h-12 rounded-full bg-\[#EDE9FB\]/)
-    expect(GOALS_SRC).toMatch(/<Target size=\{22\} className="text-\[#6F5AE8\] dark:text-\[#A78BFA\]"/) // swapped from Flag to Target to match the header icon and the confirmed design reference
+describe('GoalsWidget: compact row empty state (Kivora 2.0, 40-50% shorter), navigating to the real Goals creation surface', () => {
+  it('renders a compact 32px icon-circle in a horizontal row (not the old 48px stacked layout), soft lavender/purple like the reference, and the emptyCta translation key', () => {
+    expect(GOALS_SRC).toMatch(/flex items-center gap-3 py-3/)
+    expect(GOALS_SRC).toMatch(/w-8 h-8 rounded-full bg-\[#EDE9FB\]/)
+    expect(GOALS_SRC).toMatch(/<Target size=\{16\} className="text-\[#6F5AE8\] dark:text-\[#A78BFA\]"/)
     expect(GOALS_SRC).toMatch(/t\('dash\.goals\.emptyCta', lang\)/)
+    expect(GOALS_SRC).not.toMatch(/w-12 h-12 rounded-full bg-\[#EDE9FB\]/)
   })
 
-  it('the CTA uses a soft lavender/purple tint (not the old uniform solid-purple button)', () => {
-    expect(GOALS_SRC).toMatch(/bg-\[#EDE9FB\] dark:bg-\[#A78BFA\]\/15 text-\[#6F5AE8\] dark:text-\[#C4B5FD\] text-xs font-semibold hover:opacity-80/)
-    expect(GOALS_SRC).not.toMatch(/bg-\[#6F5AE8\] text-white text-xs font-medium hover:bg-\[#5B48D8\]/)
+  it('the CTA is now an inline text link (no pill background), matching the goal\'s accent color', () => {
+    expect(GOALS_SRC).toMatch(/text-xs font-semibold text-\[#6F5AE8\] dark:text-\[#C4B5FD\] hover:underline/)
+    expect(GOALS_SRC).not.toMatch(/min-h-\[44px\] px-4 flex items-center justify-center rounded-xl bg-\[#EDE9FB\]/)
   })
 
-  it('the CTA keeps its 44px minimum tap target', () => {
-    expect(GOALS_SRC).toMatch(/min-h-\[44px\] px-4 flex items-center justify-center rounded-xl bg-\[#EDE9FB\]/)
+  it('the empty card no longer stretches to match a filled sibling\'s height (self-start instead of h-full)', () => {
+    expect(GOALS_SRC).toMatch(/className=\{goals\.length === 0 \? 'flex flex-col self-start' : 'h-full flex flex-col'\}/)
   })
 
   it('the CTA navigates to /app/goals with an openCreate signal that opens the real create-goal flow on GoalsPage (see dashboardCreateFlowSignal.test.ts for the full signal-wiring coverage)', () => {
@@ -312,7 +342,7 @@ describe('GoalsWidget: compact icon + CTA empty state, navigating to the real Go
   })
 })
 
-describe('QuickNoteWidget: warm icon + two-line empty copy, no functional change to the note-add flow', () => {
+describe('QuickNoteWidget: compact row empty state (Kivora 2.0, 40-50% shorter), no functional change to the note-add flow', () => {
   it('still calls the real addQuickNote store action from the same input/button (no duplicate note-creation control)', () => {
     expect(NOTE_SRC).toMatch(/import \{\s*\n\s*getLatestQuickNotes,\s*\n\s*addQuickNote,\s*\n\s*subscribeNotes,\s*\n\} from '@\/lib\/quickNotesStore'/)
     expect(NOTE_SRC).toMatch(/addQuickNote\(trimmed\)/)
@@ -323,21 +353,19 @@ describe('QuickNoteWidget: warm icon + two-line empty copy, no functional change
     expect(sendButtonCount).toBe(1)
   })
 
-  it('renders a small warm-orange tinted icon container in the empty state', () => {
+  it('renders a compact 32px warm-orange tinted icon in a single horizontal row (not the old 40px icon + two-line stacked copy)', () => {
     expect(NOTE_SRC).toMatch(/import \{ Send, ArrowRight, Lightbulb, StickyNote \} from 'lucide-react'/)
-    expect(NOTE_SRC).toMatch(/w-10 h-10 rounded-full bg-\[#FFEDD5\] dark:bg-orange-400\/15 flex items-center justify-center/)
-    expect(NOTE_SRC).toMatch(/<Lightbulb size=\{18\} className="text-\[#F97316\] dark:text-orange-300" \/>/)
+    expect(NOTE_SRC).toMatch(/w-8 h-8 rounded-full bg-\[#FFEDD5\] dark:bg-orange-400\/15 flex items-center justify-center/)
+    expect(NOTE_SRC).toMatch(/<Lightbulb size=\{16\} className="text-\[#F97316\] dark:text-orange-300" \/>/)
+    expect(NOTE_SRC).not.toMatch(/w-10 h-10 rounded-full bg-\[#FFEDD5\]/)
   })
 
-  it('renders both the primary and the lighter supporting empty-state lines', () => {
-    expect(NOTE_SRC).toMatch(/t\('dash\.notes\.emptyTitle', lang\)/)
+  it('shows a single supporting hint line (the old separate bold "emptyTitle" line was dropped as redundant with the hint)', () => {
     expect(NOTE_SRC).toMatch(/t\('dash\.notes\.emptyHint', lang\)/)
-    const emptyBlock = NOTE_SRC.match(/<div className="flex flex-col items-center text-center gap-2 py-2">[\s\S]*?<\/div>\s*\n\s*<\/div>/)?.[0] ?? ''
-    expect(emptyBlock).not.toBe('')
-    const titleIdx = emptyBlock.indexOf("t('dash.notes.emptyTitle', lang)")
-    const hintIdx = emptyBlock.indexOf("t('dash.notes.emptyHint', lang)")
-    expect(titleIdx).toBeGreaterThan(-1)
-    expect(hintIdx).toBeGreaterThan(titleIdx)
+  })
+
+  it('the empty card no longer stretches to match a filled sibling\'s height (self-start instead of h-full)', () => {
+    expect(NOTE_SRC).toMatch(/className=\{notes\.length === 0 \? 'flex flex-col self-start' : 'h-full flex flex-col'\}/)
   })
 })
 

@@ -1456,6 +1456,21 @@ export type TranslationKey =
     | "dash.calendar.emptyCta"
     | "dash.habits.emptyCta"
     | "dash.goals.emptyCta"
+    // ── Dashboard: Kivora AI card ────────────────────────────────────────────
+    | "dash.ai.title"
+    | "dash.ai.subtitle"
+    | "dash.ai.mascotAlt"
+    | "dash.ai.summaryLabel"
+    | "dash.ai.summary.openDay"
+    | "dash.ai.summary.allDone"
+    | "dash.ai.summary.tasksRemainingPrefix"
+    | "dash.ai.summary.eventsPrefix"
+    | "dash.ai.chatButton"
+    | "dash.ai.planButton"
+    | "dash.ai.planPrompt"
+    | "dash.ai.askButton"
+    | "dash.ai.askButtonLoading"
+    | "dash.ai.suggestionLabel"
     | "dash.goal.progress"
     | "dash.goal.steps"
     | "dash.goal.fieldName"
@@ -3214,6 +3229,20 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "dash.calendar.emptyCta": "+ Lisa sündmus",
         "dash.habits.emptyCta": "+ Loo harjumus",
         "dash.goals.emptyCta": "+ Sea eesmärk",
+        "dash.ai.title": "Kivora AI",
+        "dash.ai.subtitle": "Sinu isiklik assistent",
+        "dash.ai.mascotAlt": "Kivora AI assistent",
+        "dash.ai.summaryLabel": "Tänane ülevaade",
+        "dash.ai.summary.openDay": "Täna pole veel ühtegi plaanitud tegevust — hea hetk endale sobivas tempos alustada.",
+        "dash.ai.summary.allDone": "Kõik tänased ülesanded on juba tehtud — tubli töö!",
+        "dash.ai.summary.tasksRemainingPrefix": "Täna ootab sind veel",
+        "dash.ai.summary.eventsPrefix": "Kalendris on täna",
+        "dash.ai.chatButton": "Vestle AI-ga",
+        "dash.ai.planButton": "Loo plaan",
+        "dash.ai.planPrompt": "Palun loo mulle plaan minu praeguste eesmärkide ja ülesannete põhjal.",
+        "dash.ai.askButton": "Küsi AI soovitust",
+        "dash.ai.askButtonLoading": "Mõtlen...",
+        "dash.ai.suggestionLabel": "✨ Tänane soovitus",
         "dash.goal.progress": "Edenemine",
         "dash.goal.steps": "Sammud",
         "dash.goal.fieldName": "Nimi",
@@ -5309,6 +5338,20 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "dash.calendar.emptyCta": "+ Add event",
         "dash.habits.emptyCta": "+ Create habit",
         "dash.goals.emptyCta": "+ Set goal",
+        "dash.ai.title": "Kivora AI",
+        "dash.ai.subtitle": "Your personal assistant",
+        "dash.ai.mascotAlt": "Kivora AI assistant",
+        "dash.ai.summaryLabel": "Today's overview",
+        "dash.ai.summary.openDay": "Nothing is scheduled for today yet — a good moment to start at your own pace.",
+        "dash.ai.summary.allDone": "All of today's tasks are already done — great work!",
+        "dash.ai.summary.tasksRemainingPrefix": "Today you still have",
+        "dash.ai.summary.eventsPrefix": "Your calendar has",
+        "dash.ai.chatButton": "Chat with AI",
+        "dash.ai.planButton": "Create a plan",
+        "dash.ai.planPrompt": "Please create a plan for me based on my current goals and tasks.",
+        "dash.ai.askButton": "Ask for an AI suggestion",
+        "dash.ai.askButtonLoading": "Thinking...",
+        "dash.ai.suggestionLabel": "✨ Today's suggestion",
         "dash.goal.progress": "Progress",
         "dash.goal.steps": "Steps",
         "dash.goal.fieldName": "Name",
