@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, ChevronDown, Check, Loader2 } from 'lucide-react'
+import { X, ChevronDown, Check, Loader2, Calendar as CalendarIcon } from 'lucide-react'
 import type { Task, Priority, TaskCategory } from '@/types'
 import { TASK_CATEGORIES, getTaskCategories } from '@/lib/taskCategories'
 import { getLocalLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
+import { useIsDark } from '@/lib/themeColors'
+import { localTodayStr, localDateStrWithOffset } from '@/lib/tasksSummary'
 import LinkedItemsPanel from '@/components/links/LinkedItemsPanel'
+import kivoraMascot from '@/assets/dashboard/kivora-ai-mascot.webp'
 
 type Props = {
   open: boolean
@@ -17,9 +20,20 @@ type Props = {
   lang?: AppLang
 }
 
+// Priority accent colors — same hues as TasksPage's PRIORITY_CONFIG (low =
+// blue, medium = orange, high = red), kept as one small local map here so
+// the picker's selected state is tinted per-priority (per the confirmed
+// design reference), not a single generic purple for every option.
+const PRIORITY_ACCENT: Record<Priority, { light: string; dark: string; bgLight: string; bgDark: string; borderLight: string; borderDark: string }> = {
+  low:    { light: '#3B82F6', dark: '#93C5FD', bgLight: '#EFF6FF', bgDark: '#0A1628', borderLight: '#BFDBFE', borderDark: '#1E3A5F' },
+  medium: { light: '#F59E0B', dark: '#FDE68A', bgLight: '#FFFBEB', bgDark: '#1F1507', borderLight: '#FDE68A', borderDark: '#3A2505' },
+  high:   { light: '#EF4444', dark: '#FCA5A5', bgLight: '#FEF2F2', bgDark: '#200A0A', borderLight: '#FECACA', borderDark: '#3D1010' },
+}
+
 export default function AddTaskModal({ open, onClose, onSave, initialTask, lang: langProp }: Props) {
   const lang = langProp ?? getLocalLanguage()
   const isEdit = Boolean(initialTask)
+  const isDark = useIsDark()
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -36,6 +50,7 @@ export default function AddTaskModal({ open, onClose, onSave, initialTask, lang:
   const [timeError, setTimeError] = useState('')
   const [saving, setSaving] = useState(false)
   const categoryRef = useRef<HTMLDivElement>(null)
+  const dateInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (open) {
@@ -81,6 +96,14 @@ export default function AddTaskModal({ open, onClose, onSave, initialTask, lang:
     { value: 'high',   label: t('tasks.priority.high',   lang) },
   ]
 
+  // Quick-date chips — pure UI convenience over the existing `date` field,
+  // no new data: "Täna"/"Homme" set it to today's/tomorrow's local
+  // (never UTC) calendar date; "Vali kuupäev" just focuses the native date
+  // input below for a custom pick.
+  const todayStr = localTodayStr()
+  const tomorrowStr = localDateStrWithOffset(1)
+  const quickDateKey: 'today' | 'tomorrow' | 'custom' = date === todayStr ? 'today' : date === tomorrowStr ? 'tomorrow' : 'custom'
+
   const handleSave = async () => {
     if (!title.trim()) {
       setError(t('taskModal.error', lang))
@@ -118,31 +141,39 @@ export default function AddTaskModal({ open, onClose, onSave, initialTask, lang:
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center sm:p-4 bg-black/0 sm:bg-black/40" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="task-modal-title"
-        className="kv-modal-enter w-full max-w-md bg-white rounded-2xl shadow-xl flex flex-col max-h-[90dvh]"
+        className="kv-modal-enter w-full sm:max-w-md bg-white dark:bg-[#1E1B33] sm:rounded-2xl shadow-xl flex flex-col h-full sm:h-auto sm:max-h-[90dvh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ECECF2] flex-shrink-0">
-          <h2 id="task-modal-title" className="text-base font-semibold text-[#1A1F36]">
-            {isEdit ? t('taskModal.editTitle', lang) : t('taskModal.addTitle', lang)}
-          </h2>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="w-10 h-10 rounded-lg flex items-center justify-center text-[#94A3B8] hover:bg-[#F8F7F4] hover:text-[#1A1F36] transition-colors"
-          >
-            <X size={18} />
-          </button>
+        {/* Mascot banner — same confirmed Kivora AI mascot image used
+           everywhere else, never a new/different illustration. */}
+        <div className="relative overflow-hidden rounded-t-none sm:rounded-t-2xl bg-gradient-to-br from-[#E4D6FB] to-[#C9B6F7] dark:from-[#3B2F66] dark:to-[#2A2150] px-5 pt-5 pb-4 flex-shrink-0">
+          <div className="relative flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <img src={kivoraMascot} alt={t('dash.ai.mascotAlt', lang)} className="w-14 h-14 object-contain flex-shrink-0" />
+              <h2 id="task-modal-title" className="flex items-center gap-1.5 text-lg font-bold text-[#3D2B6B] dark:text-[#F1EFFB] min-w-0">
+                <CalendarIcon size={18} className="flex-shrink-0" />
+                <span className="truncate">{isEdit ? t('taskModal.editTitle', lang) : t('taskModal.addTitle', lang)}</span>
+              </h2>
+            </div>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="flex-shrink-0 w-10 h-10 rounded-full bg-white/70 dark:bg-white/10 flex items-center justify-center text-[#3D2B6B] dark:text-[#F1EFFB] hover:bg-white dark:hover:bg-white/20 transition-colors"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="px-5 py-4 flex flex-col gap-4 flex-1 overflow-y-auto">
           <div>
-            <label htmlFor="task-modal-input" className="block text-xs font-medium text-[#64748B] mb-1.5">
-              {t('taskModal.titleLabel', lang)} <span className="text-red-500">*</span>
+            <label htmlFor="task-modal-input" className="block text-xs font-medium text-[#64748B] dark:text-[#9C96C2] mb-1.5">
+              {t('taskModal.titleLabel', lang)} <span className="text-red-500 dark:text-red-400">*</span>
             </label>
             <input
               id="task-modal-input"
@@ -151,13 +182,13 @@ export default function AddTaskModal({ open, onClose, onSave, initialTask, lang:
               onChange={(e) => { setTitle(e.target.value); setError('') }}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleSave() }}
               placeholder={t('taskModal.titlePlaceholder', lang)}
-              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
+              className="w-full px-3 py-2.5 rounded-lg border border-[#ECECF2] dark:border-white/10 bg-white dark:bg-white/5 text-sm text-[#1A1F36] dark:text-[#F1EFFB] placeholder:text-[#C4C9D4] dark:placeholder:text-[#6B6485] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
             />
-            {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+            {error && <p className="text-xs text-red-500 dark:text-red-400 mt-1">{error}</p>}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+            <label className="block text-xs font-medium text-[#64748B] dark:text-[#9C96C2] mb-1.5">
               {t('taskModal.descLabel', lang)}
             </label>
             <textarea
@@ -165,24 +196,71 @@ export default function AddTaskModal({ open, onClose, onSave, initialTask, lang:
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t('taskModal.descPlaceholder', lang)}
               rows={3}
-              className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] resize-none"
+              className="w-full px-3 py-2.5 rounded-lg border border-[#ECECF2] dark:border-white/10 bg-white dark:bg-white/5 text-sm text-[#1A1F36] dark:text-[#F1EFFB] placeholder:text-[#C4C9D4] dark:placeholder:text-[#6B6485] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] resize-none"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[#64748B] dark:text-[#9C96C2] mb-1.5">
+              {t('taskModal.dateLabel', lang)}
+            </label>
+            {/* Quick-date chips — pure convenience over the same `date`
+               field below, no new data model. */}
+            <div className="flex gap-2 mb-2">
+              <button
+                type="button"
+                onClick={() => setDate(todayStr)}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                  quickDateKey === 'today'
+                    ? 'bg-[#EDE9FB] dark:bg-[#3B2F66] text-[#6F5AE8] dark:text-[#C4B5FD] border border-[#6F5AE8] dark:border-[#9381F0]'
+                    : 'bg-white dark:bg-white/5 text-[#64748B] dark:text-[#9C96C2] border border-[#ECECF2] dark:border-white/10 hover:bg-[#F8F7F4] dark:hover:bg-white/10'
+                }`}
+              >
+                <CalendarIcon size={13} />
+                {t('taskModal.quickToday', lang)}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDate(tomorrowStr)}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                  quickDateKey === 'tomorrow'
+                    ? 'bg-[#EDE9FB] dark:bg-[#3B2F66] text-[#6F5AE8] dark:text-[#C4B5FD] border border-[#6F5AE8] dark:border-[#9381F0]'
+                    : 'bg-white dark:bg-white/5 text-[#64748B] dark:text-[#9C96C2] border border-[#ECECF2] dark:border-white/10 hover:bg-[#F8F7F4] dark:hover:bg-white/10'
+                }`}
+              >
+                <CalendarIcon size={13} />
+                {t('taskModal.quickTomorrow', lang)}
+              </button>
+              <button
+                type="button"
+                onClick={() => dateInputRef.current?.showPicker?.() ?? dateInputRef.current?.focus()}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                  quickDateKey === 'custom' && date
+                    ? 'bg-[#EDE9FB] dark:bg-[#3B2F66] text-[#6F5AE8] dark:text-[#C4B5FD] border border-[#6F5AE8] dark:border-[#9381F0]'
+                    : 'bg-white dark:bg-white/5 text-[#64748B] dark:text-[#9C96C2] border border-[#ECECF2] dark:border-white/10 hover:bg-[#F8F7F4] dark:hover:bg-white/10'
+                }`}
+              >
+                <CalendarIcon size={13} />
+                {t('taskModal.quickPickDate', lang)}
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              <label className="block text-xs font-medium text-[#64748B] dark:text-[#9C96C2] mb-1.5">
                 {t('taskModal.dateLabel', lang)}
               </label>
               <input
+                ref={dateInputRef}
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
+                className="w-full px-3 py-2.5 rounded-lg border border-[#ECECF2] dark:border-white/10 bg-white dark:bg-white/5 text-sm text-[#1A1F36] dark:text-[#F1EFFB] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] [color-scheme:light] dark:[color-scheme:dark]"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+              <label className="block text-xs font-medium text-[#64748B] dark:text-[#9C96C2] mb-1.5">
                 {t('taskModal.timeLabel', lang)}
               </label>
               <input
@@ -190,7 +268,7 @@ export default function AddTaskModal({ open, onClose, onSave, initialTask, lang:
                 value={time}
                 disabled={allDay}
                 onChange={(e) => { setTime(e.target.value); setTimeError('') }}
-                className="w-full px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-[#F8F7F4]"
+                className="w-full px-3 py-2.5 rounded-lg border border-[#ECECF2] dark:border-white/10 bg-white dark:bg-white/5 text-sm text-[#1A1F36] dark:text-[#F1EFFB] focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8] disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-[#F8F7F4] dark:disabled:bg-white/5 [color-scheme:light] dark:[color-scheme:dark]"
               />
             </div>
           </div>
@@ -203,57 +281,71 @@ export default function AddTaskModal({ open, onClose, onSave, initialTask, lang:
                 onChange={(e) => handleAllDayChange(e.target.checked)}
                 className="w-4 h-4 rounded accent-[#6F5AE8]"
               />
-              <span className="text-sm text-[#1A1F36]">{t('taskModal.allDayLabel', lang)}</span>
+              <span className="text-sm text-[#1A1F36] dark:text-[#F1EFFB]">{t('taskModal.allDayLabel', lang)}</span>
             </label>
-            {timeError && <p className="text-xs text-red-500 mt-1">{timeError}</p>}
+            {timeError && <p className="text-xs text-red-500 dark:text-red-400 mt-1">{timeError}</p>}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+            <label className="block text-xs font-medium text-[#64748B] dark:text-[#9C96C2] mb-1.5">
               {t('taskModal.priorityLabel', lang)}
             </label>
             <div className="flex gap-2">
-              {PRIORITIES.map((p) => (
-                <button
-                  key={p.value}
-                  onClick={() => setPriority(p.value)}
-                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    priority === p.value
-                      ? 'bg-[#EDE9FB] text-[#6F5AE8] border border-[#6F5AE8]'
-                      : 'bg-white text-[#64748B] border border-[#ECECF2] hover:bg-[#F8F7F4]'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
+              {PRIORITIES.map((p) => {
+                const accent = PRIORITY_ACCENT[p.value]
+                const selected = priority === p.value
+                return (
+                  <button
+                    key={p.value}
+                    onClick={() => setPriority(p.value)}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors border"
+                    style={selected
+                      ? {
+                          color: isDark ? accent.dark : accent.light,
+                          background: isDark ? accent.bgDark : accent.bgLight,
+                          borderColor: isDark ? accent.borderDark : accent.borderLight,
+                        }
+                      : { color: isDark ? '#9C96C2' : '#64748B', background: 'transparent', borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#ECECF2' }}
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0 border-2"
+                      style={{
+                        borderColor: isDark ? accent.dark : accent.light,
+                        background: selected ? (isDark ? accent.dark : accent.light) : 'transparent',
+                      }}
+                    />
+                    {p.label}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#64748B] mb-1.5">
+            <label className="block text-xs font-medium text-[#64748B] dark:text-[#9C96C2] mb-1.5">
               {t('taskModal.categoryLabel', lang)}
             </label>
             <div className="relative" ref={categoryRef}>
               <button
                 type="button"
                 onClick={() => setCategoryOpen((v) => !v)}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-[#ECECF2] text-sm text-[#1A1F36] bg-white focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-[#ECECF2] dark:border-white/10 text-sm text-[#1A1F36] dark:text-[#F1EFFB] bg-white dark:bg-white/5 focus:outline-none focus:border-[#6F5AE8] focus:ring-1 focus:ring-[#6F5AE8]"
               >
                 <span className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full" style={{ background: currentCat.color }} />
                   {currentCat.label}
                 </span>
-                <ChevronDown size={16} className={`text-[#94A3B8] transition-transform ${categoryOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown size={16} className={`text-[#94A3B8] dark:text-[#9C96C2] transition-transform ${categoryOpen ? 'rotate-180' : ''}`} />
               </button>
               {categoryOpen && (
-                <div className="absolute z-10 mt-1 w-full bg-white rounded-lg border border-[#ECECF2] shadow-lg overflow-hidden">
+                <div className="absolute z-10 mt-1 w-full bg-white dark:bg-[#1E1B33] rounded-lg border border-[#ECECF2] dark:border-white/10 shadow-lg overflow-hidden">
                   {categories.map((c) => (
                     <button
                       key={c.value}
                       type="button"
                       onClick={() => { setCategory(c.value); setCategoryOpen(false) }}
                       className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
-                        category === c.value ? 'bg-[#EDE9FB] text-[#6F5AE8]' : 'text-[#1A1F36] hover:bg-[#F8F7F4]'
+                        category === c.value ? 'bg-[#EDE9FB] dark:bg-[#3B2F66] text-[#6F5AE8] dark:text-[#C4B5FD]' : 'text-[#1A1F36] dark:text-[#F1EFFB] hover:bg-[#F8F7F4] dark:hover:bg-white/10'
                       }`}
                     >
                       <span className="flex items-center gap-2">
@@ -278,18 +370,21 @@ export default function AddTaskModal({ open, onClose, onSave, initialTask, lang:
           />
         )}
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2] flex-shrink-0">
+        <div
+          className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#ECECF2] dark:border-white/10 flex-shrink-0 bg-white dark:bg-[#1E1B33]"
+          style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+        >
           <button
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] hover:bg-[#F8F7F4] transition-colors disabled:opacity-50"
+            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium text-[#64748B] dark:text-[#9C96C2] hover:bg-[#F8F7F4] dark:hover:bg-white/5 transition-colors disabled:opacity-50"
           >
             {t('taskModal.cancel', lang)}
           </button>
           <button
             onClick={handleSave}
             disabled={!title.trim() || saving}
-            className="flex items-center gap-2 px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium bg-[#6F5AE8] text-white hover:bg-[#5B48D8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving && <Loader2 size={14} className="animate-spin" />}
             {t('taskModal.save', lang)}

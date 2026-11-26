@@ -18,7 +18,7 @@
  */
 
 import { computeSuggestions, type SourceSignals } from '@/lib/linkSuggestions'
-import { addLink, getLinksForEntity, hasCalendarLink } from '@/lib/entityLinksStore'
+import { addLink, getLinksForEntity, hasCalendarLink, removeLink } from '@/lib/entityLinksStore'
 import { addCalendarEvent, getAllEvents, updateCalendarEvent, deleteCalendarEvent } from '@/lib/calendarStore'
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
 import { getAllTasks } from '@/lib/tasksStore'
@@ -314,13 +314,19 @@ export async function runAutomaticLinking(
  * 09:00–10:00 fallback into a proper all-day event the next time the task
  * is saved.
  *
- * No-op if the task has no date, or has no calendar event this service
- * created for it (an event the task is merely linked to, but didn't create,
- * is left untouched — this never creates a new link/event on its own).
+ * No-op if the task has no calendar event this service created for it (an
+ * event the task is merely linked to, but didn't create, is left untouched
+ * — this never creates a new link/event on its own).
+ *
+ * If the task's date was removed, its owned event can no longer represent
+ * it on any day — it is deleted (along with the one link that pointed to
+ * it) rather than left behind on its old date. Only the task's OWN owned
+ * event/link are touched: never other entities' links, never a calendar
+ * event the task didn't create (see AUTO_CREATED_CALENDAR_EVENT_PREFIX),
+ * and never any field on the Task document itself (this function never
+ * writes to the task — see tasksStore.ts for that).
  */
 export async function syncTaskCalendarEvent(task: Task): Promise<void> {
-  if (!task.date) return
-
   const ownedLink = getLinksForEntity('task', task.id).find(
     (l) =>
       l.relationType === 'scheduled' &&
@@ -330,6 +336,32 @@ export async function syncTaskCalendarEvent(task: Task): Promise<void> {
       l.toId.startsWith(AUTO_CREATED_CALENDAR_EVENT_PREFIX),
   )
   if (!ownedLink) return
+
+  if (!task.date) {
+    try {
+      // deleteDoc() on an already-gone event is a safe no-op, so a retry
+      // (next edit) after a prior partial failure never throws here.
+      await deleteCalendarEvent(ownedLink.toId)
+    } catch (err) {
+      // Logged (not silently swallowed, per review) but not re-thrown: a
+      // calendar-cleanup failure must never block the task save itself.
+      // The link is deliberately left in place — same "owned event still
+      // exists" state as before this call — so the next edit retries the
+      // same cleanup instead of detaching the link from an event that
+      // never actually got deleted.
+      console.error('[automaticLinking] syncTaskCalendarEvent: failed to delete owned calendar event after task date was removed', err)
+      return
+    }
+    // removeLink() is fire-and-forget by design (entityLinksStore.ts): it
+    // updates local state optimistically and, if its own Firestore write
+    // fails, reverts the link back into local state on its own. That
+    // revert is exactly what makes this self-healing — if this specific
+    // write fails, the link simply reappears and the next edit's call to
+    // this function finds the same ownedLink again and retries (the event
+    // is already gone by then, so only the link removal is retried).
+    removeLink(ownedLink.id)
+    return
+  }
 
   const existing = getAllEvents().find((e) => e.id === ownedLink.toId)
   if (!existing) return

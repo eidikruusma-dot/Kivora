@@ -58,7 +58,7 @@ const SRC = readFileSync(
 describe('Tasks filter strip owns horizontal scrolling on narrow mobile', () => {
   it('the strip wrapper caps its width and scrolls internally on mobile, restoring fit-content sizing at sm: and up', () => {
     expect(SRC).toMatch(
-      /className="flex items-center gap-1 p-1 bg-white rounded-xl border border-\[#ECECF2\] max-w-full overflow-x-auto sm:w-fit"/,
+      /className="flex items-center gap-1 p-1 bg-white dark:bg-\[#1E1B33\]\/80 rounded-xl border border-\[#ECECF2\] dark:border-white\/10 max-w-full overflow-x-auto sm:w-fit"/,
     )
     // the old always-on, non-scrolling w-fit wrapper is gone
     expect(SRC).not.toMatch(
@@ -75,29 +75,32 @@ describe('tabs remain whitespace-nowrap', () => {
   })
 })
 
-describe('existing tab order and handlers remain unchanged', () => {
-  it('keeps active/completed/all keys in order, with their original label sources', () => {
-    const filterTabsBlock = SRC.match(/\{\(\[\s*\{ key: 'active',[\s\S]*?\] as const\)\.map/)?.[0] ?? ''
+describe('filter tabs: Kõik/Aktiivsed/Täna/Tulevased/Tehtud — "Kõik" is now the default, "Aktiivsed" kept as its own filter (round 5 of the Tasks module redesign)', () => {
+  it('keeps all/active/today/upcoming/completed keys in that order, with their label sources', () => {
+    const filterTabsBlock = SRC.match(/const filterTabs: \{ key: FilterKey; label: string \}\[\] = \[[\s\S]*?\]/)?.[0] ?? ''
     const order = [...filterTabsBlock.matchAll(/key: '([a-z]+)',/g)].map((m) => m[1])
-    expect(order).toEqual(['active', 'completed', 'all'])
+    expect(order).toEqual(['all', 'active', 'today', 'upcoming', 'completed'])
     expect(SRC).toMatch(/t\('tasks\.filter\.all',\s*lang\)\.replace\('\{n\}', String\(tasks\.length\)\)/)
-    expect(SRC).toMatch(/t\('tasks\.filter\.active', lang\)\.replace\('\{n\}', String\(activeCount\)\)/)
+    expect(SRC).toMatch(/t\('tasks\.filter\.active',\s*lang\)\.replace\('\{n\}', String\(activeCount\)\)/)
+    expect(SRC).toMatch(/t\('tasks\.filter\.today',\s*lang\)\.replace\('\{n\}', String\(todayCount\)\)/)
+    expect(SRC).toMatch(/t\('tasks\.filter\.upcoming',\s*lang\)\.replace\('\{n\}', String\(upcomingCount\)\)/)
     expect(SRC).toMatch(/t\('tasks\.filter\.done',\s*lang\)\.replace\('\{n\}', String\(completedCount\)\)/)
   })
 
-  it('active-state styling and the setFilter handler are unchanged', () => {
-    expect(SRC).toMatch(/\? 'bg-\[#EDE9FB\] text-\[#6F5AE8\]' : 'text-\[#64748B\] hover:bg-\[#F8F7F4\] hover:text-\[#1A1F36\]'/)
+  it('the default filter state is "all" ("Kõik"), not "active" — confirmed round-5 change', () => {
+    expect(SRC).toMatch(/const \[filter, setFilter\] = useState<FilterKey>\('all'\)/)
+  })
+
+  it('active-state styling (dark-mode aware) and the setFilter handler are unchanged', () => {
+    expect(SRC).toMatch(/\? 'bg-\[#EDE9FB\] dark:bg-\[#3B2F66\] text-\[#6F5AE8\] dark:text-\[#C4B5FD\]'/)
     expect(SRC).toMatch(/onClick=\{\(\) => setFilter\(key\)\}/)
   })
 })
 
 describe('no unrelated responsive layout, task data, or Firestore behavior changed', () => {
-  it('the page-level wrapper and header row are unchanged', () => {
+  it('the page-level wrapper is unchanged', () => {
     expect(SRC).toMatch(
       /className="flex flex-col md:flex-row gap-6 p-3 sm:p-4 lg:p-6 max-w-\[1400px\] mx-auto w-full"/,
-    )
-    expect(SRC).toMatch(
-      /className="flex w-full items-center justify-center gap-2 px-4 py-2\.5 bg-\[#6F5AE8\] text-white rounded-xl text-sm font-medium hover:bg-\[#5B48D8\] transition-colors shadow-sm sm:w-auto"/,
     )
   })
 })

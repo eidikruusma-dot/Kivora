@@ -65,7 +65,7 @@ describe('the empty-state icon container is larger and warmer (lavender, not neu
   it('uses a 64px lavender circle (up from 48px neutral gray) with the existing CheckSquare icon', () => {
     const block = extractEmptyStateBlock()
     expect(block).toMatch(/w-16 h-16 rounded-full bg-\[#EDE9FB\]/)
-    expect(block).toMatch(/<CheckSquare size=\{28\} className="text-\[#6F5AE8\]"/)
+    expect(block).toMatch(/<CheckSquare size=\{28\} className="text-\[#6F5AE8\] dark:text-\[#A78BFA\]"/)
     expect(block).not.toMatch(/bg-\[#F8F7F4\]/)
     expect(block).not.toMatch(/text-\[#94A3B8\]" \/>/) // the old neutral-gray icon color is gone
   })
@@ -82,7 +82,7 @@ describe('a subtle lavender-tinted inner surface replaces the dead white center'
 describe('the empty-state CTA is soft lavender, matching the dashboard empty-state CTA style', () => {
   it('uses a lavender background with purple text instead of the old solid-purple/white button', () => {
     const block = extractEmptyStateBlock()
-    expect(block).toMatch(/bg-\[#EDE9FB\] text-\[#6F5AE8\] rounded-xl text-sm font-semibold hover:opacity-80/)
+    expect(block).toMatch(/bg-\[#EDE9FB\] dark:bg-\[#A78BFA\]\/15 text-\[#6F5AE8\] dark:text-\[#C4B5FD\] rounded-xl text-sm font-semibold hover:opacity-80/)
     expect(block).not.toMatch(/bg-\[#6F5AE8\] text-white/)
   })
 
@@ -109,14 +109,16 @@ describe('no gradients, generated images, animations, or new assets were introdu
 })
 
 describe('everything else on the Tasks page is untouched', () => {
-  it('the top "+ Lisa ülesanne" header button is still present, unchanged action', () => {
+  it('the "+ Lisa ülesanne" add-task action is still present, unchanged handler (now a single prominent button after the list, per the confirmed design reference, instead of a small header-row button)', () => {
     expect(TASKS_PAGE_SRC).toMatch(/setModalOpen\(true\)/)
     expect(TASKS_PAGE_SRC).toMatch(/t\('tasks\.add', lang\)/)
   })
 
-  it('all three filter tabs (all/active/completed) are still present with their counts', () => {
+  it('all five filter tabs (all/active/today/upcoming/completed) are present with their counts', () => {
     expect(TASKS_PAGE_SRC).toMatch(/t\('tasks\.filter\.all',\s*lang\)\.replace\('\{n\}', String\(tasks\.length\)\)/)
     expect(TASKS_PAGE_SRC).toMatch(/t\('tasks\.filter\.active',\s*lang\)\.replace\('\{n\}', String\(activeCount\)\)/)
+    expect(TASKS_PAGE_SRC).toMatch(/t\('tasks\.filter\.today',\s*lang\)\.replace\('\{n\}', String\(todayCount\)\)/)
+    expect(TASKS_PAGE_SRC).toMatch(/t\('tasks\.filter\.upcoming',\s*lang\)\.replace\('\{n\}', String\(upcomingCount\)\)/)
     expect(TASKS_PAGE_SRC).toMatch(/t\('tasks\.filter\.done',\s*lang\)\.replace\('\{n\}', String\(completedCount\)\)/)
   })
 
@@ -138,6 +140,6 @@ describe('everything else on the Tasks page is untouched', () => {
 
   it('the mobile-responsive row layout (BUG-01 fix) is untouched', () => {
     expect(TASKS_PAGE_SRC).not.toMatch(/overflow-x-hidden/)
-    expect(TASKS_PAGE_SRC).toMatch(/flex flex-col gap-3 sm:flex-row/)
+    expect(TASKS_PAGE_SRC).toMatch(/sm:flex-row sm:items-center sm:gap-3/)
   })
 })

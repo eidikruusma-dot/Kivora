@@ -9,6 +9,7 @@ import type { Priority, Task } from '@/types'
 import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
 import { t } from '@/lib/translations'
+import { localTodayStr } from '@/lib/tasksSummary'
 
 const priorityColor: Record<Priority, string> = {
   high: 'text-orange-500 dark:text-orange-300',
@@ -19,7 +20,7 @@ const priorityColor: Record<Priority, string> = {
 export default function TasksWidget() {
   const navigate = useNavigate()
   const allTasks = useTasks()
-  const todayStr = new Date().toISOString().slice(0, 10)
+  const todayStr = localTodayStr()
   const todayTasks = allTasks.filter((t) => !t.date || t.date === todayStr)
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)

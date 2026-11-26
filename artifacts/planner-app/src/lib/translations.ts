@@ -361,8 +361,11 @@ export type TranslationKey =
     | "tasks.title"
     | "tasks.subtitle"
     | "tasks.add"
+    | "tasks.overview.title"
     | "tasks.filter.all"
     | "tasks.filter.active"
+    | "tasks.filter.today"
+    | "tasks.filter.upcoming"
     | "tasks.filter.done"
     | "tasks.empty.title"
     | "tasks.empty.body"
@@ -370,12 +373,19 @@ export type TranslationKey =
     | "tasks.stat.done"
     | "tasks.stat.active"
     | "tasks.stat.total"
+    | "tasks.stat.overdue"
     | "tasks.priorities.title"
     | "tasks.priority.high"
     | "tasks.priority.medium"
     | "tasks.priority.low"
     | "tasks.ai.title"
     | "tasks.ai.body"
+    | "tasks.ai.bannerTitle"
+    | "tasks.ai.overdue"
+    | "tasks.ai.todayImportant"
+    | "tasks.ai.today"
+    | "tasks.ai.activeOnly"
+    | "tasks.ai.allDone"
     | "tasks.action.edit"
     | "tasks.action.delete"
     | "tasks.deleteConfirm.title"
@@ -398,6 +408,9 @@ export type TranslationKey =
     | "taskModal.save"
     | "taskModal.cancel"
     | "taskModal.error"
+    | "taskModal.quickToday"
+    | "taskModal.quickTomorrow"
+    | "taskModal.quickPickDate"
     // ── Task categories ───────────────────────────────────────────────────────
     | "cat.work"
     | "cat.school"
@@ -2312,8 +2325,11 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "tasks.title": "Ülesanded",
         "tasks.subtitle": "{active} aktiivset · {done} tehtud",
         "tasks.add": "Lisa ülesanne",
+        "tasks.overview.title": "Ülesannete ülevaade",
         "tasks.filter.all": "Kõik ({n})",
         "tasks.filter.active": "Aktiivsed ({n})",
+        "tasks.filter.today": "Täna ({n})",
+        "tasks.filter.upcoming": "Tulevased ({n})",
         "tasks.filter.done": "Tehtud ({n})",
         "tasks.empty.title": "Alusta oma päeva esimese ülesandega",
         "tasks.empty.body": "Lisa midagi väikest või tähtsat — Kivora aitab sul järge hoida.",
@@ -2321,6 +2337,7 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "tasks.stat.done": "Tehtud",
         "tasks.stat.active": "Aktiivsed",
         "tasks.stat.total": "Kokku",
+        "tasks.stat.overdue": "Ületanud",
         "tasks.priorities.title": "Prioriteedid",
         "tasks.priority.high": "Kõrge",
         "tasks.priority.medium": "Keskmine",
@@ -2328,6 +2345,12 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "tasks.ai.title": "AI soovitus",
         "tasks.ai.body":
             "Sul on täna 1 kõrge prioriteediga ülesanne ja 2 tänase tähtajaga ülesannet. Soovitan alustada projektiraportist.",
+        "tasks.ai.bannerTitle": "Kivora AI soovitab",
+        "tasks.ai.overdue": "Sul on {n} tähtaja ületanud ülesannet. Tegele nendega esimesena.",
+        "tasks.ai.todayImportant": "Sul on täna {n} tähtsat ülesannet. Tee need ära esimesena – nii püsib päev selge ja produktiivne.",
+        "tasks.ai.today": "Sul on täna {n} ülesannet. Vaata need üle ja alusta sobivaimast.",
+        "tasks.ai.activeOnly": "Täna pole tähtajaga ülesandeid, kuid sul on veel {n} lõpetamata ülesannet.",
+        "tasks.ai.allDone": "Kõik ülesanded on tehtud! Tubli töö.",
         "tasks.action.edit": "Muuda",
         "tasks.action.delete": "Kustuta",
         "tasks.deleteConfirm.title": "Kustuta ülesanne?",
@@ -2350,6 +2373,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "taskModal.save": "Salvesta",
         "taskModal.cancel": "Tühista",
         "taskModal.error": "Sisesta ülesande pealkiri.",
+        "taskModal.quickToday": "Täna",
+        "taskModal.quickTomorrow": "Homme",
+        "taskModal.quickPickDate": "Vali kuupäev",
         // task categories
         "cat.work": "Töö",
         "cat.school": "Kool",
@@ -4422,8 +4448,11 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "tasks.title": "Tasks",
         "tasks.subtitle": "{active} active · {done} done",
         "tasks.add": "Add task",
+        "tasks.overview.title": "Tasks overview",
         "tasks.filter.all": "All ({n})",
         "tasks.filter.active": "Active ({n})",
+        "tasks.filter.today": "Today ({n})",
+        "tasks.filter.upcoming": "Upcoming ({n})",
         "tasks.filter.done": "Done ({n})",
         "tasks.empty.title": "Start your day with your first task",
         "tasks.empty.body": "Add something small or important — Kivora will help you stay on track.",
@@ -4431,11 +4460,18 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "tasks.stat.done": "Done",
         "tasks.stat.active": "Active",
         "tasks.stat.total": "Total",
+        "tasks.stat.overdue": "Overdue",
         "tasks.priorities.title": "Priorities",
         "tasks.priority.high": "High",
         "tasks.priority.medium": "Medium",
         "tasks.priority.low": "Low",
         "tasks.ai.title": "AI Suggestion",
+        "tasks.ai.bannerTitle": "Kivora AI suggests",
+        "tasks.ai.overdue": "You have {n} overdue tasks. Tackle those first.",
+        "tasks.ai.todayImportant": "You have {n} important tasks today. Do these first — it keeps your day clear and productive.",
+        "tasks.ai.today": "You have {n} tasks today. Take a look and start with what fits best.",
+        "tasks.ai.activeOnly": "Nothing due today, but you still have {n} open tasks.",
+        "tasks.ai.allDone": "All tasks are done! Great work.",
         "tasks.ai.body":
             "You have 1 high-priority task and 2 tasks due today. I suggest starting with the project report.",
         "tasks.action.edit": "Edit",
@@ -4460,6 +4496,9 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "taskModal.save": "Save",
         "taskModal.cancel": "Cancel",
         "taskModal.error": "Please enter a task title.",
+        "taskModal.quickToday": "Today",
+        "taskModal.quickTomorrow": "Tomorrow",
+        "taskModal.quickPickDate": "Pick a date",
         // task categories
         "cat.work": "Work",
         "cat.school": "School",

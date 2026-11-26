@@ -84,7 +84,7 @@ describe('desktop/tablet layout and existing behavior are unchanged', () => {
   })
 
   it('completed-task title styling (line-through, muted color) is untouched', () => {
-    expect(SRC).toMatch(/task\.completed \? 'text-\[#94A3B8\] line-through' : 'text-\[#1A1F36\]'/)
+    expect(SRC).toMatch(/task\.completed \? 'text-\[#94A3B8\] dark:text-\[#6B6485\] line-through' : 'text-\[#1A1F36\] dark:text-\[#F1EFFB\]'/)
   })
 
   it('the checkbox toggle handler and row click-through are untouched', () => {

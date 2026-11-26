@@ -29,7 +29,7 @@ const TRANSLATIONS_SRC = readFileSync(resolve(process.cwd(), 'src/lib/translatio
 
 describe('the row trash icon opens the confirmation dialog instead of deleting immediately', () => {
   it('the trash button now calls setDeleteId, not deleteTask, directly', () => {
-    const trashButton = SRC.match(/onClick=\{\(\) => setDeleteId\(task\.id\)\}[\s\S]{0,650}/)?.[0] ?? ''
+    const trashButton = SRC.match(/onClick=\{\(\) => setDeleteId\(task\.id\)\}[\s\S]{0,950}/)?.[0] ?? ''
     expect(trashButton).not.toBe('')
     expect(trashButton).toMatch(/aria-label=\{t\('tasks\.action\.delete', lang\)\}/)
     // Same icon, same button — only the click target changed.
@@ -87,7 +87,7 @@ describe('ET/EN copy for the confirmation dialog', () => {
 
 describe('cancel leaves the task untouched', () => {
   it('the Cancel button only clears deleteId — it never calls deleteTask', () => {
-    const cancelButton = SRC.match(/onClick=\{\(\) => setDeleteId\(null\)\}\s*\n\s*disabled=\{deleting\}[\s\S]{0,200}tasks\.deleteConfirm\.cancel/)?.[0] ?? ''
+    const cancelButton = SRC.match(/onClick=\{\(\) => setDeleteId\(null\)\}\s*\n\s*disabled=\{deleting\}[\s\S]{0,350}tasks\.deleteConfirm\.cancel/)?.[0] ?? ''
     expect(cancelButton).not.toBe('')
     expect(cancelButton).not.toMatch(/deleteTask/)
   })

@@ -65,7 +65,7 @@ vi.mock('@/lib/firestoreUtils', () => ({
 }))
 
 import { initTasksStore } from '@/lib/tasksStore'
-import { initEntityLinksStore } from '@/lib/entityLinksStore'
+import { initEntityLinksStore, getLinksForEntity } from '@/lib/entityLinksStore'
 import { initCalendarStore, getAllEvents } from '@/lib/calendarStore'
 import { runAutomaticLinking, syncTaskCalendarEvent } from '@/lib/automaticLinking'
 import { layoutEvents } from '@/lib/calendar/eventLayout'
@@ -321,7 +321,22 @@ describe('syncTaskCalendarEvent — editing a task keeps its existing linked eve
     expect(calendarEventWrites()).toHaveLength(0)
   })
 
-  it('a task with no date is a no-op, even if it has an owned linked event', async () => {
+  it('a task with no date and no owned linked event is a true no-op', async () => {
+    // Never had an auto-created event in the first place — nothing to clean up.
+    seedLinks([])
+    seedCalendarEvents([])
+
+    await syncTaskCalendarEvent(makeTask({ date: undefined }))
+
+    expect(calendarEventWrites()).toHaveLength(0)
+    expect(deleteDocMock).not.toHaveBeenCalled()
+  })
+})
+
+// ── Date removed: owned event + link must be cleaned up, nothing else ──────
+
+describe('syncTaskCalendarEvent — removing a task\'s date deletes its OWN owned event+link, never anything else', () => {
+  it('deletes the owned auto-created calendar event and removes the one link pointing to it', async () => {
     seedLinks([makeLink({ toId: 'cal-auto-100-abc' })])
     seedCalendarEvents([{
       id: 'cal-auto-100-abc', title: 'Osta lilled', date: '2026-08-30',
@@ -330,6 +345,115 @@ describe('syncTaskCalendarEvent — editing a task keeps its existing linked eve
 
     await syncTaskCalendarEvent(makeTask({ date: undefined }))
 
+    expect(deleteDocMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: `users/${UID}/calendarEvents/cal-auto-100-abc` }),
+    )
+    // The link is gone from the in-memory store right after the call —
+    // removeLink() applies its optimistic local removal synchronously.
+    expect(getLinksForEntity('task', 'task-1')).toHaveLength(0)
+    // Nothing is ever written to the Task document itself by this sync —
+    // it only ever touches calendar events and entity links.
     expect(calendarEventWrites()).toHaveLength(0)
+  })
+
+  it('never touches an unrelated manually created calendar event or an unrelated link on the same task', async () => {
+    seedLinks([
+      makeLink({ id: 'link-owned', toId: 'cal-auto-100-abc' }),
+      // A second, unrelated link from the SAME task to a note — must survive.
+      makeLink({ id: 'link-note', toType: 'note', toId: 'note-1', relationType: 'related' }),
+    ])
+    seedCalendarEvents([
+      { id: 'cal-auto-100-abc', title: 'Osta lilled', date: '2026-08-30', allDay: true, startTime: '', endTime: '', color: '#6F5AE8', calendarId: 'mine' },
+      { id: 'evt-manual-1', title: 'Unrelated meeting', date: '2026-08-30', startTime: '10:00', endTime: '11:00', color: '#3B82F6', calendarId: 'mine' },
+    ])
+
+    await syncTaskCalendarEvent(makeTask({ date: undefined }))
+
+    // Exactly 2 deletes happen: the owned calendar event doc + the one
+    // owned link doc (removeLink's own Firestore write) — never the
+    // unrelated event or the unrelated link.
+    expect(deleteDocMock).toHaveBeenCalledTimes(2)
+    expect(deleteDocMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: `users/${UID}/calendarEvents/cal-auto-100-abc` }),
+    )
+    expect(deleteDocMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ path: expect.stringContaining('evt-manual-1') }),
+    )
+    expect(getAllEvents().find((e) => e.id === 'evt-manual-1')).toMatchObject({ startTime: '10:00', endTime: '11:00' })
+    expect(getLinksForEntity('task', 'task-1')).toEqual([
+      expect.objectContaining({ id: 'link-note', toId: 'note-1' }),
+    ])
+  })
+
+  it('a link pointing at a non-cal-auto- (manually linked) event is left untouched when the date is removed', async () => {
+    seedLinks([makeLink({ toId: 'cal-1234-manual' })])
+    seedCalendarEvents([{
+      id: 'cal-1234-manual', title: 'Pre-existing event', date: '2026-08-30',
+      startTime: '10:00', endTime: '11:00', color: '#3B82F6', calendarId: 'mine',
+    }])
+
+    await syncTaskCalendarEvent(makeTask({ date: undefined }))
+
+    expect(deleteDocMock).not.toHaveBeenCalled()
+    expect(getLinksForEntity('task', 'task-1')).toHaveLength(1)
+    expect(getAllEvents().find((e) => e.id === 'cal-1234-manual')).toMatchObject({ startTime: '10:00', endTime: '11:00' })
+  })
+
+  it('does not write anything to the task document itself — only the calendar event and the link are touched', async () => {
+    seedLinks([makeLink({ toId: 'cal-auto-100-abc' })])
+    seedCalendarEvents([{
+      id: 'cal-auto-100-abc', title: 'Osta lilled', date: '2026-08-30',
+      allDay: true, startTime: '', endTime: '', color: '#6F5AE8', calendarId: 'mine',
+    }])
+
+    await syncTaskCalendarEvent(makeTask({ date: undefined, title: 'Osta lilled' }))
+
+    const taskWrites = [...setDocMock.mock.calls, ...updateDocMock.mock.calls]
+      .map((c) => (c[0] as { path: string }).path)
+      .filter((p) => p.startsWith(`users/${UID}/tasks/`))
+    expect(taskWrites).toHaveLength(0)
+  })
+
+  it('logs (does not silently swallow) when deleting the owned calendar event fails, and leaves the link in place for a later retry', async () => {
+    seedLinks([makeLink({ toId: 'cal-auto-100-abc' })])
+    seedCalendarEvents([{
+      id: 'cal-auto-100-abc', title: 'Osta lilled', date: '2026-08-30',
+      allDay: true, startTime: '', endTime: '', color: '#6F5AE8', calendarId: 'mine',
+    }])
+    deleteDocMock.mockRejectedValueOnce(new Error('network error'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await syncTaskCalendarEvent(makeTask({ date: undefined }))
+
+    expect(errorSpy).toHaveBeenCalled()
+    // The link must still be there — not detached from an event that, as
+    // far as Firestore is concerned, never actually got deleted.
+    expect(getLinksForEntity('task', 'task-1')).toHaveLength(1)
+    errorSpy.mockRestore()
+  })
+
+  it('recovers safely on the next call after a transient delete failure: retries the same cleanup and succeeds', async () => {
+    seedLinks([makeLink({ toId: 'cal-auto-100-abc' })])
+    seedCalendarEvents([{
+      id: 'cal-auto-100-abc', title: 'Osta lilled', date: '2026-08-30',
+      allDay: true, startTime: '', endTime: '', color: '#6F5AE8', calendarId: 'mine',
+    }])
+    deleteDocMock.mockRejectedValueOnce(new Error('network error'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await syncTaskCalendarEvent(makeTask({ date: undefined })) // fails, link preserved
+    expect(getLinksForEntity('task', 'task-1')).toHaveLength(1)
+
+    await syncTaskCalendarEvent(makeTask({ date: undefined })) // retried on the next edit, succeeds
+    expect(getLinksForEntity('task', 'task-1')).toHaveLength(0)
+  })
+
+  it('a task that already had no date and no owned event stays a no-op (unchanged)', async () => {
+    seedLinks([])
+    seedCalendarEvents([])
+
+    await syncTaskCalendarEvent(makeTask({ date: undefined }))
+
+    expect(deleteDocMock).not.toHaveBeenCalled()
   })
 })

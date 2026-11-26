@@ -30,17 +30,14 @@ describe('TasksPage responsive markup (BUG-01)', () => {
     expect(SRC).not.toMatch(/overflow-x-hidden/)
   })
 
-  it('the page header stacks vertically on mobile and reverts to a row at sm:', () => {
-    // flex-col by default (mobile), sm:flex-row restores the original single-row desktop layout
-    expect(SRC).toMatch(/flex flex-col gap-3 sm:flex-row/)
+  it('the task-card row stacks vertically on mobile and reverts to the original single row at sm: (the page header itself no longer needs this fix: it is now a single subtitle line + one bottom add-button, not a title+button row that could overflow)', () => {
+    expect(SRC).toMatch(/flex flex-col gap-2 pl-5 pr-4 py-3\.5[^`]*sm:flex-row sm:items-center sm:gap-3 sm:pr-5 sm:py-4/)
   })
 
-  it('the Add-task button is full-width on mobile and reverts to auto-width at sm: (desktop)', () => {
-    expect(SRC).toMatch(/w-full items-center justify-center gap-2[^"]*sm:w-auto/)
-  })
-
-  it('the task-card row stacks vertically on mobile and reverts to the original single row at sm:', () => {
-    expect(SRC).toMatch(/flex flex-col gap-2 px-4 py-3\.5[^`]*sm:flex-row sm:items-center sm:gap-3 sm:px-5 sm:py-4/)
+  it('the single "+ Lisa ülesanne" button (after the task list, per the confirmed design reference) is always full-width — there is exactly one prominent add action, not a second narrower header-row button', () => {
+    const addButtonBlock = SRC.match(/className="flex items-center justify-center gap-2[^"]*"\s*\n\s*onClick=\{\(\) => setModalOpen\(true\)\}/)?.[0] ?? ''
+    expect(addButtonBlock).not.toBe('')
+    expect(addButtonBlock).not.toMatch(/sm:w-auto/)
   })
 
   it('uses display:contents wrappers (sm:contents) so desktop reassembles the exact original flat row', () => {

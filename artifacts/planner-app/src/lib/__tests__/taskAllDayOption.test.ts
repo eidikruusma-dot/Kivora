@@ -49,7 +49,7 @@ describe('AddTaskModal is the single shared form for both create and edit (no se
     const allDayIdx = SRC.indexOf("t('taskModal.allDayLabel', lang)")
     expect(dateTimeIdx).toBeGreaterThan(-1)
     expect(allDayIdx).toBeGreaterThan(dateTimeIdx)
-    expect(allDayIdx - dateTimeIdx).toBeLessThan(1000) // immediately following, same form section
+    expect(allDayIdx - dateTimeIdx).toBeLessThan(1500) // same form section (quick-date chips + date/time grid sit between them)
   })
 })
 
