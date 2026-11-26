@@ -33,7 +33,25 @@ import kivoraMascot from '@/assets/dashboard/kivora-ai-mascot.webp'
  * any actual plan generation goes through the existing, already-reviewed
  * AIPlanGeneratorModal confirm-before-save flow — nothing is ever saved or
  * changed here without the user's own explicit action in that flow.
+ *
+ * The summary/suggestion bubble's PLACEMENT (never its content — text is
+ * never truncated or hidden) depends on how long the text is relative to
+ * the viewport: short text sits beside the mascot as before; a longer
+ * response (the model isn't always perfectly compliant with the "2-3
+ * sentences" instruction below) moves to its own full-card-width block
+ * below the mascot+title row instead, so it never produces a tall column
+ * with empty space left under the mascot. See useViewportWidth() below.
  */
+function useViewportWidth(): number {
+  const [width, setWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1024))
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  return width
+}
+
 export default function KivoraAICard() {
   const navigate = useNavigate()
   const [lang, setLang] = useState<AppLang>(getLocalLanguage)
@@ -41,6 +59,7 @@ export default function KivoraAICard() {
 
   const allTasks = useTasks()
   const allEvents = useCalendarEvents()
+  const viewportWidth = useViewportWidth()
 
   const tasksTotal = allTasks.length
   const tasksCompleted = allTasks.filter((tk) => tk.completed).length
@@ -61,8 +80,8 @@ export default function KivoraAICard() {
     setAiError(undefined)
     try {
       const prompt = lang === 'en'
-        ? 'Give me one short, personal suggestion for today based on my real Kivora data (tasks, calendar, habits, goals). A single short paragraph, no greeting.'
-        : 'Anna mulle üks lühike ja personaalne soovitus tänaseks päevaks, lähtudes minu tegelikest Kivora andmetest (ülesanded, kalender, harjumused, eesmärgid). Üks lühike lõik, ilma tervituseta.'
+        ? 'Give me a short, personal and practical suggestion for today based on my real Kivora data (tasks, calendar, habits, goals). Answer in at most 2-3 short, concrete sentences, with no greeting or introduction.'
+        : 'Anna mulle lühike, personaalne ja praktiline soovitus tänaseks päevaks, lähtudes minu tegelikest Kivora andmetest (ülesanded, kalender, harjumused, eesmärgid). Vasta maksimaalselt 2-3 lühikese ja konkreetse lausega, ilma sissejuhatuse ega tervituseta.'
       const res = await fetchAIReply([{ role: 'user', content: prompt }], lang)
       setAiSuggestion(res.reply)
     } catch (err) {
@@ -83,11 +102,40 @@ export default function KivoraAICard() {
     navigate('/app/assistant')
   }
 
+  // The bubble's body text, whichever is currently shown — never truncated;
+  // only its PLACEMENT below depends on its length and the viewport width.
+  const bodyText = aiSuggestion ?? localSummary
+
+  // A narrower card has less room beside the mascot before text looks
+  // cramped, so the "switch to full width" length threshold scales with
+  // viewport width rather than using one fixed character count everywhere.
+  const longTextThreshold = viewportWidth < 400 ? 70 : viewportWidth < 1024 ? 110 : 170
+  const isLongText = !aiLoading && !aiError && bodyText.length > longTextThreshold
+
+  const summaryBubble = (
+    <div className="rounded-2xl bg-[#F5F2FD] dark:bg-[#2A2150]/70 border border-[#EADFFB] dark:border-white/15 px-3 py-2.5">
+      <p className="text-[11px] font-semibold text-[#6F5AE8] dark:text-[#D4C8FC] mb-1">
+        {aiSuggestion ? t('dash.ai.suggestionLabel', lang) : t('dash.ai.summaryLabel', lang)}
+      </p>
+      {aiLoading ? (
+        <p className="text-sm text-[#94A3B8] dark:text-[#B4AFD1] italic">{t('dash.ai.askButtonLoading', lang)}</p>
+      ) : aiError ? (
+        <p className="text-sm text-[#DC2626] dark:text-red-300">{aiError}</p>
+      ) : (
+        <p className="text-sm text-[#1A1F36] dark:text-[#F8F7FD] leading-relaxed">
+          {bodyText}
+        </p>
+      )}
+    </div>
+  )
+
   return (
     <div className="relative rounded-[28px] p-[1.5px] bg-gradient-to-br from-[#C9B6F7] via-[#E4D6FB] to-[#F3C9E0] dark:from-[#4A3B82] dark:via-[#3B2F66] dark:to-[#5B3D6B] shadow-[0_18px_40px_rgba(99,69,181,0.16)] dark:shadow-[0_18px_40px_rgba(0,0,0,0.35)]">
       <div className="rounded-[26.5px] bg-white/90 dark:bg-[#1E1B33]/95 backdrop-blur-xl px-3 sm:px-5 py-3 sm:py-4">
-        {/* Header row: mascot always on the left, title/subtitle/summary always on the
-           right — even at 320px (never stacked), per the confirmed layout. */}
+        {/* Header row: mascot always on the left, title/subtitle always on the
+           right — even at 320px (never stacked). The summary bubble joins
+           this row only while its text is short enough for the viewport;
+           see isLongText below. */}
         <div className="flex items-start gap-3 sm:gap-4">
           <img
             src={kivoraMascot}
@@ -104,23 +152,15 @@ export default function KivoraAICard() {
               {t('dash.ai.subtitle', lang)}
             </p>
 
-            {/* Summary / suggestion bubble */}
-            <div className="rounded-2xl bg-[#F5F2FD] dark:bg-[#2A2150]/70 border border-[#EADFFB] dark:border-white/15 px-3 py-2.5">
-              <p className="text-[11px] font-semibold text-[#6F5AE8] dark:text-[#D4C8FC] mb-1">
-                {aiSuggestion ? t('dash.ai.suggestionLabel', lang) : t('dash.ai.summaryLabel', lang)}
-              </p>
-              {aiLoading ? (
-                <p className="text-sm text-[#94A3B8] dark:text-[#B4AFD1] italic">{t('dash.ai.askButtonLoading', lang)}</p>
-              ) : aiError ? (
-                <p className="text-sm text-[#DC2626] dark:text-red-300">{aiError}</p>
-              ) : (
-                <p className="text-sm text-[#1A1F36] dark:text-[#F8F7FD] leading-relaxed">
-                  {aiSuggestion ?? localSummary}
-                </p>
-              )}
-            </div>
+            {!isLongText && summaryBubble}
           </div>
         </div>
+
+        {/* Long text (relative to the current viewport) breaks out of the
+           mascot row entirely and spans the full card width here instead —
+           never truncated, just given room that doesn't leave empty space
+           under the mascot. */}
+        {isLongText && <div className="mt-3">{summaryBubble}</div>}
 
         {/* Actions — a single full-width row below the mascot+text header,
            not confined under the text column, so they have the whole card's

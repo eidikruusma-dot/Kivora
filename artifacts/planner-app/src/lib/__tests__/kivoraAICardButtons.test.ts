@@ -59,7 +59,7 @@ describe('"Küsi AI soovitust" — the ONLY real AI call in this card, and only 
   it('fetchAIReply is referenced exactly once in the whole file, inside handleAskAi', () => {
     const fetchCount = (CARD_SRC.match(/fetchAIReply\(/g) ?? []).length
     expect(fetchCount).toBe(1)
-    expect(CARD_SRC).toMatch(/const handleAskAi = async \(\) => \{[\s\S]{0,600}fetchAIReply\(/)
+    expect(CARD_SRC).toMatch(/const handleAskAi = async \(\) => \{[\s\S]{0,900}fetchAIReply\(/)
   })
 
   it('is not called inside a useEffect / on mount — only from the button\'s onClick', () => {
@@ -71,6 +71,11 @@ describe('"Küsi AI soovitust" — the ONLY real AI call in this card, and only 
     expect(CARD_SRC).toMatch(/getAiErrorCode\(err\) === 'QUOTA_EXCEEDED'/)
     expect(CARD_SRC).toMatch(/t\('ai\.chat\.quotaExceeded', lang\)/)
     expect(CARD_SRC).toMatch(/t\('ai\.chat\.error', lang\)/)
+  })
+
+  it('the prompt explicitly asks for a short, personal, practical answer capped at 2-3 concrete sentences (both ET and EN)', () => {
+    expect(CARD_SRC).toMatch(/lühike, personaalne ja praktiline soovitus[\s\S]{0,250}2-3 lühikese ja konkreetse lausega/)
+    expect(CARD_SRC).toMatch(/short, personal and practical suggestion[\s\S]{0,250}2-3 short, concrete sentences/)
   })
 
   it('shows a disabled/loading state on the button while the request is in flight (prevents double-firing)', () => {
