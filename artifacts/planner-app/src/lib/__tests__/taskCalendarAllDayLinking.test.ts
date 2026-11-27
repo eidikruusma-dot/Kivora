@@ -33,7 +33,9 @@ import type { EntityLink } from '@/types/entityLinks'
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
 import type { Task } from '@/types'
 
-vi.mock('@/lib/firebase', () => ({ db: {}, auth: {}, storage: {} }))
+const UID = 'user-a'
+
+vi.mock('@/lib/firebase', () => ({ db: {}, auth: { currentUser: { uid: 'user-a' } }, storage: {} }))
 
 // ── Fake Firestore (same shape as taskDeleteCascade.test.ts) ───────────────
 
@@ -50,6 +52,32 @@ const updateDocMock = vi.fn(() => Promise.resolve())
 const deleteDocMock = vi.fn(() => Promise.resolve())
 const writeBatchMock = vi.fn(() => ({ delete: vi.fn(), commit: vi.fn(() => Promise.resolve()) }))
 
+// A small fake transactional store for runAutomaticLinking()'s own
+// runTransaction() call — mirrors the existing doc map by path, and routes
+// every tx.set() through setDocMock too, so the file's existing
+// calendarEventWrites() helper (built on setDocMock) keeps working
+// unchanged for these tests. No retry-on-conflict loop here (these tests
+// never run concurrently) — see automaticLinkingAtomicity.test.ts for the
+// dedicated concurrency/retry coverage.
+const fakeTxDb = new Map<string, unknown>()
+interface FakeTx {
+  get: (ref: { path: string }) => Promise<{ exists: () => boolean; data: () => unknown }>
+  set: (ref: { path: string }, data: unknown) => void
+}
+const runTransactionMock = vi.fn(async (_db: unknown, updateFn: (tx: FakeTx) => Promise<unknown>) => {
+  const pendingWrites: { path: string; data: unknown }[] = []
+  const tx: FakeTx = {
+    get: async (ref) => ({ exists: () => fakeTxDb.has(ref.path), data: () => fakeTxDb.get(ref.path) }),
+    set: (ref, data) => { pendingWrites.push({ path: ref.path, data }) },
+  }
+  const result = await updateFn(tx)
+  for (const w of pendingWrites) {
+    fakeTxDb.set(w.path, w.data)
+    setDocMock({ path: w.path }, w.data)
+  }
+  return result
+})
+
 vi.mock('firebase/firestore', () => ({
   collection: vi.fn(() => ({})),
   doc: vi.fn((_db: unknown, ...segments: string[]) => ({ path: segments.join('/') })),
@@ -57,6 +85,7 @@ vi.mock('firebase/firestore', () => ({
   updateDoc: (...args: unknown[]) => updateDocMock(...args),
   deleteDoc: (...args: unknown[]) => deleteDocMock(...args),
   writeBatch: (...args: unknown[]) => writeBatchMock(...args),
+  runTransaction: (...args: Parameters<typeof runTransactionMock>) => runTransactionMock(...args),
   onSnapshot: (...args: Parameters<typeof onSnapshotMock>) => onSnapshotMock(...args),
 }))
 
@@ -71,8 +100,6 @@ import { runAutomaticLinking, syncTaskCalendarEvent } from '@/lib/automaticLinki
 import { layoutEvents } from '@/lib/calendar/eventLayout'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-
-const UID = 'user-a'
 
 // initTasksStore -> onSnapshot call 0, initEntityLinksStore -> call 1,
 // initCalendarStore -> call 2 (fixed order set in beforeEach below).
@@ -127,6 +154,8 @@ beforeEach(() => {
   updateDocMock.mockClear()
   deleteDocMock.mockClear()
   writeBatchMock.mockClear()
+  runTransactionMock.mockClear()
+  fakeTxDb.clear()
 
   initTasksStore(UID)     // onSnapshot call index 0
   initEntityLinksStore(UID) // onSnapshot call index 1
@@ -181,6 +210,44 @@ describe('runAutomaticLinking — dated task with no time creates an all-day eve
     expect(writes[0].data.startTime).toBe('14:00')
     expect(writes[0].data.endTime).toBe('15:00')
     expect(result.calendarEventId).not.toBeNull()
+  })
+})
+
+// ── Backward compatibility: a legacy random-ID owned event is still
+// recognized, even though new owned events now get a deterministic id ─────
+
+describe('runAutomaticLinking — backward compatibility with a legacy random-ID auto-created event', () => {
+  it('never creates a duplicate when the task already owns an old-style "cal-auto-<timestamp>-<random>" event', async () => {
+    const legacyEventId = 'cal-auto-1700000000000-xyz1'
+    seedLinks([makeLink({ toId: legacyEventId })])
+    seedCalendarEvents([{
+      id: legacyEventId, title: 'Osta lilled', date: '2026-08-30',
+      allDay: true, startTime: '', endTime: '', color: '#6F5AE8', calendarId: 'mine',
+    }])
+
+    const result = await runAutomaticLinking('task', 'task-1', 'et', { title: 'Osta lilled', date: '2026-08-30' })
+
+    // 1. The old event is unchanged.
+    expect(getAllEvents().find((e) => e.id === legacyEventId)).toMatchObject({
+      id: legacyEventId, title: 'Osta lilled', date: '2026-08-30', allDay: true,
+    })
+    // 2. No new calendar event is created (hasCalendarLink() already short-
+    //    circuits the whole candidate before any transaction is attempted).
+    expect(calendarEventWrites()).toHaveLength(0)
+    expect(getAllEvents()).toHaveLength(1)
+    // 3. No new 'scheduled' link is created.
+    const links = getLinksForEntity('task', 'task-1')
+    expect(links.filter((l) => l.relationType === 'scheduled')).toHaveLength(1)
+    // 4. No AiAction log entry is written for a no-op.
+    const actionWrites = setDocMock.mock.calls
+      .map((c) => (c[0] as { path: string }).path)
+      .filter((p) => p.startsWith(`users/${UID}/aiActions/`))
+    expect(actionWrites).toHaveLength(0)
+    // 5. The existing link survives, pointing at the SAME legacy event id.
+    expect(links[0].toId).toBe(legacyEventId)
+    // No candidate was ever attempted, so the transaction never ran either.
+    expect(runTransactionMock).not.toHaveBeenCalled()
+    expect(result.calendarEventId).toBeNull()
   })
 })
 

@@ -87,15 +87,17 @@ export async function addCalendarEvent(
   event: MockCalendarEvent,
 ): Promise<MockCalendarEvent> {
   if (!_currentUid) throw new Error('STORE_NOT_INITIALIZED: calendar store has no authenticated user')
-  await setDoc(eventDoc(_currentUid, event.id), sanitizeForFirestore(event));
-  return event;
+  const stamped: MockCalendarEvent = { ...event, updatedAt: new Date().toISOString() };
+  await setDoc(eventDoc(_currentUid, stamped.id), sanitizeForFirestore(stamped));
+  return stamped;
 }
 
 export async function updateCalendarEvent(
   updated: MockCalendarEvent,
 ): Promise<void> {
   if (!_currentUid) return;
-  await setDoc(eventDoc(_currentUid, updated.id), sanitizeForFirestore(updated));
+  const stamped: MockCalendarEvent = { ...updated, updatedAt: new Date().toISOString() };
+  await setDoc(eventDoc(_currentUid, stamped.id), sanitizeForFirestore(stamped));
 }
 
 export async function deleteCalendarEvent(id: string): Promise<void> {

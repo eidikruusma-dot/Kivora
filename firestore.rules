@@ -15,7 +15,13 @@ service cloud.firestore {
     function isValidAiActionFieldValue(fv) {
       return fv is map
         && fv.present is bool
-        && (fv.present == false || ('value' in fv));
+        && (
+          fv.present == false
+          || (
+            'value' in fv
+            && (fv.value is string || fv.value is number || fv.value is bool || fv.value == null)
+          )
+        );
     }
 
     function isValidAiActionChange(c) {

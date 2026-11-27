@@ -204,6 +204,19 @@ export interface RecordAiActionParams {
   snapshotUpdatedAt: Record<string, string>
 }
 
+function isValidFieldValueType(value: unknown): boolean {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null
+}
+
+function validateFieldValue(fv: AiActionFieldValue, label: string): void {
+  if (typeof fv?.present !== 'boolean') {
+    throw new Error(`INVALID_AI_ACTION_CHANGE: ${label} must be an AiActionFieldValue`)
+  }
+  if (fv.present && !isValidFieldValueType(fv.value)) {
+    throw new Error(`INVALID_AI_ACTION_CHANGE: ${label}.value must be a string, number, boolean, or null`)
+  }
+}
+
 function validateChange(c: AiActionChange): void {
   if (!c.entityId || c.entityId.length > MAX_ENTITY_ID_LENGTH) {
     throw new Error('INVALID_AI_ACTION_CHANGE: entityId missing or too long')
@@ -211,9 +224,8 @@ function validateChange(c: AiActionChange): void {
   if (!c.field || c.field.length > MAX_FIELD_NAME_LENGTH) {
     throw new Error('INVALID_AI_ACTION_CHANGE: field missing or too long')
   }
-  if (typeof c.oldValue?.present !== 'boolean' || typeof c.newValue?.present !== 'boolean') {
-    throw new Error('INVALID_AI_ACTION_CHANGE: oldValue/newValue must be an AiActionFieldValue')
-  }
+  validateFieldValue(c.oldValue, 'oldValue')
+  validateFieldValue(c.newValue, 'newValue')
 }
 
 /**

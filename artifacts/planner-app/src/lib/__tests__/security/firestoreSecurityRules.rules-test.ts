@@ -37,6 +37,28 @@ const REAL_FIRESTORE_RULES = readFileSync(
 // test is run for real, prefer reading that over the draft fixture.
 const DRAFTED_FIRESTORE_RULES = withDraftFirestoreRules(REAL_FIRESTORE_RULES)
 
+function validAction(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'action-1',
+    type: 'fillCategory',
+    module: 'task',
+    entityId: 'task-1',
+    relatedChanges: [{
+      module: 'task',
+      entityId: 'task-1',
+      field: 'category',
+      oldValue: { present: false },
+      newValue: { present: true, value: 'Töö' },
+    }],
+    reason: 'Täitsin tühja kategooria.',
+    createdAt: new Date().toISOString(),
+    revertible: true,
+    revertStatus: 'none',
+    snapshotUpdatedAt: { 'task-1': new Date().toISOString() },
+    ...overrides,
+  }
+}
+
 describe('deployed-rules behavior (reads the REAL firestore.rules on disk)', () => {
   let testEnv: RulesTestEnvironment
 
@@ -99,28 +121,6 @@ describe('deployed-rules behavior (reads the REAL firestore.rules on disk)', () 
   })
 
   describe('aiActions (Kivora 2.0, Etapp 2.1): create validation, one-way revertStatus, cross-user isolation', () => {
-    function validAction(overrides: Record<string, unknown> = {}) {
-      return {
-        id: 'action-1',
-        type: 'fillCategory',
-        module: 'task',
-        entityId: 'task-1',
-        relatedChanges: [{
-          module: 'task',
-          entityId: 'task-1',
-          field: 'category',
-          oldValue: { present: false },
-          newValue: { present: true, value: 'Töö' },
-        }],
-        reason: 'Täitsin tühja kategooria.',
-        createdAt: new Date().toISOString(),
-        revertible: true,
-        revertStatus: 'none',
-        snapshotUpdatedAt: { 'task-1': new Date().toISOString() },
-        ...overrides,
-      }
-    }
-
     it('the owner can create a valid action and read it back', async () => {
       const aliceDb = testEnv.authenticatedContext('user-a').firestore()
       await assertSucceeds(aliceDb.doc('users/user-a/aiActions/action-1').set(validAction()))
@@ -193,6 +193,47 @@ describe('deployed-rules behavior (reads the REAL firestore.rules on disk)', () 
       await assertFails(bobDb.doc('users/user-a/aiActions/action-1').get())
       await assertFails(bobDb.doc('users/user-a/aiActions/action-1').update({ revertStatus: 'reverted' }))
       await assertFails(bobDb.doc('users/user-a/aiActions/action-1').delete())
+    })
+  })
+
+  describe('Kivora 2.0, Etapp 2.2: runAutomaticLinking()\'s transactional write (entityLinks + calendarEvents + aiActions together)', () => {
+    it('a transaction creating a new link, a new calendar event, and an aiAction together succeeds under the real, live rules', async () => {
+      const aliceDb = testEnv.authenticatedContext('user-a').firestore()
+      await aliceDb.runTransaction(async (tx) => {
+        tx.set(aliceDb.doc('users/user-a/entityLinks/autolink__task__task-1__scheduled__calendar__cal-auto-task__task-1'), {
+          id: 'autolink__task__task-1__scheduled__calendar__cal-auto-task__task-1',
+          fromType: 'task', fromId: 'task-1', toType: 'calendar', toId: 'cal-auto-task__task-1',
+          relationType: 'scheduled', createdAt: Date.now(), updatedAt: Date.now(),
+        })
+        tx.set(aliceDb.doc('users/user-a/calendarEvents/cal-auto-task__task-1'), {
+          id: 'cal-auto-task__task-1', title: 'Osta lilled', date: '2026-09-01',
+          allDay: true, startTime: '', endTime: '', color: '#6F5AE8', calendarId: 'mine',
+          updatedAt: new Date().toISOString(),
+        })
+        tx.set(aliceDb.doc('users/user-a/aiActions/action-autolink-1'), validAction({
+          id: 'action-autolink-1', type: 'createCalendarEvent',
+          relatedChanges: [
+            { module: 'calendar', entityId: 'cal-auto-task__task-1', field: 'event', oldValue: { present: false }, newValue: { present: true, value: 'cal-auto-task__task-1' } },
+            { module: 'calendar', entityId: 'autolink__task__task-1__scheduled__calendar__cal-auto-task__task-1', field: 'link', oldValue: { present: false }, newValue: { present: true, value: 'autolink__task__task-1__scheduled__calendar__cal-auto-task__task-1' } },
+          ],
+        }))
+      })
+
+      await assertSucceeds(aliceDb.doc('users/user-a/calendarEvents/cal-auto-task__task-1').get())
+      await assertSucceeds(aliceDb.doc('users/user-a/entityLinks/autolink__task__task-1__scheduled__calendar__cal-auto-task__task-1').get())
+      await assertSucceeds(aliceDb.doc('users/user-a/aiActions/action-autolink-1').get())
+    })
+
+    it('an aiAction value that is a nested object (not string/number/boolean/null) is rejected — the type-check hardening added in Etapp 2.2', async () => {
+      const aliceDb = testEnv.authenticatedContext('user-a').firestore()
+      await assertFails(aliceDb.doc('users/user-a/aiActions/action-bad-value').set(validAction({
+        id: 'action-bad-value',
+        relatedChanges: [{
+          module: 'calendar', entityId: 'cal-1', field: 'event',
+          oldValue: { present: false },
+          newValue: { present: true, value: { nested: 'object' } },
+        }],
+      })))
     })
   })
 

@@ -36,6 +36,16 @@ export interface MockCalendarEvent {
    * task-auto-created event.
    */
   source?: { type: 'plan' | 'goal'; id: string }
+  /**
+   * ISO timestamp of this document's last write, stamped by
+   * calendarStore.ts's addCalendarEvent()/updateCalendarEvent() on every
+   * call. Absent on any event that predates this field (no migration
+   * needed — every read path already treats it as optional). Exists so a
+   * future revert of an autonomously-created event (see
+   * automaticLinking.ts's AiAction logging) can detect "has this document
+   * been touched since Kivora's own write" before silently deleting it.
+   */
+  updatedAt?: string
 }
 
 export interface PositionedEvent {

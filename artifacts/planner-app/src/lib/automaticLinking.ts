@@ -10,16 +10,31 @@
  *      one calendar event and links it.
  *   4. Returns the IDs of created links + the created calendar event ID (for undo).
  *
+ * Every write runAutomaticLinking() makes — any new EntityLink, the one
+ * auto-created CalendarEvent, and the AiAction log entry/entries describing
+ * them (Kivora 2.0, Etapp 2.2's action-history system, see aiActionsStore.ts)
+ * — lands in ONE Firestore transaction, never the store's own public
+ * addLink()/addCalendarEvent() (those keep their existing, independent,
+ * random-ID write behavior for every OTHER caller, e.g. manual linking via
+ * SuggestedLinksPanel).
+ *
  * Duplicate prevention:
- *   - addLink() is idempotent — it returns the existing link if the same
- *     from/to/relation triple already exists.
- *   - Calendar auto-create checks getAllEvents() for an event with the same
- *     title + date before creating a new one.
+ *   - Candidate links/calendar event are written under a DETERMINISTIC id
+ *     (see deterministicLinkId()/deterministicCalendarEventId() below), and
+ *     the transaction's tx.get() on that exact id is the server-
+ *     authoritative existence check — this is what makes two near-
+ *     simultaneous runAutomaticLinking() calls for the same entity converge
+ *     on exactly one document instead of two, which a local in-memory check
+ *     or a plain writeBatch (no reads) cannot guarantee on its own.
+ *   - Calendar auto-create also still checks getAllEvents() for an event
+ *     with the same title + date first, as a fast local pre-filter before
+ *     ever starting a transaction (same as before this change).
  */
 
+import { runTransaction } from 'firebase/firestore'
 import { computeSuggestions, type SourceSignals } from '@/lib/linkSuggestions'
-import { addLink, getLinksForEntity, hasCalendarLink, removeLink } from '@/lib/entityLinksStore'
-import { addCalendarEvent, getAllEvents, updateCalendarEvent, deleteCalendarEvent } from '@/lib/calendarStore'
+import { getLinksForEntity, hasCalendarLink, removeLink, linkDoc } from '@/lib/entityLinksStore'
+import { addCalendarEvent, getAllEvents, updateCalendarEvent, deleteCalendarEvent, eventDoc } from '@/lib/calendarStore'
 import type { MockCalendarEvent } from '@/lib/calendar/eventLayout'
 import { getAllTasks } from '@/lib/tasksStore'
 import { getAllNotes } from '@/lib/quickNotesStore'
@@ -27,10 +42,13 @@ import { getAllGoals } from '@/lib/goalsStore'
 import { getAllHabits } from '@/lib/habitsStore'
 import { getAllChats } from '@/lib/aiConversationsStore'
 import { getAllSchoolTasks, getAllSchoolExams, getAllSchoolSubjects } from '@/lib/schoolStore'
-import { decodeSchoolId, encodeSchoolId, type SchoolEntityKind } from '@/types/entityLinks'
+import { decodeSchoolId, encodeSchoolId, type SchoolEntityKind, type RelationType, type EntityLink } from '@/types/entityLinks'
 import type { EntityType } from '@/types/entityLinks'
 import type { AppLang } from '@/lib/languageStore'
 import type { Task } from '@/types'
+import { db, auth } from '@/lib/firebase'
+import { sanitizeForFirestore } from '@/lib/firestoreUtils'
+import { actionDoc, generateAiActionRetryKey, type AiAction, type AiActionChange } from '@/lib/aiActionsStore'
 
 // Every calendar event this service auto-creates gets an id with this
 // prefix — it's the only place in the codebase that generates ids this way
@@ -60,6 +78,36 @@ export function findOwnedCalendarEventId(fromType: EntityType, fromId: string): 
       l.toType === 'calendar' &&
       l.toId.startsWith(AUTO_CREATED_CALENDAR_EVENT_PREFIX),
   )?.toId
+}
+
+// ── Deterministic IDs for the automatic write path (Kivora 2.0, Etapp 2.2) ──
+//
+// addLink()'s own public API (used by manual flows, e.g. SuggestedLinksPanel)
+// keeps its existing random-ID scheme untouched — these deterministic IDs
+// are used ONLY by runAutomaticLinking()'s own internal transactional write
+// path below, specifically to let a Firestore transaction check "does this
+// exact link/event already exist" by a direct document read (tx.get()),
+// rather than relying solely on the local in-memory cache (entityLinksStore's
+// existing addLink() dedup check), which cannot by itself prevent two
+// near-simultaneous runAutomaticLinking() calls from both creating the same
+// semantic link/event. The encoded tuple is used directly (not hashed) to
+// make the id self-describing and to avoid any hash-collision risk; none of
+// fromId/toId ever contain '/' (Task ids are UUIDs, School ids are
+// "kind:rawId", calendar event ids are "cal-auto-..."), so this is a safe
+// Firestore document id in every real case.
+
+function deterministicLinkId(
+  fromType: EntityType,
+  fromId: string,
+  toType: EntityType,
+  toId: string,
+  relationType: RelationType,
+): string {
+  return `autolink__${fromType}__${fromId}__${relationType}__${toType}__${toId}`
+}
+
+function deterministicCalendarEventId(type: EntityType, id: string): string {
+  return `${AUTO_CREATED_CALENDAR_EVENT_PREFIX}${type}__${id}`
 }
 
 // The color every auto-created calendar event has always defaulted to
@@ -231,14 +279,80 @@ function calendarDuplicateExists(title: string, date: string): boolean {
  *                When omitted, falls back to reading the store (suitable for
  *                in-memory-only entities like habits).
  */
+interface LinkCandidate {
+  fromType: EntityType
+  fromId: string
+  toType: EntityType
+  toId: string
+  relationType: RelationType
+  id: string
+}
+
+function buildLinkCandidate(
+  fromType: EntityType,
+  fromId: string,
+  toType: EntityType,
+  toId: string,
+  relationType: RelationType,
+): LinkCandidate {
+  return {
+    fromType,
+    fromId,
+    toType,
+    toId,
+    relationType,
+    id: deterministicLinkId(fromType, fromId, toType, toId, relationType),
+  }
+}
+
+function buildLinkDocData(c: LinkCandidate, now: number): EntityLink {
+  return {
+    id: c.id,
+    fromType: c.fromType,
+    fromId: c.fromId,
+    toType: c.toType,
+    toId: c.toId,
+    relationType: c.relationType,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+/**
+ * Run automatic linking for a freshly-saved entity.
+ *
+ * Kivora 2.0, Etapp 2.2 — every write this function makes (any new
+ * EntityLink, the one auto-created CalendarEvent, and the AiAction log
+ * entry/entries describing them) lands in ONE Firestore transaction: it all
+ * commits together or nothing does, so a logging failure can never leave an
+ * un-logged automatic change, and a data-write failure can never leave a
+ * dangling, unlogged link/event either.
+ *
+ * Duplicate prevention across concurrent calls: each candidate link/event
+ * is written under a DETERMINISTIC id (see deterministicLinkId() /
+ * deterministicCalendarEventId() above), and the transaction's tx.get() on
+ * that exact id is the server-authoritative existence check — never the
+ * local in-memory cache alone. Two near-simultaneous calls that would
+ * otherwise both decide "this doesn't exist yet" are resolved by Firestore
+ * itself: whichever transaction commits first wins, and the other's tx.get()
+ * (on retry) sees the now-existing document and skips writing it again.
+ *
+ * @param type  - entity type
+ * @param id    - entity ID (must already exist in Firestore or in-memory store)
+ * @param lang  - UI language
+ * @param hint  - key signals from the entity, supplied by the caller so this
+ *                function does not depend on the store's onSnapshot having fired.
+ *                When omitted, falls back to reading the store (suitable for
+ *                in-memory-only entities like habits).
+ */
 export async function runAutomaticLinking(
   type: EntityType,
   id: string,
   lang: AppLang,
   hint?: EntityHint,
 ): Promise<AutoLinkResult> {
-  const linkIds: string[] = []
-  let calendarEventId: string | null = null
+  const uid = auth.currentUser?.uid
+  if (!uid) return { linkIds: [], calendarEventId: null }
 
   // Build a SourceSignals override from the caller-supplied hint so that
   // computeSuggestions does not need to look the entity up from the store.
@@ -246,30 +360,19 @@ export async function runAutomaticLinking(
     ? { title: hint.title, date: hint.date, description: hint.description, category: hint.category }
     : undefined
 
-  // ── Step 1: auto-link high-confidence suggestions ─────────────────────────
+  // ── Step 1 candidates: high-confidence suggested links ────────────────────
   const suggestions = computeSuggestions(type, id, lang, new Set(), sourceOverride)
   const highConf = suggestions.filter((s) => s.isHighConfidence)
+  const linkCandidates = highConf.map((s) => buildLinkCandidate(type, id, s.type, s.id, s.suggestedRelation))
 
-  for (const s of highConf) {
-    try {
-      const link = addLink({
-        fromType: type,
-        fromId: id,
-        toType: s.type,
-        toId: s.id,
-        relationType: s.suggestedRelation,
-      })
-      linkIds.push(link.id)
-    } catch {
-      // Not authenticated or already exists — skip silently
-    }
-  }
-
-  // ── Step 2: auto-create a calendar event if entity has a date ─────────────
+  // ── Step 2 candidate: one auto-created calendar event + its scheduled link
   // Skip if: entity is calendar itself, already has a calendar link,
   // the date string is not ISO YYYY-MM-DD, or a duplicate event already exists.
+  // (These are the same fast, local pre-checks as before — they decide
+  // WHETHER to attempt the candidate at all; the transaction below decides,
+  // server-authoritatively, whether to actually write it.)
+  let calendarCandidate: { event: MockCalendarEvent; link: LinkCandidate } | null = null
   if (type !== 'calendar') {
-    // Prefer hint data to avoid store-timing issues
     const info: EntityInfo = hint
       ? { title: hint.title, date: hint.date, time: hint.time, isSchool: type === 'school' }
       : getEntityInfo(type, id)
@@ -282,44 +385,140 @@ export async function runAutomaticLinking(
       info.title &&
       !calendarDuplicateExists(info.title, date)
     ) {
-      try {
-        const eventId = `${AUTO_CREATED_CALENDAR_EVENT_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-        const hasTime = Boolean(info.time)
-        await addCalendarEvent({
-          id: eventId,
-          title: info.title,
-          date,
-          // A date with no explicit time is an all-day event — never a fake
-          // 00:00–23:59 block, and never defaulted to a made-up time slot.
-          allDay: !hasTime,
-          startTime: hasTime ? info.time! : '',
-          endTime: hasTime ? addOneHourClamped(info.time!) : '',
-          color: info.isSchool ? resolveSchoolItemColor(id) : DEFAULT_AUTO_EVENT_COLOR,
-          calendarId: info.isSchool ? 'school' : 'mine',
-        })
-        calendarEventId = eventId
-
-        // Link the entity to the new calendar event
-        try {
-          const calLink = addLink({
-            fromType: type,
-            fromId: id,
-            toType: 'calendar',
-            toId: eventId,
-            relationType: 'scheduled',
-          })
-          linkIds.push(calLink.id)
-        } catch {
-          // skip
-        }
-      } catch {
-        // Calendar write failed — don't surface as error
-        calendarEventId = null
+      const eventId = deterministicCalendarEventId(type, id)
+      const hasTime = Boolean(info.time)
+      const event: MockCalendarEvent = {
+        id: eventId,
+        title: info.title,
+        date,
+        // A date with no explicit time is an all-day event — never a fake
+        // 00:00–23:59 block, and never defaulted to a made-up time slot.
+        allDay: !hasTime,
+        startTime: hasTime ? info.time! : '',
+        endTime: hasTime ? addOneHourClamped(info.time!) : '',
+        color: info.isSchool ? resolveSchoolItemColor(id) : DEFAULT_AUTO_EVENT_COLOR,
+        calendarId: info.isSchool ? 'school' : 'mine',
       }
+      const link = buildLinkCandidate(type, id, 'calendar', eventId, 'scheduled')
+      calendarCandidate = { event, link }
     }
   }
 
-  return { linkIds, calendarEventId }
+  // Nothing to do — zero Firestore calls, exactly like before this change.
+  if (linkCandidates.length === 0 && !calendarCandidate) {
+    return { linkIds: [], calendarEventId: null }
+  }
+
+  try {
+    return await runTransaction(db, async (tx) => {
+      const linkIds: string[] = []
+      let calendarEventId: string | null = null
+
+      // All reads before any writes (a Firestore transaction requirement).
+      const linkSnaps = await Promise.all(linkCandidates.map((c) => tx.get(linkDoc(uid, c.id))))
+      const calLinkSnap = calendarCandidate ? await tx.get(linkDoc(uid, calendarCandidate.link.id)) : null
+      const calEventSnap = calendarCandidate ? await tx.get(eventDoc(uid, calendarCandidate.event.id)) : null
+
+      const now = Date.now()
+      const nowIso = new Date(now).toISOString()
+
+      // ── Step 1: write every link that doesn't already exist ────────────
+      const createLinkChanges: AiActionChange[] = []
+      linkCandidates.forEach((c, i) => {
+        linkIds.push(c.id)
+        if (linkSnaps[i].exists()) return // already created — this or a concurrent call won the race
+        tx.set(linkDoc(uid, c.id), sanitizeForFirestore(buildLinkDocData(c, now)))
+        createLinkChanges.push({
+          module: c.toType,
+          entityId: c.id,
+          field: 'link',
+          oldValue: { present: false },
+          newValue: { present: true, value: c.id },
+        })
+      })
+
+      if (createLinkChanges.length > 0) {
+        const retryKey = generateAiActionRetryKey()
+        const action: AiAction = {
+          id: retryKey,
+          type: 'createLink',
+          module: type,
+          entityId: id,
+          relatedChanges: createLinkChanges,
+          reason: 'Automatic cross-module link creation (runAutomaticLinking)',
+          createdAt: nowIso,
+          revertible: true,
+          revertStatus: 'none',
+          snapshotUpdatedAt: Object.fromEntries(createLinkChanges.map((c) => [c.entityId, String(now)])),
+        }
+        tx.set(actionDoc(uid, retryKey), sanitizeForFirestore(action))
+      }
+
+      // ── Step 2: write the calendar event and/or its link if new ────────
+      if (calendarCandidate && calLinkSnap && calEventSnap) {
+        const eventExists = calEventSnap.exists()
+        const linkExists = calLinkSnap.exists()
+
+        if (!eventExists || !linkExists) {
+          const relatedChanges: AiActionChange[] = []
+
+          if (!eventExists) {
+            const eventData: MockCalendarEvent = { ...calendarCandidate.event, updatedAt: nowIso }
+            tx.set(eventDoc(uid, calendarCandidate.event.id), sanitizeForFirestore(eventData))
+            relatedChanges.push({
+              module: 'calendar',
+              entityId: calendarCandidate.event.id,
+              field: 'event',
+              oldValue: { present: false },
+              newValue: { present: true, value: calendarCandidate.event.id },
+            })
+            calendarEventId = calendarCandidate.event.id
+          }
+
+          if (!linkExists) {
+            tx.set(
+              linkDoc(uid, calendarCandidate.link.id),
+              sanitizeForFirestore(buildLinkDocData(calendarCandidate.link, now)),
+            )
+            relatedChanges.push({
+              module: 'calendar',
+              entityId: calendarCandidate.link.id,
+              field: 'link',
+              oldValue: { present: false },
+              newValue: { present: true, value: calendarCandidate.link.id },
+            })
+          }
+          linkIds.push(calendarCandidate.link.id)
+
+          const retryKey = generateAiActionRetryKey()
+          const action: AiAction = {
+            id: retryKey,
+            type: 'createCalendarEvent',
+            module: type,
+            entityId: id,
+            relatedChanges,
+            reason: 'Automatic calendar event creation (runAutomaticLinking)',
+            createdAt: nowIso,
+            revertible: true,
+            revertStatus: 'none',
+            snapshotUpdatedAt: Object.fromEntries(
+              relatedChanges.map((c) => [c.entityId, c.field === 'event' ? nowIso : String(now)]),
+            ),
+          }
+          tx.set(actionDoc(uid, retryKey), sanitizeForFirestore(action))
+        }
+      }
+
+      return { linkIds, calendarEventId }
+    })
+  } catch {
+    // Transaction failed (offline, permission, etc.) — never surfaced as an
+    // error to the caller, matching this file's existing best-effort
+    // behavior. Because it's a single transaction, nothing partial was
+    // committed: no dangling link/event without its log entry, and no log
+    // entry without the data it describes.
+    return { linkIds: [], calendarEventId: null }
+  }
 }
 
 // ── Task edit → linked calendar event sync ────────────────────────────────────
