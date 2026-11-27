@@ -11,7 +11,7 @@
  * `cal-auto-` prefix (stamped only by automaticLinking.ts's auto-create
  * path), NOT by relationType alone — a `scheduled` EntityLink is also used
  * when a user manually links a task to a pre-existing event (LinkPickerModal,
- * PostSaveLinkSuggestionsDialog), so relationType alone would over-delete.
+ * SuggestedLinksPanel), so relationType alone would over-delete.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'

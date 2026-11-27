@@ -135,7 +135,12 @@ describe('everything else on the Tasks page is untouched', () => {
   it('the edit-task modal and automatic-linking wiring are still present, unchanged', () => {
     expect(TASKS_PAGE_SRC).toMatch(/<AddTaskModal open=\{editingTask !== undefined\} onClose=\{closeEdit\} onSave=\{handleEditTask\} initialTask=\{editingTask\} lang=\{lang\} \/>/)
     expect(TASKS_PAGE_SRC).toMatch(/runAutomaticLinking/)
-    expect(TASKS_PAGE_SRC).toMatch(/PostSaveLinkSuggestionsDialog/)
+    expect(TASKS_PAGE_SRC).toMatch(/AutoLinkToast/)
+  })
+
+  it('the forced post-save link-suggestions popup is gone (Kivora 2.0: no blocking modal after adding a task)', () => {
+    expect(TASKS_PAGE_SRC).not.toMatch(/PostSaveLinkSuggestionsDialog/)
+    expect(TASKS_PAGE_SRC).not.toMatch(/postSave/)
   })
 
   it('the mobile-responsive row layout (BUG-01 fix) is untouched', () => {

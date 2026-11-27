@@ -79,7 +79,6 @@ import type { Task as GlobalTask } from "@/types";
 import LinkedItemsPanel from "@/components/links/LinkedItemsPanel";
 import { encodeSchoolId, decodeSchoolId } from "@/types/entityLinks";
 import { removeLinksForEntity } from "@/lib/entityLinksStore";
-import PostSaveLinkSuggestionsDialog from "@/components/links/PostSaveLinkSuggestionsDialog";
 import AutoLinkToast from "@/components/links/AutoLinkToast";
 import { runAutomaticLinking, syncSchoolCalendarEvent, syncSchoolCalendarEventCompletion, deleteSchoolCalendarEvent, type AutoLinkResult } from "@/lib/automaticLinking";
 import { getLocalDateString, getLocalWeekdayIndex, formatDateWithWeekday, formatDateRange, msUntilNextLocalMidnight } from "@/lib/dateUtils";
@@ -497,7 +496,6 @@ export default function SchoolPage() {
   // this file already renders from) so that view is completely unaffected.
   const realSubjects = useSchoolSubjects();
   const [addingSubject, setAddingSubject] = useState(false);
-  const [postSave, setPostSave] = useState<{ type: 'school'; id: string } | null>(null);
   const [autoLink, setAutoLink] = useState<AutoLinkResult | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
@@ -965,7 +963,6 @@ export default function SchoolPage() {
             setAddingTask(false);
             setQuickAddSubject("");
             const schoolTaskId = encodeSchoolId('task', task.id);
-            setPostSave({ type: 'school', id: schoolTaskId });
             runAutomaticLinking('school', schoolTaskId, lang, {
               title: task.title,
               date: task.deadline,
@@ -1004,7 +1001,6 @@ export default function SchoolPage() {
             addExam(exam);
             setAddingExam(false);
             const schoolExamId = encodeSchoolId('exam', exam.id);
-            setPostSave({ type: 'school', id: schoolExamId });
             runAutomaticLinking('school', schoolExamId, lang, {
               title: exam.title,
               date: exam.date,
@@ -1054,7 +1050,6 @@ export default function SchoolPage() {
             addExam(exam);
             setAddingEksam(false);
             const schoolEksamId = encodeSchoolId('exam', exam.id);
-            setPostSave({ type: 'school', id: schoolEksamId });
             runAutomaticLinking('school', schoolEksamId, lang, {
               title: exam.title,
               date: exam.date,
@@ -1165,14 +1160,6 @@ export default function SchoolPage() {
             });
             setEditingSubject(null);
           }}
-        />
-      )}
-      {postSave && (
-        <PostSaveLinkSuggestionsDialog
-          type={postSave.type}
-          entityId={postSave.id}
-          lang={lang}
-          onClose={() => setPostSave(null)}
         />
       )}
       {autoLink && (

@@ -157,7 +157,7 @@ export async function setTaskCompleted(id: string, completed: boolean): Promise<
 // Calendar page itself) uses a different prefix. A `scheduled` EntityLink
 // alone does NOT prove a calendar event was auto-created — the same
 // relationType is used when a user manually links a task to a pre-existing
-// event (see LinkPickerModal, PostSaveLinkSuggestionsDialog). Checking this
+// event (see LinkPickerModal, SuggestedLinksPanel). Checking this
 // prefix on the link's toId is what distinguishes "owned by this task" from
 // "independently created and merely linked."
 const AUTO_CREATED_CALENDAR_EVENT_PREFIX = 'cal-auto-'

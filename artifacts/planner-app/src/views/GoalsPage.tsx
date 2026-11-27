@@ -40,7 +40,6 @@ import type { Goal, GoalStatus } from '@/data/goalsData'
 import { useGoals, useGoalsLoading, addGoal, updateGoal, deleteGoal as deleteGoalStore, toggleStep, addStep, deleteStep } from '@/lib/goalsStore'
 import LinkedItemsPanel from '@/components/links/LinkedItemsPanel'
 import { removeLinksForEntity } from '@/lib/entityLinksStore'
-import PostSaveLinkSuggestionsDialog from '@/components/links/PostSaveLinkSuggestionsDialog'
 import AutoLinkToast from '@/components/links/AutoLinkToast'
 import { runAutomaticLinking, type AutoLinkResult } from '@/lib/automaticLinking'
 
@@ -176,7 +175,6 @@ export default function GoalsPage() {
   const [filter, setFilter] = useState<'all' | 'active' | 'paused' | 'completed'>('all')
 
   const [showAddModal, setShowAddModal] = useState(false)
-  const [postSave, setPostSave] = useState<{ type: 'goal'; id: string } | null>(null)
   const [autoLink, setAutoLink] = useState<AutoLinkResult | null>(null)
   const [form, setForm] = useState<NewGoalForm>(emptyForm)
   const [formError, setFormError] = useState('')
@@ -322,7 +320,6 @@ export default function GoalsPage() {
       }
       addGoal(newGoal)
       toast.success(lang === 'et' ? 'Eesmärk lisatud' : 'Goal added')
-      setPostSave({ type: 'goal', id: newGoal.id })
       runAutomaticLinking('goal', newGoal.id, lang, {
         title: newGoal.title,
         description: newGoal.description,
@@ -1208,14 +1205,6 @@ export default function GoalsPage() {
         </div>
       )}
 
-      {postSave && (
-        <PostSaveLinkSuggestionsDialog
-          type={postSave.type}
-          entityId={postSave.id}
-          lang={lang}
-          onClose={() => setPostSave(null)}
-        />
-      )}
       {autoLink && (
         <AutoLinkToast
           linkIds={autoLink.linkIds}

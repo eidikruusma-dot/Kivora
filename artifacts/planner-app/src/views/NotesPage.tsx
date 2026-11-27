@@ -36,7 +36,6 @@ import { t } from '@/lib/translations'
 import type { TranslationKey } from '@/lib/translations'
 import LinkedItemsPanel from '@/components/links/LinkedItemsPanel'
 import { removeLinksForEntity } from '@/lib/entityLinksStore'
-import PostSaveLinkSuggestionsDialog from '@/components/links/PostSaveLinkSuggestionsDialog'
 import AutoLinkToast from '@/components/links/AutoLinkToast'
 import { runAutomaticLinking, type AutoLinkResult } from '@/lib/automaticLinking'
 
@@ -96,7 +95,6 @@ export default function NotesPage() {
   // Create/Edit modal
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [postSave, setPostSave] = useState<{ type: 'note'; id: string } | null>(null)
   const [autoLink, setAutoLink] = useState<AutoLinkResult | null>(null)
   const [form, setForm] = useState<NoteFormState>(EMPTY_FORM)
   const [formError, setFormError] = useState('')
@@ -228,7 +226,6 @@ export default function NotesPage() {
       })
     } else {
       const note = await addNote(form.title, form.content, form.folder, form.starred)
-      setPostSave({ type: 'note', id: note.id })
       runAutomaticLinking('note', note.id, lang, {
         title: form.title,
         description: form.content,
@@ -833,14 +830,6 @@ export default function NotesPage() {
           </div>
         </div>
       )}
-    {postSave && (
-      <PostSaveLinkSuggestionsDialog
-        type={postSave.type}
-        entityId={postSave.id}
-        lang={lang}
-        onClose={() => setPostSave(null)}
-      />
-    )}
     {autoLink && (
       <AutoLinkToast
         linkIds={autoLink.linkIds}

@@ -36,7 +36,6 @@ import {
 } from "@/lib/aiConversationsStore";
 import LinkedItemsPanel from "@/components/links/LinkedItemsPanel";
 import { removeLinksForEntity } from "@/lib/entityLinksStore";
-import PostSaveLinkSuggestionsDialog from "@/components/links/PostSaveLinkSuggestionsDialog";
 import AutoLinkToast from "@/components/links/AutoLinkToast";
 import {
   runAutomaticLinking,
@@ -407,9 +406,6 @@ export default function AIAssistantPage() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [loading, setLoading] = useState(false);
-  const [postSave, setPostSave] = useState<{ type: "ai"; id: string } | null>(
-    null,
-  );
   const [autoLink, setAutoLink] = useState<AutoLinkResult | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -893,7 +889,6 @@ export default function AIAssistantPage() {
     }).catch(() => {});
     setActiveId(chat.id);
     setInput("");
-    setPostSave({ type: "ai", id: chat.id });
     runAutomaticLinking("ai", chat.id, lang, { title: chat.title }).then(
       (r) => {
         if (r.linkIds.length > 0) setAutoLink(r);
@@ -2381,14 +2376,6 @@ export default function AIAssistantPage() {
           </div>
         </div>
       </aside>
-      {postSave && (
-        <PostSaveLinkSuggestionsDialog
-          type={postSave.type}
-          entityId={postSave.id}
-          lang={lang}
-          onClose={() => setPostSave(null)}
-        />
-      )}
       {autoLink && (
         <AutoLinkToast
           linkIds={autoLink.linkIds}

@@ -23,7 +23,6 @@ import { usePlans } from '@/lib/plansStore'
 import { useGoals } from '@/lib/goalsStore'
 import { getDerivedCalendarEvents } from '@/lib/planGoalCalendarEvents'
 import { removeLinksForEntity, getLinksForEntity } from '@/lib/entityLinksStore'
-import PostSaveLinkSuggestionsDialog from '@/components/links/PostSaveLinkSuggestionsDialog'
 import AutoLinkToast from '@/components/links/AutoLinkToast'
 import { runAutomaticLinking, AUTO_CREATED_CALENDAR_EVENT_PREFIX, type AutoLinkResult } from '@/lib/automaticLinking'
 import type { CalendarViewType, UserPreferences } from '@/types'
@@ -114,7 +113,6 @@ export default function CalendarPage() {
 
   // Detail + edit state
   const [detailEvent, setDetailEvent] = useState<MockCalendarEvent | null>(null)
-  const [postSave, setPostSave] = useState<{ type: 'calendar'; id: string } | null>(null)
   const [autoLink, setAutoLink] = useState<AutoLinkResult | null>(null)
   const [editingEvent, setEditingEvent] = useState<MockCalendarEvent | null>(null)
 
@@ -185,7 +183,6 @@ export default function CalendarPage() {
   // Add new event
   const handleSaveEvent = useCallback((event: MockCalendarEvent) => {
     addCalendarEvent(event)
-    setPostSave({ type: 'calendar', id: event.id })
     runAutomaticLinking('calendar', event.id, lang, {
       title: event.title,
       date: event.date,
@@ -397,14 +394,6 @@ export default function CalendarPage() {
         timeFormat={preferences.timeFormat}
         defaultReminder={defaultReminder}
       />
-      {postSave && (
-        <PostSaveLinkSuggestionsDialog
-          type={postSave.type}
-          entityId={postSave.id}
-          lang={lang}
-          onClose={() => setPostSave(null)}
-        />
-      )}
       {autoLink && (
         <AutoLinkToast
           linkIds={autoLink.linkIds}

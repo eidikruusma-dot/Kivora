@@ -52,7 +52,6 @@ import {
 } from "@/lib/habitsStore";
 import LinkedItemsPanel from "@/components/links/LinkedItemsPanel";
 import { removeLinksForEntity } from "@/lib/entityLinksStore";
-import PostSaveLinkSuggestionsDialog from "@/components/links/PostSaveLinkSuggestionsDialog";
 import AutoLinkToast from "@/components/links/AutoLinkToast";
 import { runAutomaticLinking, type AutoLinkResult } from "@/lib/automaticLinking";
 
@@ -203,7 +202,6 @@ export default function HabitsPage() {
   // Create/Edit modal
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [postSave, setPostSave] = useState<{ type: 'habit'; id: string } | null>(null);
   const [autoLink, setAutoLink] = useState<AutoLinkResult | null>(null);
   const [form, setForm] = useState<HabitForm>(EMPTY_FORM);
   const [formError, setFormError] = useState("");
@@ -409,7 +407,6 @@ export default function HabitsPage() {
           customDays: form.customDays,
         });
         toast.success(lang === 'et' ? 'Harjumus salvestatud' : 'Habit saved');
-        setPostSave({ type: 'habit', id: habit.id });
         runAutomaticLinking('habit', habit.id, lang, {
           title: habit.title,
           description: habit.description,
@@ -1461,14 +1458,6 @@ export default function HabitsPage() {
         </div>
       )}
 
-      {postSave && (
-        <PostSaveLinkSuggestionsDialog
-          type={postSave.type}
-          entityId={postSave.id}
-          lang={lang}
-          onClose={() => setPostSave(null)}
-        />
-      )}
       {autoLink && (
         <AutoLinkToast
           linkIds={autoLink.linkIds}

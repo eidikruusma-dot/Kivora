@@ -8,7 +8,6 @@ import { getTaskCategories } from '@/lib/taskCategories'
 import AddTaskModal from '@/components/tasks/AddTaskModal'
 import TasksAIBanner from '@/components/tasks/TasksAIBanner'
 import { localTodayStr } from '@/lib/tasksSummary'
-import PostSaveLinkSuggestionsDialog from '@/components/links/PostSaveLinkSuggestionsDialog'
 import AutoLinkToast from '@/components/links/AutoLinkToast'
 import { runAutomaticLinking, syncTaskCalendarEvent, type AutoLinkResult } from '@/lib/automaticLinking'
 import { subscribeToLanguage, getLocalLanguage } from '@/lib/languageStore'
@@ -35,7 +34,6 @@ export default function TasksPage() {
   const [filter, setFilter] = useState<FilterKey>('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | undefined>(undefined)
-  const [postSave, setPostSave] = useState<{ type: 'task'; id: string } | null>(null)
   const [autoLink, setAutoLink] = useState<AutoLinkResult | null>(null)
   const [flashId, setFlashId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -106,7 +104,6 @@ export default function TasksPage() {
       category: task.category,
     })
     if (result.linkIds.length > 0) setAutoLink(result)
-    setPostSave({ type: 'task', id: task.id })
   }
   const handleEditTask = async (task: Task) => {
     await storeUpdateTask(task)
@@ -483,14 +480,6 @@ export default function TasksPage() {
         </div>
       )}
 
-      {postSave && (
-        <PostSaveLinkSuggestionsDialog
-          type={postSave.type}
-          entityId={postSave.id}
-          lang={lang}
-          onClose={() => setPostSave(null)}
-        />
-      )}
       {autoLink && (
         <AutoLinkToast
           linkIds={autoLink.linkIds}
