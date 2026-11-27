@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Sparkles, MessageCircle } from 'lucide-react'
+import { Sparkles, MessageCircle, AlertTriangle, Clock3, CalendarClock } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useTasks } from '@/lib/tasksStore'
 import { useCalendarEvents } from '@/lib/calendarStore'
-import { getEventsForDate } from '@/lib/calendar/eventLayout'
-import { computeDashboardSummary } from '@/lib/dashboardSummary'
+import { useSchoolTasks, useSchoolExams } from '@/lib/schoolStore'
+import { usePlans } from '@/lib/plansStore'
+import { useGoals } from '@/lib/goalsStore'
+import { computeDailyOverview } from '@/lib/dailyObservations'
+import { computeSmartDailySummary } from '@/lib/dashboardSummary'
 import { fetchAIReply, getAiErrorCode } from '@/lib/aiClient'
 import { getLocalLanguage, subscribeToLanguage } from '@/lib/languageStore'
 import type { AppLang } from '@/lib/languageStore'
@@ -59,15 +62,24 @@ export default function KivoraAICard() {
 
   const allTasks = useTasks()
   const allEvents = useCalendarEvents()
+  const schoolTasks = useSchoolTasks()
+  const schoolExams = useSchoolExams()
+  const plans = usePlans()
+  const goals = useGoals()
   const viewportWidth = useViewportWidth()
 
-  const tasksTotal = allTasks.length
-  const tasksCompleted = allTasks.filter((tk) => tk.completed).length
-  const eventsToday = useMemo(() => getEventsForDate(allEvents, new Date()).length, [allEvents])
+  // Each input here is already its own store's filtered array (not a
+  // shared/global reference), so this only recomputes when one of these
+  // specific stores actually changes — same lesson applied in
+  // SuggestedLinksPanel.tsx's unrelated-global-update fix.
+  const overview = useMemo(
+    () => computeDailyOverview({ tasks: allTasks, events: allEvents, schoolTasks, schoolExams, plans, goals }),
+    [allTasks, allEvents, schoolTasks, schoolExams, plans, goals],
+  )
 
   const localSummary = useMemo(
-    () => computeDashboardSummary({ tasksTotal, tasksCompleted, eventsToday }, lang),
-    [tasksTotal, tasksCompleted, eventsToday, lang],
+    () => computeSmartDailySummary(overview, lang),
+    [overview, lang],
   )
 
   // On-demand real AI suggestion — undefined until the user asks for one.
@@ -165,6 +177,48 @@ export default function KivoraAICard() {
            never truncated, just given room that doesn't leave empty space
            under the mascot. */}
         {isLongText && <div className="mt-3">{summaryBubble}</div>}
+
+        {/* Compact, tappable fact chips — one per observation KIND (never
+           per individual item, keeping this scannable), each a count the
+           user can open for detail. These are the same deduplicated,
+           duration-free facts computeDailyOverview() already produced for
+           the prose above — shown here again only as a quick-navigation
+           shortcut, never as extra/different claims. Hidden while the
+           on-demand AI suggestion or its loading/error state occupies the
+           bubble, since they'd read as unrelated clutter next to that. */}
+        {!aiLoading && !aiError && !aiSuggestion && (
+          overview.overdueCount > 0 || overview.conflicts.length > 0 || overview.upcoming.length > 0
+        ) && (
+          <div className="flex flex-wrap gap-1.5 mt-2.5">
+            {overview.overdueCount > 0 && (
+              <button
+                onClick={() => navigate('/app/tasks')}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#FEF2F2] dark:bg-red-500/10 text-[#DC2626] dark:text-red-300 text-[11px] font-semibold hover:opacity-80 transition-opacity"
+              >
+                <AlertTriangle size={11} />
+                {overview.overdueCount}
+              </button>
+            )}
+            {overview.conflicts.length > 0 && (
+              <button
+                onClick={() => navigate('/app/calendar')}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#FFF7ED] dark:bg-orange-500/10 text-[#C2410C] dark:text-orange-300 text-[11px] font-semibold hover:opacity-80 transition-opacity"
+              >
+                <Clock3 size={11} />
+                {overview.conflicts.length}
+              </button>
+            )}
+            {overview.upcoming.length > 0 && (
+              <button
+                onClick={() => navigate('/app/tasks')}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#EDE9FB] dark:bg-[#3B2F66] text-[#6F5AE8] dark:text-[#D4C8FC] text-[11px] font-semibold hover:opacity-80 transition-opacity"
+              >
+                <CalendarClock size={11} />
+                {overview.upcoming.length}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Actions — a single full-width row below the mascot+text header,
            not confined under the text column, so they have the whole card's

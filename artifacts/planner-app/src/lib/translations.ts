@@ -1478,6 +1478,11 @@ export type TranslationKey =
     | "dash.ai.summary.allDone"
     | "dash.ai.summary.tasksRemainingPrefix"
     | "dash.ai.summary.eventsPrefix"
+    | "dash.ai.summary.overduePrefix"
+    | "dash.ai.summary.conflictPrefix"
+    | "dash.ai.summary.todayActivePrefix"
+    | "dash.ai.summary.dueSoonPrefix"
+    | "dash.ai.summary.nothingTodayButSoon"
     | "dash.ai.chatButton"
     | "dash.ai.planButton"
     | "dash.ai.planPrompt"
@@ -3263,6 +3268,11 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "dash.ai.summary.allDone": "Kõik tänased ülesanded on juba tehtud — tubli töö!",
         "dash.ai.summary.tasksRemainingPrefix": "Täna ootab sind veel",
         "dash.ai.summary.eventsPrefix": "Kalendris on täna",
+        "dash.ai.summary.overduePrefix": "Sul on",
+        "dash.ai.summary.conflictPrefix": "Täna kattub ajaliselt",
+        "dash.ai.summary.todayActivePrefix": "Täna on sul veel",
+        "dash.ai.summary.dueSoonPrefix": "Lähipäevil tuleb",
+        "dash.ai.summary.nothingTodayButSoon": "Täna pole midagi planeeritud, kuid lähiajal on tulekul tähtaegu.",
         "dash.ai.chatButton": "Vestle AI-ga",
         "dash.ai.planButton": "Loo plaan",
         "dash.ai.planPrompt": "Palun loo mulle plaan minu praeguste eesmärkide ja ülesannete põhjal.",
@@ -5385,6 +5395,11 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "dash.ai.summary.allDone": "All of today's tasks are already done — great work!",
         "dash.ai.summary.tasksRemainingPrefix": "Today you still have",
         "dash.ai.summary.eventsPrefix": "Your calendar has",
+        "dash.ai.summary.overduePrefix": "You have",
+        "dash.ai.summary.conflictPrefix": "Today",
+        "dash.ai.summary.todayActivePrefix": "Today you still have",
+        "dash.ai.summary.dueSoonPrefix": "Coming up in the next few days:",
+        "dash.ai.summary.nothingTodayButSoon": "Nothing is planned for today, but there are deadlines coming up soon.",
         "dash.ai.chatButton": "Chat with AI",
         "dash.ai.planButton": "Create a plan",
         "dash.ai.planPrompt": "Please create a plan for me based on my current goals and tasks.",

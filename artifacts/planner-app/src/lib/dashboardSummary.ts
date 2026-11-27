@@ -1,5 +1,6 @@
 import { t } from '@/lib/translations'
 import type { AppLang } from '@/lib/languageStore'
+import type { DailyOverview } from '@/lib/dailyObservations'
 
 /**
  * Rule-based ("Tänane ülevaade" / "Today's overview") summary for the
@@ -56,4 +57,62 @@ export function computeDashboardSummary(input: DashboardSummaryInput, lang: AppL
   const eventNote = eventsToday > 0 ? eventsNote(eventsToday, lang) : ''
 
   return [taskNote, eventNote].filter(Boolean).join(' ') || t('dash.ai.summary.openDay', lang)
+}
+
+/**
+ * The smarter "Minu päev" summary — composed from a DailyOverview
+ * (dailyObservations.ts), itself computed purely from the user's real
+ * Tasks/Calendar/School/Plans/Goals data. Still 100% rule-based, free, and
+ * local — exactly the same philosophy as computeDashboardSummary() above
+ * (which is kept, unmodified, for backward compatibility), just fed a
+ * richer, deduplicated input.
+ *
+ * Priority order mirrors what actually needs attention first: overdue,
+ * then today's time conflicts, then what's still open today / already
+ * done, then what's coming up soon. Every count is exactly that — a count
+ * of items — never a fabricated duration or "workload" figure, since no
+ * duration data exists anywhere in this codebase (see dailyObservations.ts's
+ * module doc comment).
+ */
+export function computeSmartDailySummary(overview: DailyOverview, lang: AppLang): string {
+  const clauses: string[] = []
+
+  if (overview.overdueCount > 0) {
+    const prefix = t('dash.ai.summary.overduePrefix', lang)
+    clauses.push(`${prefix} ${countNoun(overview.overdueCount, lang, 'tähtaja ületanud tegevus', 'tähtaja ületanud tegevust', 'overdue item', 'overdue items')}.`)
+  }
+
+  if (overview.conflicts.length > 0) {
+    const prefix = t('dash.ai.summary.conflictPrefix', lang)
+    clauses.push(`${prefix} ${countNoun(overview.conflicts.length, lang, 'ajakonflikt', 'ajakonflikti', 'time conflict', 'time conflicts')}.`)
+  }
+
+  if (overview.todayActiveCount > 0) {
+    const prefix = t('dash.ai.summary.todayActivePrefix', lang)
+    clauses.push(`${prefix} ${countNoun(overview.todayActiveCount, lang, 'tegevus', 'tegevust', 'thing to do', 'things to do')}.`)
+  } else if (overview.todayTotalCount > 0) {
+    // Something existed for today and all of it is already done — a real,
+    // earned "all done", never shown when there was simply nothing at all
+    // (see the empty-data branch below).
+    clauses.push(t('dash.ai.summary.allDone', lang))
+  } else if (overview.upcoming.length > 0) {
+    // Nothing at all today, but something real is coming — never phrased
+    // as "all done" (nothing was ever here to finish) and never silent
+    // about what's ahead.
+    clauses.push(t('dash.ai.summary.nothingTodayButSoon', lang))
+  }
+
+  if (overview.upcoming.length > 0) {
+    const prefix = t('dash.ai.summary.dueSoonPrefix', lang)
+    clauses.push(`${prefix} ${countNoun(overview.upcoming.length, lang, 'tähtaeg', 'tähtaega', 'deadline', 'deadlines')}.`)
+  }
+
+  if (clauses.length === 0) {
+    // Nothing overdue, nothing today, nothing upcoming, nothing done to
+    // report either — a genuinely empty day, not a congratulatory message
+    // for work that never existed.
+    return t('dash.ai.summary.openDay', lang)
+  }
+
+  return clauses.join(' ')
 }

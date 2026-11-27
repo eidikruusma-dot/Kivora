@@ -90,8 +90,8 @@ describe('two distinct, never-conflated labels: free local summary vs. real on-d
     )
   })
 
-  it('the default body text is the pure local computeDashboardSummary result, never a hardcoded/sample sentence', () => {
-    expect(CARD_SRC).toMatch(/import \{ computeDashboardSummary \} from '@\/lib\/dashboardSummary'/)
+  it('the default body text is the pure local computeSmartDailySummary result, never a hardcoded/sample sentence', () => {
+    expect(CARD_SRC).toMatch(/import \{ computeSmartDailySummary \} from '@\/lib\/dashboardSummary'/)
     expect(CARD_SRC).toMatch(/aiSuggestion \?\? localSummary/)
   })
 })

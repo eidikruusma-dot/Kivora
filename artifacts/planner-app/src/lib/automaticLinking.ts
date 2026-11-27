@@ -40,6 +40,28 @@ import type { Task } from '@/types'
 // call sites reuse this one definition instead of redeclaring the literal.
 export const AUTO_CREATED_CALENDAR_EVENT_PREFIX = 'cal-auto-'
 
+/**
+ * Finds the calendar event id this service itself auto-created for the
+ * given entity (if any) — the same "owned scheduled link" lookup
+ * syncTaskCalendarEvent()/tasksStore.ts's deleteTask cascade already use
+ * internally, pulled out here as its own small, read-only helper so other
+ * code (e.g. dailyObservations.ts) can check "does this task already have
+ * its own mirror calendar event" without re-deriving the same filter a
+ * fourth time, and without risking a double-count: a task and the single
+ * calendar event this service created to represent it are the SAME
+ * commitment shown in two places, never two separate ones.
+ */
+export function findOwnedCalendarEventId(fromType: EntityType, fromId: string): string | undefined {
+  return getLinksForEntity(fromType, fromId).find(
+    (l) =>
+      l.relationType === 'scheduled' &&
+      l.fromType === fromType &&
+      l.fromId === fromId &&
+      l.toType === 'calendar' &&
+      l.toId.startsWith(AUTO_CREATED_CALENDAR_EVENT_PREFIX),
+  )?.toId
+}
+
 // The color every auto-created calendar event has always defaulted to
 // (Tasks, Notes, Goals, Habits, AI chats, and — until now — School items
 // alike). Kept as the fallback for School items whose subject color can't
