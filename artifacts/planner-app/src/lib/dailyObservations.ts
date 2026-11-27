@@ -130,6 +130,17 @@ export interface DailyOverview {
    */
   todayActiveCount: number
 
+  /**
+   * How many tasks/school items are completed/done and NOT dated today
+   * (a past-dated or undated completion). Lets the caller say "nothing
+   * is due today, but you finished something earlier" instead of
+   * conflating that with either a genuinely blank account or with
+   * today's own work being done — the exact distinction a completed
+   * YESTERDAY-dated task must never collapse into a "today is all done"
+   * message for.
+   */
+  pastCompletedCount: number
+
   /** Sorted ascending by date, within the upcoming window, excluding today/overdue. */
   upcoming: UpcomingItem[]
 
@@ -204,6 +215,17 @@ export function computeDailyOverview(input: DailyObservationsInput): DailyOvervi
     todaySchoolTasks.filter((t) => t.progress < 100).length +
     todaySchoolExams.filter((e) => e.status !== 'tehtud').length +
     todayCalendarCount
+
+  // A completion counts here only when it is NOT today's own item — a
+  // task due yesterday and completed today must never be read as "today
+  // is done" (that's todayActiveCount/todayTotalCount's job, scoped
+  // strictly to items dated today). Plain string inequality, so this
+  // never needs the date to be valid ISO — an undated completed task
+  // still correctly counts as "not today".
+  const pastCompletedCount =
+    input.tasks.filter((t) => t.completed && t.date !== todayStr).length +
+    input.schoolTasks.filter((t) => t.progress >= 100 && t.deadline !== todayStr).length +
+    input.schoolExams.filter((e) => e.status === 'tehtud' && e.date !== todayStr).length
 
   // ── Upcoming (strictly after today, within the window) — rule 3 ────────
   const upcoming: UpcomingItem[] = []
@@ -280,6 +302,7 @@ export function computeDailyOverview(input: DailyObservationsInput): DailyOvervi
     todayActiveCount,
     todayCalendarCount,
     todayTotalCount,
+    pastCompletedCount,
     upcoming,
     conflicts,
   }

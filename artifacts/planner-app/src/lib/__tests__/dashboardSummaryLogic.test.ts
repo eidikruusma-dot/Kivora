@@ -125,9 +125,23 @@ describe('computeSmartDailySummary: honest empty state (rule 4) — never a cong
 })
 
 describe('computeSmartDailySummary: a real, earned "all done" vs. an empty day are never conflated', () => {
-  it('ET: says "all done" only when something existed today and all of it is finished', () => {
+  it('ET: says "all done" only when something existed today and all of it is finished (explicitly "tänase tähtajaga", never conflated with the generic computeDashboardSummary wording)', () => {
     const msg = computeSmartDailySummary(overview({ todayTotalCount: 2, todayActiveCount: 0 }), 'et')
-    expect(msg).toBe('Kõik tänased ülesanded on juba tehtud — tubli töö!')
+    expect(msg).toBe('Kõik tänase tähtajaga ülesanded on juba tehtud — tubli töö!')
+  })
+
+  it('ET: nothing today, but something completed BEFORE today, is phrased distinctly from "empty" AND from "all done today" (the exact 26->27 Nov bug)', () => {
+    const msg = computeSmartDailySummary(overview({ pastCompletedCount: 1 }), 'et')
+    expect(msg).toBe('Täna ei ole tähtajaga ülesandeid. 1 varasem ülesanne on lõpetatud.')
+    expect(msg).not.toContain('tänase tähtajaga ülesanded on juba tehtud')
+    expect(msg).not.toBe('Täna pole veel ühtegi plaanitud tegevust — hea hetk endale sobivas tempos alustada.')
+  })
+
+  it('EN: same, with correct singular/plural "is/are done"', () => {
+    const one = computeSmartDailySummary(overview({ pastCompletedCount: 1 }), 'en')
+    expect(one).toBe('There are no tasks due today. 1 earlier task is done.')
+    const two = computeSmartDailySummary(overview({ pastCompletedCount: 2 }), 'en')
+    expect(two).toBe('There are no tasks due today. 2 earlier tasks are done.')
   })
 
   it('ET: nothing today but something real coming up is phrased distinctly from both "empty" and "all done"', () => {

@@ -1483,6 +1483,8 @@ export type TranslationKey =
     | "dash.ai.summary.todayActivePrefix"
     | "dash.ai.summary.dueSoonPrefix"
     | "dash.ai.summary.nothingTodayButSoon"
+    | "dash.ai.summary.allDoneToday"
+    | "dash.ai.summary.todayEmptyPastDonePrefix"
     | "dash.ai.chatButton"
     | "dash.ai.planButton"
     | "dash.ai.planPrompt"
@@ -3273,6 +3275,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "dash.ai.summary.todayActivePrefix": "Täna on sul veel",
         "dash.ai.summary.dueSoonPrefix": "Lähipäevil tuleb",
         "dash.ai.summary.nothingTodayButSoon": "Täna pole midagi planeeritud, kuid lähiajal on tulekul tähtaegu.",
+        "dash.ai.summary.allDoneToday": "Kõik tänase tähtajaga ülesanded on juba tehtud — tubli töö!",
+        "dash.ai.summary.todayEmptyPastDonePrefix": "Täna ei ole tähtajaga ülesandeid.",
         "dash.ai.chatButton": "Vestle AI-ga",
         "dash.ai.planButton": "Loo plaan",
         "dash.ai.planPrompt": "Palun loo mulle plaan minu praeguste eesmärkide ja ülesannete põhjal.",
@@ -5400,6 +5404,8 @@ const dict: Record<AppLang, Record<TranslationKey, string>> = {
         "dash.ai.summary.todayActivePrefix": "Today you still have",
         "dash.ai.summary.dueSoonPrefix": "Coming up in the next few days:",
         "dash.ai.summary.nothingTodayButSoon": "Nothing is planned for today, but there are deadlines coming up soon.",
+        "dash.ai.summary.allDoneToday": "All of today's tasks are already done — great work!",
+        "dash.ai.summary.todayEmptyPastDonePrefix": "There are no tasks due today.",
         "dash.ai.chatButton": "Chat with AI",
         "dash.ai.planButton": "Create a plan",
         "dash.ai.planPrompt": "Please create a plan for me based on my current goals and tasks.",

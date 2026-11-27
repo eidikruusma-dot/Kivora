@@ -32,6 +32,7 @@ vi.mock('@/lib/automaticLinking', () => ({
 
 import { findOwnedCalendarEventId } from '@/lib/automaticLinking'
 import { computeDailyOverview, type SchoolTaskLike, type SchoolExamLike } from '@/lib/dailyObservations'
+import { computeSmartDailySummary } from '@/lib/dashboardSummary'
 
 const TODAY = '2026-06-15'
 const YESTERDAY = '2026-06-14'
@@ -352,5 +353,81 @@ describe('computeDailyOverview: local-timezone correctness', () => {
     })
     expect(o.todayStr).toBe('2026-06-15')
     expect(o.todayTaskCount).toBe(1)
+  })
+})
+
+// ── End-to-end: computeDailyOverview -> computeSmartDailySummary ───────────
+// Regression for the real Android report: a task due 2026-11-26 17:30,
+// overdue on 2026-11-27, marked complete that day. The card must NEVER say
+// "Kõik tänase tähtajaga ülesanded on juba tehtud" (that's specifically
+// about TODAY's own items, of which there are zero here) — it must say
+// there are no tasks due today AND that an earlier one is done, as two
+// distinct, honest facts.
+
+describe('end-to-end regression: a yesterday-dated task completed today is never read as "today is done" (the exact 26->27 Nov report)', () => {
+  const NOV_27 = new Date(2026, 10, 27, 9, 0) // local Nov 27, 2026, 09:00
+
+  it('state 2 — nothing due today, one earlier task completed: the exact previously-broken scenario', () => {
+    const o = computeDailyOverview({
+      ...EMPTY_INPUT,
+      tasks: [task({ id: 'test-task', title: 'Kivora testülesanne', date: '2026-11-26', time: '17:30', completed: true })],
+      now: NOV_27,
+    })
+    expect(o.overdueCount).toBe(0) // completed — correctly no longer overdue
+    expect(o.todayTotalCount).toBe(0) // nothing is dated today
+    expect(o.pastCompletedCount).toBe(1) // but one earlier item is done
+
+    const msg = computeSmartDailySummary(o, 'et')
+    expect(msg).toBe('Täna ei ole tähtajaga ülesandeid. 1 varasem ülesanne on lõpetatud.')
+    expect(msg).not.toContain('Kõik tänase tähtajaga ülesanded on juba tehtud')
+    expect(msg).not.toContain('tubli töö')
+  })
+
+  it('state 5 — the same task, NOT yet completed on Nov 27: correctly overdue, no "all done" wording at all', () => {
+    const o = computeDailyOverview({
+      ...EMPTY_INPUT,
+      tasks: [task({ id: 'test-task', title: 'Kivora testülesanne', date: '2026-11-26', time: '17:30', completed: false })],
+      now: NOV_27,
+    })
+    expect(o.overdueCount).toBe(1)
+    const msg = computeSmartDailySummary(o, 'et')
+    expect(msg).toContain('Sul on 1 tähtaja ületanud tegevus.')
+    expect(msg).not.toContain('tehtud')
+  })
+
+  it('state 1 — a genuinely blank account on the same day: the calm open-day message, not state 2\'s wording', () => {
+    const o = computeDailyOverview({ ...EMPTY_INPUT, now: NOV_27 })
+    const msg = computeSmartDailySummary(o, 'et')
+    expect(msg).toBe('Täna pole veel ühtegi plaanitud tegevust — hea hetk endale sobivas tempos alustada.')
+  })
+
+  it('state 3 — a DIFFERENT task actually due today (Nov 27), also completed: a real, earned "all done today"', () => {
+    const o = computeDailyOverview({
+      ...EMPTY_INPUT,
+      tasks: [
+        task({ id: 'yesterday-done', date: '2026-11-26', completed: true }),
+        task({ id: 'today-done', date: '2026-11-27', completed: true }),
+      ],
+      now: NOV_27,
+    })
+    expect(o.todayTotalCount).toBe(1)
+    expect(o.todayActiveCount).toBe(0)
+    const msg = computeSmartDailySummary(o, 'et')
+    expect(msg).toBe('Kõik tänase tähtajaga ülesanded on juba tehtud — tubli töö!')
+  })
+
+  it('state 4 — a task due today, not yet completed, alongside the already-completed earlier one: today\'s own open work takes priority in the wording', () => {
+    const o = computeDailyOverview({
+      ...EMPTY_INPUT,
+      tasks: [
+        task({ id: 'yesterday-done', date: '2026-11-26', completed: true }),
+        task({ id: 'today-open', date: '2026-11-27', completed: false }),
+      ],
+      now: NOV_27,
+    })
+    expect(o.todayActiveCount).toBe(1)
+    const msg = computeSmartDailySummary(o, 'et')
+    expect(msg).toBe('Täna on sul veel 1 tegevus.')
+    expect(msg).not.toContain('tehtud')
   })
 })

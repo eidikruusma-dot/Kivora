@@ -35,6 +35,12 @@ function eventsNote(count: number, lang: AppLang): string {
   return `${prefix} ${countNoun(count, lang, 'sündmus', 'sündmust', 'event', 'events')}.`
 }
 
+/** "N varasem(at) ülesanne/ülesannet on lõpetatud." / "N earlier task(s) is/are done." — see computeSmartDailySummary's state 2. */
+function pastCompletedNote(count: number, lang: AppLang): string {
+  const noun = countNoun(count, lang, 'varasem ülesanne', 'varasemat ülesannet', 'earlier task', 'earlier tasks')
+  return lang === 'en' ? `${noun} ${count === 1 ? 'is' : 'are'} done.` : `${noun} on lõpetatud.`
+}
+
 export function computeDashboardSummary(input: DashboardSummaryInput, lang: AppLang): string {
   const { tasksTotal, tasksCompleted, eventsToday } = input
   const tasksRemaining = Math.max(tasksTotal - tasksCompleted, 0)
@@ -88,17 +94,28 @@ export function computeSmartDailySummary(overview: DailyOverview, lang: AppLang)
   }
 
   if (overview.todayActiveCount > 0) {
+    // State 4: today has its own not-yet-done items.
     const prefix = t('dash.ai.summary.todayActivePrefix', lang)
     clauses.push(`${prefix} ${countNoun(overview.todayActiveCount, lang, 'tegevus', 'tegevust', 'thing to do', 'things to do')}.`)
   } else if (overview.todayTotalCount > 0) {
-    // Something existed for today and all of it is already done — a real,
-    // earned "all done", never shown when there was simply nothing at all
-    // (see the empty-data branch below).
-    clauses.push(t('dash.ai.summary.allDone', lang))
+    // State 3: today had its own items and every one of them is done — a
+    // real, earned "all done for TODAY specifically". This is deliberately
+    // its own, more explicit message (dash.ai.summary.allDoneToday) rather
+    // than reusing computeDashboardSummary()'s plain "allDone" key, so it
+    // can never be confused with state 2 below: a task due YESTERDAY that
+    // gets completed today must never produce this message — it has
+    // nothing to do with today's own (empty) set of items.
+    clauses.push(t('dash.ai.summary.allDoneToday', lang))
+  } else if (overview.pastCompletedCount > 0) {
+    // State 2: nothing is due today at all, but something — dated earlier
+    // or undated — was completed. Never phrased as "today is done" (today
+    // never had anything to begin with) and never silently dropped either.
+    clauses.push(t('dash.ai.summary.todayEmptyPastDonePrefix', lang))
+    clauses.push(pastCompletedNote(overview.pastCompletedCount, lang))
   } else if (overview.upcoming.length > 0) {
-    // Nothing at all today, but something real is coming — never phrased
-    // as "all done" (nothing was ever here to finish) and never silent
-    // about what's ahead.
+    // State 1b: nothing today, nothing completed before either, but
+    // something real is coming — never phrased as "all done" (nothing was
+    // ever here to finish) and never silent about what's ahead.
     clauses.push(t('dash.ai.summary.nothingTodayButSoon', lang))
   }
 
