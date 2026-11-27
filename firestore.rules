@@ -8,6 +8,30 @@ service cloud.firestore {
         && request.auth.uid == uid;
     }
 
+    // Kivora 2.0, Etapp 2.1 — validation helpers for the aiActions
+    // collection below. Firestore rules have no loop construct, so a
+    // list's elements can only be checked at fixed indices up to a known
+    // cap (see isValidAiActionChangeAt).
+    function isValidAiActionFieldValue(fv) {
+      return fv is map
+        && fv.present is bool
+        && (fv.present == false || ('value' in fv));
+    }
+
+    function isValidAiActionChange(c) {
+      return c is map
+        && c.module is string
+        && c.module in ['task', 'calendar', 'note', 'habit', 'goal', 'school', 'ai']
+        && c.entityId is string && c.entityId.size() > 0 && c.entityId.size() <= 200
+        && c.field is string && c.field.size() > 0 && c.field.size() <= 100
+        && isValidAiActionFieldValue(c.oldValue)
+        && isValidAiActionFieldValue(c.newValue);
+    }
+
+    function isValidAiActionChangeAt(list, i) {
+      return i >= list.size() || isValidAiActionChange(list[i]);
+    }
+
     // USER PROFILE
     match /users/{uid} {
       allow read: if isOwner(uid);
@@ -283,6 +307,59 @@ service cloud.firestore {
     // ENTITY LINKS
     match /users/{uid}/entityLinks/{linkId} {
       allow read, create, update, delete: if isOwner(uid);
+    }
+
+    // AI ACTIONS — Kivora 2.0, Etapp 2.1. A history of actions Kivora
+    // itself takes autonomously on a user's data. See
+    // src/lib/aiActionsStore.ts's module doc comment for the full
+    // design and its documented, permanent limitation: this is a
+    // CLIENT-written log, not a tamper-proof audit trail, and must
+    // never be used for a server-side authorization or financial
+    // decision.
+    match /users/{uid}/aiActions/{actionId} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && request.resource.data.id is string
+        && request.resource.data.id == actionId
+        && request.resource.data.type is string
+        && request.resource.data.type in ['createLink', 'createCalendarEvent', 'fillCategory', 'flagDuplicate']
+        && request.resource.data.module is string
+        && request.resource.data.module in ['task', 'calendar', 'note', 'habit', 'goal', 'school', 'ai']
+        && request.resource.data.entityId is string
+        && request.resource.data.entityId.size() > 0
+        && request.resource.data.entityId.size() <= 200
+        && request.resource.data.relatedChanges is list
+        && request.resource.data.relatedChanges.size() > 0
+        && request.resource.data.relatedChanges.size() <= 5
+        && isValidAiActionChangeAt(request.resource.data.relatedChanges, 0)
+        && isValidAiActionChangeAt(request.resource.data.relatedChanges, 1)
+        && isValidAiActionChangeAt(request.resource.data.relatedChanges, 2)
+        && isValidAiActionChangeAt(request.resource.data.relatedChanges, 3)
+        && isValidAiActionChangeAt(request.resource.data.relatedChanges, 4)
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        && request.resource.data.reason.size() <= 200
+        && request.resource.data.createdAt is string
+        && request.resource.data.revertible is bool
+        && request.resource.data.revertStatus == 'none'
+        && request.resource.data.snapshotUpdatedAt is map;
+
+      // revertStatus may only ever move 'none' -> 'reverted', touching no
+      // other field. NOTE: this rule cannot verify that a real revert of
+      // the target entity (resource.data.module/entityId) happened in
+      // the same transaction — Firestore rules evaluate each document
+      // write independently and have no visibility into a transaction's
+      // other writes. That guarantee is a CODE-level invariant a future
+      // Etapp 2.3 revert implementation must provide (one transaction
+      // writing both the reverted entity and this status together); it
+      // is not, and cannot be, enforced here.
+      allow update: if isOwner(uid)
+        && resource.data.revertStatus == 'none'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revertStatus'])
+        && request.resource.data.revertStatus == 'reverted';
+
+      allow delete: if isOwner(uid);
     }
 
     // MONEY – TRANSACTIONS

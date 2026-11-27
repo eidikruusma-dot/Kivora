@@ -98,6 +98,104 @@ describe('deployed-rules behavior (reads the REAL firestore.rules on disk)', () 
     await assertFails(anonDb.doc('users/user-a/tasks/t1').get())
   })
 
+  describe('aiActions (Kivora 2.0, Etapp 2.1): create validation, one-way revertStatus, cross-user isolation', () => {
+    function validAction(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'action-1',
+        type: 'fillCategory',
+        module: 'task',
+        entityId: 'task-1',
+        relatedChanges: [{
+          module: 'task',
+          entityId: 'task-1',
+          field: 'category',
+          oldValue: { present: false },
+          newValue: { present: true, value: 'Töö' },
+        }],
+        reason: 'Täitsin tühja kategooria.',
+        createdAt: new Date().toISOString(),
+        revertible: true,
+        revertStatus: 'none',
+        snapshotUpdatedAt: { 'task-1': new Date().toISOString() },
+        ...overrides,
+      }
+    }
+
+    it('the owner can create a valid action and read it back', async () => {
+      const aliceDb = testEnv.authenticatedContext('user-a').firestore()
+      await assertSucceeds(aliceDb.doc('users/user-a/aiActions/action-1').set(validAction()))
+      await assertSucceeds(aliceDb.doc('users/user-a/aiActions/action-1').get())
+    })
+
+    it('rejects a create whose document id does not match the given id field', async () => {
+      const aliceDb = testEnv.authenticatedContext('user-a').firestore()
+      await assertFails(aliceDb.doc('users/user-a/aiActions/action-1').set(validAction({ id: 'other-id' })))
+    })
+
+    it('rejects an unknown action type', async () => {
+      const aliceDb = testEnv.authenticatedContext('user-a').firestore()
+      await assertFails(aliceDb.doc('users/user-a/aiActions/action-1').set(validAction({ type: 'deleteEverything' })))
+    })
+
+    it('rejects an unknown module', async () => {
+      const aliceDb = testEnv.authenticatedContext('user-a').firestore()
+      await assertFails(aliceDb.doc('users/user-a/aiActions/action-1').set(validAction({ module: 'not-a-module' })))
+    })
+
+    it('rejects more than 5 relatedChanges', async () => {
+      const aliceDb = testEnv.authenticatedContext('user-a').firestore()
+      const change = validAction().relatedChanges[0]
+      await assertFails(aliceDb.doc('users/user-a/aiActions/action-1').set(
+        validAction({ relatedChanges: Array.from({ length: 6 }, () => change) }),
+      ))
+    })
+
+    it('rejects a reason over 200 characters', async () => {
+      const aliceDb = testEnv.authenticatedContext('user-a').firestore()
+      await assertFails(aliceDb.doc('users/user-a/aiActions/action-1').set(validAction({ reason: 'x'.repeat(201) })))
+    })
+
+    it('rejects creating with a revertStatus other than "none"', async () => {
+      const aliceDb = testEnv.authenticatedContext('user-a').firestore()
+      await assertFails(aliceDb.doc('users/user-a/aiActions/action-1').set(validAction({ revertStatus: 'reverted' })))
+    })
+
+    it('allows the one-way revertStatus "none" -> "reverted" transition, touching no other field', async () => {
+      const aliceDb = testEnv.authenticatedContext('user-a').firestore()
+      await assertSucceeds(aliceDb.doc('users/user-a/aiActions/action-1').set(validAction()))
+      await assertSucceeds(aliceDb.doc('users/user-a/aiActions/action-1').update({ revertStatus: 'reverted' }))
+    })
+
+    it('rejects an update that changes revertStatus together with any other field', async () => {
+      const aliceDb = testEnv.authenticatedContext('user-a').firestore()
+      await assertSucceeds(aliceDb.doc('users/user-a/aiActions/action-1').set(validAction()))
+      await assertFails(aliceDb.doc('users/user-a/aiActions/action-1').update({ revertStatus: 'reverted', reason: 'edited' }))
+    })
+
+    it('rejects changing revertStatus again once it is already "reverted" (one-way only)', async () => {
+      const aliceDb = testEnv.authenticatedContext('user-a').firestore()
+      await assertSucceeds(aliceDb.doc('users/user-a/aiActions/action-1').set(validAction()))
+      await assertSucceeds(aliceDb.doc('users/user-a/aiActions/action-1').update({ revertStatus: 'reverted' }))
+      await assertFails(aliceDb.doc('users/user-a/aiActions/action-1').update({ revertStatus: 'none' }))
+    })
+
+    it('the owner can delete their own action', async () => {
+      const aliceDb = testEnv.authenticatedContext('user-a').firestore()
+      await assertSucceeds(aliceDb.doc('users/user-a/aiActions/action-1').set(validAction()))
+      await assertSucceeds(aliceDb.doc('users/user-a/aiActions/action-1').delete())
+    })
+
+    it('cross-user isolation: a different authenticated user cannot read, write, or delete another user\'s aiActions document', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await ctx.firestore().doc('users/user-a/aiActions/action-1').set(validAction())
+      })
+      const bobDb = testEnv.authenticatedContext('user-b').firestore()
+      await assertFails(bobDb.doc('users/user-a/aiActions/action-1').get())
+      await assertFails(bobDb.doc('users/user-a/aiActions/action-1').update({ revertStatus: 'reverted' }))
+      await assertFails(bobDb.doc('users/user-a/aiActions/action-1').delete())
+    })
+  })
+
   describe('feedbackSubmissions / supportMessages stay locked down for everyone, including their own author', () => {
     it('feedbackSubmissions: the author cannot read or delete their own submission', async () => {
       await testEnv.withSecurityRulesDisabled(async (ctx) => {
